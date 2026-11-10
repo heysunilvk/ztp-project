@@ -31,6 +31,7 @@
 14. [Enhancement roadmap (Now / Next / Later)](#14-enhancement-roadmap-now--next--later)
 15. [Definition of Done](#15-definition-of-done)
 16. [Glossary](#16-glossary)
+- [Appendix: PDF coverage map](#appendix-pdf-coverage-map)
 
 ---
 
@@ -103,7 +104,9 @@ The PDF says reviewers care about *"reasoning and tradeoffs more than feature co
 | SM-5 | Concurrent devices provisioned in one run | **≥ 50**, server RSS ≤ 64 MB | ZTP-NFR-05 | TC-PERF-01 |
 | SM-6 | IP fragments on the wire | **0**; every datagram ≤ 1200 B | ZTP-FR-20, NFR-02 | TC-PROV-04/05 |
 | SM-7 | Crashes or sanitizer errors under fuzzing (1M malformed datagrams) | **0** | ZTP-NFR-07 | TC-SRV-07 |
-| SM-8 | Required README questions answered (5 required + 4 bonus) | **9/9** | ZTP-DEL-06/08 | TC-DEL-05/07 |
+| SM-8 | Required README questions answered (5 required + 4 bonus), plus the PDF §4 keepalive explanation | **10/10** | ZTP-DEL-06/08/12 | TC-DEL-05/07/10 |
+| SM-9 | PDF Appendix A steps reproduced, with the PDF's log text verbatim | **9/9 steps** | ZTP-FR-33 | TC-APX-01..10 |
+| SM-10 | The DB dump matches the PDF's "Example of a Dump from Server DB" (title, 6 columns, order, formats, notes) | **Exact match** | ZTP-FR-31 | TC-PDF-02 |
 
 ---
 
@@ -115,7 +118,7 @@ The PDF says reviewers care about *"reasoning and tradeoffs more than feature co
 | **Network operations admin** ("Omar") | Runs the provisioning server and owns policy | Correct firmware and config per model and tenant; audit of who registered and when; failure reasons | FR-28..32 |
 | **Security officer** ("Sasha") | Signs off on the trust model | No rogue devices, no rogue servers, no replays, documented residual risks | FR-13/14, NFR-06, §13 |
 | **Firmware release manager** ("Felix") | Ships firmware versions | Upgrades that verify integrity and survive crashes, with no bricking and no double registration | FR-16..23 |
-| **Evaluator / senior reviewer** | Reads the submission | Runnable code, a clear README, logs that prove behaviour, honest tradeoffs | DEL-01..11 |
+| **Evaluator / senior reviewer** | Reads the submission | Runnable code, a clear README, logs that prove behaviour, honest tradeoffs | DEL-01..12 |
 
 ---
 
@@ -138,11 +141,37 @@ The PDF says reviewers care about *"reasoning and tradeoffs more than feature co
 |---|---|---|---|---|
 | S1 First boot, upgrade (the Appendix A device) | ZTP-93AF21 | EDGE-GW-100 / v1.0 | Success, v1.1 / cfg v3, OPERATIONAL after restart | — |
 | S2 Bad credential | ZTP-84BC19 | EDGE-GW-100, corrupted device key | **Failed**, no firmware or config | Invalid HMAC |
-| S3 Power loss mid-download | ZTP-71DD08 | EDGE-GW-100 / v1.0 | `kill -9` during firmware download; resumes the missing chunks only; Success v1.1 / v3 | Transfer resumed |
+| S3 Power loss mid-download | ZTP-71DD08 | EDGE-GW-100 / v1.0 | `kill -9` during firmware download; resumes the missing chunks only; Success v1.1 / v3 | — (verbose dump: "Transfer resumed") |
 | S4 Already current | ZTP-55AC90 | EDGE-GW-100 / v1.1 | Success v1.1 / v3, no upgrade or restart | — |
 | S5 Legacy model | ZTP-19FE77 | EDGE-GW-050 / v0.9 | Success v1.0 / cfg v2 after upgrade | Legacy device |
 
 All five run **concurrently** with 15% loss, 10% reordering and 5% duplication injected on both sides. The resulting dump mirrors the example table in the PDF.
+
+### 5.3 Reference journey: the PDF's Appendix A, step by step
+This is the canonical user journey that the product must reproduce: one new EDGE-GW-100 device (ZTP-93AF21, firmware v1.0) going from power-on to OPERATIONAL. The full message flow is in [DESIGN §4.5](DESIGN.md#45-end-to-end-control-and-event-flow-following-pdf-appendix-a-steps-19) and the log transcript in [DESIGN Appendix A](DESIGN.md#appendix-a-annotated-end-to-end-log-transcript). Each step is verified by its own test.
+```mermaid
+flowchart LR
+    S1["1 Boot<br/>serial and fw v1.0"] --> S2["2 Discovery<br/>10.10.10.5:5555"]
+    S2 --> S3["3 UDP session<br/>session_id 7421"]
+    S3 --> S4["4 NAT keepalive"]
+    S4 --> S5["5 Secure registration<br/>nonce and HMAC"]
+    S5 --> S6["6 Config<br/>3 chunks, checksum"]
+    S6 --> S7["7 Firmware upgrade<br/>v1.0 to v1.1, restart"]
+    S7 --> S8["8 Resume<br/>same session, no re-registration"]
+    S8 --> S9["9 Validation<br/>OPERATIONAL"]
+```
+| Step | What the user or operator sees | Log lines (PDF wording, verbatim) | Requirements | Acceptance test |
+|---|---|---|---|---|
+| 1 Device boot | The device starts with no configuration and identifies itself | `[BOOT] Device starting`, `[BOOT] Soft serial: ZTP-93AF21`, `[BOOT] Firmware version: v1.0` | FR-01 | TC-APX-01 |
+| 2 Server discovery | It finds the provisioning server without a technician | `[DISCOVERY] Using static server IP 10.10.10.5:5555` | FR-02 (BON-01 for multicast) | TC-APX-02 |
+| 3 UDP session | A logical session is set up over UDP | `[UDP] HELLO sent (seq=1)`, `[UDP] Session established (session_id=7421)` | FR-03..06 | TC-APX-03 |
+| 4 NAT keepalive | The path through NAT is confirmed and kept alive | `[NAT] Keepalive sent`, `[NAT] Keepalive acknowledged` | FR-10, FR-11 | TC-APX-04 |
+| 5 Secure registration | The device proves who it is; the operator sees it registered under the tenant | `[AUTH] Registration successful`, `[AUTH] Assigned tenant: cruise_ops` | FR-12..14, FR-29, FR-30 | TC-APX-05 |
+| 6 Configuration | The config arrives in pieces and is verified | `[PROVISION] Receiving config (chunk 1/3)` … `(chunk 3/3)`, `[PROVISION] Config checksum verified` | FR-15, FR-17, FR-18, FR-20 | TC-APX-06 |
+| 7 Firmware upgrade | Outdated firmware is replaced and the device restarts itself | `[UPGRADE] Current: v1.0 -> Target: v1.1`, `[UPGRADE] Upgrade complete, restarting device` | FR-16..19, FR-21, FR-22 | TC-APX-07 |
+| 8 Resume after restart | The device continues where it left off; the operator sees **one** registration | `[BOOT] Restart detected`, `[UDP] Session resumed (session_id=7421)` | FR-23 | TC-APX-08 |
+| 9 Validation and operational mode | The device checks itself and goes live | `[VALIDATION] Configuration present`, `[VALIDATION] Firmware v1.1 verified`, `[STATE] Device is OPERATIONAL` | FR-24..27 | TC-APX-09 |
+| All | The same journey under 15% loss, reordering and duplication | All of the above, in order | FR-09, NFR-03 | TC-APX-10 |
 
 ---
 
@@ -161,12 +190,12 @@ Priority key: **M** = Must (required by the PDF), **S** = Should (strongly impli
 | ZTP-FR-07 | Acknowledgement of received messages | §3 | M | Cumulative ACK and SACK; piggybacked or as a pure ACK |
 | ZTP-FR-08 | Duplicate detection | §3 | M | Duplicates are logged, re-ACKed and never re-delivered to the application |
 | ZTP-FR-09 | Correct operation under 10–20% simulated packet loss | §3 | M | See SM-1 |
-| ZTP-FR-10 | Periodic keepalive messages | §4 | M | Sent when the session is idle for one keepalive interval; acknowledged; logs `[NAT] Keepalive sent/acknowledged` |
+| ZTP-FR-10 | Periodic keepalive messages | §4, App. A Step 4 | M | A path-probe keepalive right after the session is established (before registration, as in Appendix A), then one whenever the session has been idle for an interval; each is acknowledged; logs `[NAT] Keepalive sent` and `[NAT] Keepalive acknowledged` |
 | ZTP-FR-11 | Detection of session timeouts, on device and server | §4 | M | Device: declares the session dead after 3 missed intervals and recovers. Server: expires an idle session after 3 intervals, then enforces a grace period |
 | ZTP-FR-12 | Registration carries the soft serial, device metadata and a nonce | §5 | M | REGISTER TLVs: serial, model, fw version, hw revision, 64-bit device nonce, echoed server nonce |
 | ZTP-FR-13 | The server checks authenticity with HMAC | §5 | M | HMAC-SHA256 over every in-session frame; a bad MAC on REGISTER gives REGISTER_NAK(Invalid HMAC) and a Failed DB row |
 | ZTP-FR-14 | Replay protection | §5 | M | Replayed REGISTER in the same session, replayed into a new session, reused nonce, replayed resume: all rejected, none changes state |
-| ZTP-FR-15 | The server sends a configuration payload in JSON | §6 | M | The config is valid JSON containing `interfaces`, `mtu`, `keepalive_interval` and `config_version` |
+| ZTP-FR-15 | The server sends a configuration payload in JSON | §6 | M | The config is valid JSON and a superset of the PDF's Appendix A example: `interfaces.wan = "eth0"`, `interfaces.lan = "eth1"`, `mtu = 1500` and `keepalive_interval = 20` unchanged, plus `config_version` |
 | ZTP-FR-16 | The server sends a (mock) firmware blob | §6 | M | Per-model firmware artifact with a version header |
 | ZTP-FR-17 | Data is transferred in chunks | §6 | M | 1024-byte chunks; logs `Receiving config (chunk i/N)` |
 | ZTP-FR-18 | Integrity is validated with a hash | §6 | M | SHA-256 of the whole artifact matches the manifest before use; on mismatch, re-download (limited retries) |
@@ -182,9 +211,9 @@ Priority key: **M** = Must (required by the PDF), **S** = Should (strongly impli
 | ZTP-FR-28 | The server handles many devices registering at the same time | §9 | M | 5-device demo with interleaved progress; 50-device scale test |
 | ZTP-FR-29 | The server assigns the correct firmware and config per device | §9 | M | Policy: serial override > model > default; legacy model gets v1.0 / cfg v2 |
 | ZTP-FR-30 | The server stores registration details: device ID, timestamp, firmware assigned, config version, outcome | §9 | M | All five fields present in every row (plus stage, notes, attempts) |
-| ZTP-FR-31 | The server can dump its DB | §9 | M | On SIGUSR1, on SIGINT, and at the end of the demo; table format as in the PDF example |
+| ZTP-FR-31 | The server can dump its DB | §9 | M | On SIGUSR1, on SIGINT, and at the end of the demo. The default format **exactly** matches the PDF's "Example of a Dump from Server DB": title "Device Registration Details"; columns *Device ID, Registration Status, Firmware Assigned, Config Version, Registration Time, Notes* in that order; `YYYY-MM-DD HH:MM:SS`; `—` for empty cells; notes such as "Invalid HMAC" and "Legacy device". Extra fields appear only in a verbose dump |
 | ZTP-FR-32 | The server displays a summary: successful devices, failed devices, firmware and config per device | §9 | M | Summary block printed after the dump |
-| ZTP-FR-33 | Both sides emit tagged logs that follow the Appendix A flow | §1 example, App. A | S | Tags `[BOOT] [DISCOVERY] [UDP] [NAT] [AUTH] [PROVISION] [UPGRADE] [VALIDATION] [STATE]` |
+| ZTP-FR-33 | Both sides emit tagged logs that follow the Appendix A flow and the §1 example output | §1 example, App. A | M | Tags `[BOOT] [DISCOVERY] [UDP] [NAT] [AUTH] [PROVISION] [UPGRADE] [VALIDATION] [STATE]`. Every log line shown in the PDF (§1 example, Appendix A Steps 1–9, bonus sample) is emitted **verbatim as a prefix**, in Appendix A order (§5.3) |
 
 ---
 
@@ -240,13 +269,23 @@ Every bullet in the PDF's "Expected Submission" section has an ID. A submission 
 | ZTP-DEL-09 | Server logs | Exp. Sub. 3 | `logs/server.log` from the demo run |
 | ZTP-DEL-10 | Client (device) logs | Exp. Sub. 3 | `logs/device_<serial>.log` for every demo device |
 | ZTP-DEL-11 | DB dump and summary from the demo run | §9 (supports FR-31/32) | `logs/db_dump.txt` |
+| ZTP-DEL-12 | README explains why keepalives and session-timeout detection matter in real deployments | §4 ("Explain in your README why this is important for real deployments") | A dedicated README section (from DESIGN §9.6) |
 
 ---
 
 ## 10. Scope, assumptions and interpretation decisions
 
 ### 10.1 In scope
-Everything in §6–§9: all core requirements, **all bonus items**, and all deliverables.
+Everything in §6–§9: all core requirements, **all bonus items**, and all deliverables. A clause-by-clause map of the PDF is in [Appendix: PDF coverage map](#appendix-pdf-coverage-map).
+
+**The PDF's "Scope & Expectations", and the product decisions taken:**
+| PDF expectation | Decision |
+|---|---|
+| Language: C or Python | **C11**: realistic for device firmware, and gives explicit control of sockets, byte order and memory (rationale: DESIGN §1.3) |
+| Deliverables: working code and a README explaining the design choices | Code plus README plus logs; see §9 (DEL-01..12) |
+| Focus on correctness and networking fundamentals rather than UI or packaging | No UI (CLI, logs, a text dump); packaging is a Makefile only; effort goes into the protocol and the tests |
+| "This is not a REST or API exercise" | A binary protocol over raw UDP sockets; no HTTP or REST anywhere (TC-PDF-05) |
+| "Reasoning and tradeoffs more than feature completeness" | Every interpretation and tradeoff is documented (§10.4, DESIGN §3 and §22) |
 
 ### 10.2 Out of scope
 See §3.2 for the non-goals. Also out of scope: real NAT hardware, real power-loss rigs, IPv6, and multiple server instances.
@@ -406,7 +445,7 @@ The submission is done when **all** of the following hold:
 1. Every `ZTP-FR-*`, `ZTP-BON-*` and `ZTP-DEL-*` requirement has at least one passing test case in QA_TEST_PLAN.md §10.
 2. Every `ZTP-NFR-*` target is met or has a waiver signed off (with a documented rationale).
 3. `make && make test && make demo` succeeds from a clean checkout on Linux and on macOS, shown by a green run of the CI workflow on both runners and a local macOS run.
-4. The README answers the 5 required and 4 bonus questions and covers every section listed in DEL-07 and DEL-08.
+4. The README answers the 5 required and 4 bonus questions, explains why keepalives matter (DEL-12), and covers every section listed in DEL-07 and DEL-08. The Appendix A journey (§5.3) passes all 9 steps (TC-APX-01..10), and the DB dump matches the PDF's example format (TC-PDF-02).
 5. `logs/` contains `server.log`, one `device_<serial>.log` per demo device, and `db_dump.txt`, and they show scenarios S1–S5.
 6. No Sev-1 or Sev-2 defects are open (QA §11.3).
 7. All three documents are updated to match the final implementation (version bumped to 1.0).
@@ -416,3 +455,49 @@ The submission is done when **all** of the following hold:
 ## 16. Glossary
 The full glossary is in [DESIGN §0.3](DESIGN.md#03-glossary). The key terms are:
 **ZTP:** Zero Touch Provisioning. **Session:** a logical association between a device and the server, identified by `session_id`. **Epoch:** the counter of session re-keys (it increases on each resume). **RTO:** retransmission timeout. **SACK:** selective acknowledgement. **K_mfg / K_dev / K_s:** the manufacturing, device and session keys. **Grace period:** how long the server keeps a session that can still be resumed. **OPERATIONAL:** the final, validated device state.
+
+---
+
+## Appendix: PDF coverage map
+Every clause of the PDF maps to at least one requirement ID. QA keeps the same list with test cases added ([QA §15](QA_TEST_PLAN.md#15-pdf-conformance-matrix)), and DESIGN keeps it with design sections added (DESIGN §2 and §2.5).
+
+| PDF section | Clause | Requirement IDs |
+|---|---|---|
+| Overview | Simplified ZTP system using UDP as the transport | FR-03, DEL-04 |
+| Overview | "Not a REST or API exercise"; networking fundamentals, reliability, security, system behaviour | §3.2 non-goals, §10.1; NFR-06 |
+| Scope & Expectations | Language: C or Python | NFR-01 (C11) |
+| Scope & Expectations | Deliverables: working code and a README | DEL-01, DEL-05..08, DEL-12 |
+| Scope & Expectations | Correctness and fundamentals over UI or packaging | §10.1 |
+| Problem statement | No prior configuration → discover → secure UDP channel → register → config and firmware → operational | FR-01..27 (journey §5.3) |
+| §1 Boot & Discovery | Generate or load a soft serial | FR-01 |
+| §1 | Static IP (acceptable) | FR-02 |
+| §1 | Broadcast or multicast discovery (bonus) | BON-01 |
+| §1 | Example output `[BOOT] Soft serial generated`, `[DISCOVERY] Provisioning server found` | FR-33 |
+| §2 UDP Session | All communication uses UDP | FR-03 |
+| §2 | Session handshake; sequence numbers; timeouts; retransmission; session identifier | FR-04, FR-05, FR-06 |
+| §3 Reliable Messaging | Acknowledgements; duplicate detection; retransmission on timeout | FR-07, FR-08, FR-06 |
+| §3 | Handle simulated packet loss of 10–20% | FR-09, NFR-03, BON-06 |
+| §4 NAT & Keepalives | Assume NAT or firewall; periodic keepalives; session timeout detection | FR-10, FR-11 |
+| §4 | Explain in the README why this matters for real deployments | DEL-12 |
+| §5 Secure Registration | Device sends soft serial, device metadata, nonce | FR-12 |
+| §5 | Server verifies with HMAC; replay protection | FR-13, FR-14 |
+| §6 Config & Firmware | Config payload (JSON or YAML); firmware blob (mock) | FR-15, FR-16 |
+| §6 | Chunks; hash integrity; resume after failure; no IP fragmentation | FR-17, FR-18, FR-19, FR-20 |
+| §7 Upgrade & Restart | Outdated firmware → simulate upgrade; restart process; resume without duplicate registration | FR-21, FR-22, FR-23 |
+| §8 Validation | Config availability; firmware version; session health → OPERATIONAL | FR-24, FR-25, FR-26, FR-27 |
+| §9 Server Robustness | Multiple devices concurrently; accept and process at the same time | FR-28, NFR-05 |
+| §9 | Determine and assign firmware and config per device | FR-29 |
+| §9 | Track ID, timestamp, firmware, config version, outcome; in-memory or file-backed store | FR-30, NFR-10 |
+| §9 | Dump the DB; summary of successes, failures, versions per device | FR-31, FR-32, DEL-11 |
+| §9 | "Example of a Dump from Server DB" (format and the 5 example rows) | FR-31 (SM-10), §5.2 S1–S5 |
+| README Requirements | Q1 reliability, Q2 replay, Q3 fragmentation, Q4 NAT, Q5 packet loss | DEL-06 |
+| Notes | Reasoning and tradeoffs | DEL-07 (limitations and tradeoffs) |
+| Appendix A | Scenario: no configuration, certificates or stored credentials | §10.4 item 1 (A-02) |
+| Appendix A | Device information; Steps 1–9 and their logs; example configuration | FR-01..33 via §5.3 (SM-9), FR-15 |
+| Bonus | Assumptions: 10–20% loss, reordering, duplicates | NFR-03, BON-04, BON-05 |
+| Bonus | Requirement 1: seq numbers; 2: ACK and retransmission; 3: idempotent processing; 4: loss simulation | BON-02, BON-03, BON-05, BON-06 |
+| Bonus | Sample packet flow, out-of-order example, sample log output | BON-04, BON-08 |
+| Bonus | README questions 1–4 (out-of-order, duplicates, lost ACK, tradeoffs) | DEL-08, BON-07 |
+| Expected Submission 1 | Working code; runnable or buildable; device/server separation; UDP sockets; build and run instructions | DEL-01..05 |
+| Expected Submission 2 | README minimum topics (6) and bonus topics (3) | DEL-07, DEL-08 |
+| Expected Submission 3 | Server logs; client logs | DEL-09, DEL-10 |

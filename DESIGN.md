@@ -106,6 +106,17 @@ Senior architects, who judge the protocol and trust model; senior developers, wh
 | Congestion control | Small, fixed window; control-plane traffic | AIMD or QUIC-style congestion control |
 | Multi-instance or HA server | Single host is enough for the exercise | Sharding by `session_id`, shared DB |
 
+### 1.3 How the design meets the PDF's "Overview" and "Scope & Expectations"
+| PDF statement | How this design responds |
+|---|---|
+| "Build a simplified ZTP system using UDP as the transport protocol" | Every message is a UDP datagram on ports 5555 and 5556. No TCP, HTTP or other transport anywhere (ZTP-FR-03, TC-SESS-08, TC-PDF-05) |
+| "This is not a REST or API exercise" | A binary, fixed-header protocol over raw `SOCK_DGRAM` sockets (§5). There are no HTTP, REST, JSON-RPC or web frameworks. JSON appears **only** as the configuration *payload* the PDF asks for (§11.1) |
+| "Reason about networking fundamentals, reliability, security, and system behavior … real-world operational constraints" | Reliability (§8), NAT (§9), fragmentation (§5.5), security (§10, §18), crash consistency (§12.4, §15.3), operations (§14, §17). Each choice carries a "Design rationale" or "Reviewer note" |
+| "Language: C or Python" | **C11**. Rationale: (1) C is what real device control planes are written in, so the exercise is realistic; (2) it gives explicit control of byte order, struct layout, socket options (DF bit, `SO_BROADCAST`, multicast loop) and memory bounds, all of which this assignment is about; (3) a static binary with no runtime dependencies suits a constrained device. Tradeoff: more code and memory-safety risk than Python, mitigated by fixed-offset parsing, ASan/UBSan, fuzzing and `-Werror` (§5.6, §19.1) |
+| "Deliverables: working code and a README explaining your design choices" | Code: §4.2, §19. README: built from §21 (ZTP-DEL-05..08, DEL-12) |
+| "Focus on correctness and networking fundamentals rather than UI or packaging" | There is no UI: a CLI, tagged logs and a text DB dump only. Packaging is a Makefile only. Effort goes into the protocol, testing and documentation |
+| "There is no single correct solution … reasoning and tradeoffs more than feature completeness" | §3 (explicit ambiguity decisions), §22 (tradeoffs and limitations), §23 (open questions) |
+
 ---
 
 ## 2. Requirements traceability matrix
@@ -123,12 +134,12 @@ This is the completeness checklist for reviewers. Each PRD requirement maps to t
 | ZTP-FR-07 | Acknowledgements | §8.4 | common/reliable.c | TC-UNIT-10, TC-REL-02 |
 | ZTP-FR-08 | Duplicate detection | §8.5 | common/reliable.c | TC-REL-05 |
 | ZTP-FR-09 | 10–20% loss | §8, §16, §21.1 Q5 | all | TC-REL-09 |
-| ZTP-FR-10 | Keepalives | §9.2 | device/session.c | TC-NAT-01/02 |
+| ZTP-FR-10 | Keepalives (incl. path probe before registration, as in Appendix A Step 4) | §9.2 | device/session.c | TC-NAT-01/02, TC-APX-04 |
 | ZTP-FR-11 | Session timeout detection | §9.3 | device/session.c, server/session.c | TC-NAT-03/04/07 |
 | ZTP-FR-12 | REGISTER: serial, metadata, nonce | §10.2 | device/fsm.c | TC-AUTH-01 |
 | ZTP-FR-13 | HMAC authenticity | §10.1–10.3 | common/crypto, server/auth.c | TC-AUTH-02/03 |
 | ZTP-FR-14 | Replay protection | §10.4 | server/auth.c, common/reliable.c | TC-AUTH-04..07 |
-| ZTP-FR-15 | JSON configuration | §11.1 | server/artifacts.c | TC-PROV-01/02 |
+| ZTP-FR-15 | JSON configuration (superset of the PDF's example config) | §11.1 | server/artifacts.c | TC-PROV-01/02, TC-PDF-03 |
 | ZTP-FR-16 | Firmware blob | §11.1 | tools/mkartifacts.c | TC-PROV-03 |
 | ZTP-FR-17 | Chunked transfer | §11.2 | device/transfer.c | TC-PROV-01/03/06 |
 | ZTP-FR-18 | Hash integrity | §11.3 | device/transfer.c | TC-PROV-07/10 |
@@ -144,9 +155,9 @@ This is the completeness checklist for reviewers. Each PRD requirement maps to t
 | ZTP-FR-28 | Concurrent devices | §14.1 | server/main.c | TC-SRV-01/09 |
 | ZTP-FR-29 | Per-device assignment | §14.3 | server/policy.c | TC-SRV-02, TC-UPG-06 |
 | ZTP-FR-30 | Registration record fields | §14.4 | server/db.c | TC-SRV-03 |
-| ZTP-FR-31 | DB dump | §14.5 | server/db.c | TC-SRV-04 |
+| ZTP-FR-31 | DB dump in the PDF's example format | §14.5 | server/db.c | TC-SRV-04, TC-PDF-02 |
 | ZTP-FR-32 | Summary | §14.5 | server/db.c | TC-SRV-05 |
-| ZTP-FR-33 | Tagged logs following Appendix A | §17, App. A | common/log.c | TC-LOG-01, TC-E2E-01 |
+| ZTP-FR-33 | Tagged logs following Appendix A and the §1 example output | §17, §4.5, App. A | common/log.c | TC-LOG-01, TC-E2E-01, TC-APX-01..10, TC-PDF-01 |
 
 ### 2.2 Bonus requirements
 | PRD ID | Requirement | Design § | Module(s) | Key tests |
@@ -156,7 +167,7 @@ This is the completeness checklist for reviewers. Each PRD requirement maps to t
 | ZTP-BON-03 | ACK + retransmit on timeout | §8.3 | common/reliable.c | TC-REL-02 |
 | ZTP-BON-04 | Out-of-order buffering | §8.4 | common/reliable.c | TC-REL-03/10, TC-UNIT-08 |
 | ZTP-BON-05 | Idempotent processing | §8.6 | handlers on both sides | TC-REL-04/05, TC-PROV-11 |
-| ZTP-BON-06 | In-code loss simulation | §16 | common/netsim.c | TC-SIM-01..03 |
+| ZTP-BON-06 | In-code loss simulation | §16 | common/netsim.c | TC-SIM-01..04 |
 | ZTP-BON-07 | Lost-ACK handling | §8.7 | common/reliable.c | TC-REL-04 |
 | ZTP-BON-08 | Bonus log lines | §17.2 | common/log.c | TC-LOG-02 |
 
@@ -188,6 +199,17 @@ This is the completeness checklist for reviewers. Each PRD requirement maps to t
 | ZTP-DEL-08 | README: bonus sections + 4 questions | §21.2, §21.3 |
 | ZTP-DEL-09/10 | Server and client logs | §17.3, §19.3 |
 | ZTP-DEL-11 | DB dump and summary | §14.5, §19.3 |
+| ZTP-DEL-12 | README: why keepalives and session-timeout detection matter in real deployments (PDF §4) | §9.2, §9.6, §21.3 |
+
+### 2.5 Conformance with the PDF's examples
+The PDF gives four concrete examples. The design reproduces each one, and QA checks each one verbatim:
+| PDF example | Where it is reproduced | QA |
+|---|---|---|
+| §1 "Example output" (`[BOOT] Soft serial generated`, `[DISCOVERY] Provisioning server found`) | §6.1, §6.3, §17.4 | TC-PDF-01 |
+| §9 "Example of a Dump from Server DB" (5 devices, columns, "Invalid HMAC", "Legacy device") | §14.5 | TC-PDF-02 |
+| Appendix A, Steps 1–9 (device info, static IP 10.10.10.5:5555, HELLO/HELLO_ACK seq=1 with session_id=7421, keepalive, REGISTER fields, config chunks 1/3–3/3, upgrade v1.0 → v1.1, resume, validation) | §4.5 (event flow), Appendix A (transcript) | TC-APX-01..10 |
+| Appendix A "Example Configuration" (`interfaces`, `mtu`, `keepalive_interval`) | §11.1 | TC-PDF-03 |
+| Bonus "Sample Packet Flow Diagram", "Example Out-of-Order Handling", "Sample Log Output" | §8.8.1, §17.2 | TC-REL-03, TC-LOG-02 |
 
 ---
 
@@ -337,6 +359,112 @@ ztp/
 ### 4.4 Threading and I/O model
 Both binaries are **single-threaded and event-driven**: a non-blocking UDP socket, `poll()` with a timeout equal to the next timer deadline, and a min-heap of timers. Signals go through the self-pipe trick, which is portable to macOS where `signalfd` isn't available. The reasoning is in §14.1.
 
+### 4.5 End-to-end control and event flow (following PDF Appendix A, Steps 1–9)
+This is the full happy-path lifecycle of the Appendix A device. Each "Step n" note matches the step with the same number in the PDF. Reliability (ACK/SACK, retransmissions) is left out here and shown in §8. The same flow is in [Appendix A](#appendix-a-annotated-end-to-end-log-transcript) as log lines and in QA as TC-APX-01..10.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant D as Device ZTP-93AF21 (EDGE-GW-100, v1.0)
+    participant S as Server 10.10.10.5:5555
+    participant DB as Server DB
+    Note over D: Step 1 BOOT, load or generate soft serial, read firmware v1.0 from active slot
+    Note over D: Step 2 DISCOVERY, static IP 10.10.10.5:5555 (or authenticated multicast OFFER)
+    D->>S: HELLO seq=1 (soft_serial, model, fw, Nd)
+    S-->>D: HELLO_ACK seq=1 (session_id=7421, Ns)
+    Note over D,S: Step 3 session established, both derive K_s
+    D->>S: KEEPALIVE seq=2 (path probe)
+    S-->>D: KEEPALIVE_ACK
+    Note over D,S: Step 4 NAT binding confirmed, first RTT sample
+    D->>S: REGISTER seq=3 (session_id, soft_serial, model, firmware, nonce)
+    S->>DB: upsert ZTP-93AF21 Success, fw v1.1, cfg v3
+    S-->>D: REGISTER_ACK (tenant cruise_ops, fw target v1.1, cfg v3)
+    Note over D,S: Step 5 registered
+    D->>S: MANIFEST_REQ config
+    S-->>D: MANIFEST (3 chunks, sha256)
+    D->>S: CHUNK_REQ chunks 0 to 2
+    S-->>D: CHUNK_DATA 1/3, 2/3, 3/3
+    D->>S: TRANSFER_DONE config ok
+    Note over D,S: Step 6 config checksum verified
+    D->>S: MANIFEST_REQ firmware
+    S-->>D: MANIFEST (64 chunks, sha256)
+    D->>S: CHUNK_REQ in batches of 32
+    S-->>D: CHUNK_DATA x64
+    D->>S: UPGRADE_STATUS installing v1.1
+    S->>DB: stage UPGRADING
+    Note over D: Step 7 install to slot B, atomic commit, execv restart
+    D->>S: HELLO RESUME (session_id=7421, resume_ctr, Nd2)
+    S-->>D: HELLO_ACK RESUMED (epoch 1, Ns2)
+    Note over D,S: Step 8 session resumed, no REGISTER sent
+    D->>S: KEEPALIVE health probe
+    S-->>D: KEEPALIVE_ACK
+    D->>S: STATUS_REPORT OPERATIONAL
+    S->>DB: stage OPERATIONAL
+    S-->>D: STATUS_ACK
+    Note over D: Step 9 validation passed, device OPERATIONAL
+```
+
+**Event flow by Appendix A step.** Each step lists its trigger, the messages exchanged, the state change and the log lines (the PDF text is emitted verbatim; §17.4).
+| Step | Trigger event | Messages | Device state change | Server state / DB change | PDF log lines emitted |
+|---|---|---|---|---|---|
+| 1 Boot | Process start | — | → BOOT | — | `[BOOT] Device starting`, `[BOOT] Soft serial: ZTP-93AF21`, `[BOOT] Firmware version: v1.0` |
+| 2 Discovery | Boot done | (DISCOVER/OFFER in multicast mode) | BOOT → DISCOVERY → SESSION | (rate-limit bucket) | `[DISCOVERY] Using static server IP 10.10.10.5:5555`, `[DISCOVERY] Provisioning server found` |
+| 3 Session | Server address known | HELLO, HELLO_ACK | SESSION, keys derived | HALF_OPEN, sid 7421 | `[UDP] HELLO sent (seq=1)`, `[UDP] Session established (session_id=7421)` |
+| 4 Keepalive | Session established (path probe), then every idle interval | KEEPALIVE, KEEPALIVE_ACK | Liveness ALIVE (§9.5) | last_rx updated | `[NAT] Keepalive sent`, `[NAT] Keepalive acknowledged` |
+| 5 Registration | Path probe acknowledged | REGISTER, REGISTER_ACK / NAK | → REGISTER → CONFIG | HALF_OPEN → REGISTERED; DB row Success | `[AUTH] Registration successful`, `[AUTH] Assigned tenant: cruise_ops` |
+| 6 Config | REGISTER_ACK | MANIFEST_REQ/MANIFEST, CHUNK_REQ/DATA, TRANSFER_DONE | CONFIG → FIRMWARE | PROVISIONING; stage CONFIG_SENT | `[PROVISION] Receiving config (chunk 1/3)` … `(3/3)`, `[PROVISION] Config checksum verified` |
+| 7 Upgrade | fw target > running | MANIFEST, CHUNK_DATA ×64, UPGRADE_STATUS | FIRMWARE → UPGRADE → RESTART | AWAIT_RESUME; stage UPGRADING | `[UPGRADE] Current: v1.0 -> Target: v1.1`, `[UPGRADE] Upgrade complete, restarting device` |
+| 8 Resume | Process restart with `pending_reboot` | HELLO(RESUME), HELLO_ACK(RESUMED), UPGRADE_STATUS(installed) | BOOT → RESUME → VALIDATE | AWAIT_RESUME → PROVISIONING, epoch 1; **no new DB row** | `[BOOT] Restart detected`, `[UDP] Session resumed (session_id=7421)` |
+| 9 Validation | Resume accepted | KEEPALIVE (health probe), STATUS_REPORT, STATUS_ACK | VALIDATE → OPERATIONAL | OPERATIONAL; stage OPERATIONAL | `[VALIDATION] Configuration present`, `[VALIDATION] Firmware v1.1 verified`, `[STATE] Device is OPERATIONAL` |
+
+### 4.6 Deployment and NAT topology
+```mermaid
+flowchart LR
+    subgraph SITE["Customer site, private 192.168.1.0/24"]
+        DEV1["Device A<br/>192.168.1.20:40001"]
+        DEV2["Device B<br/>192.168.1.21:40002"]
+    end
+    NAT["NAT / stateful firewall<br/>public 203.0.113.7<br/>UDP idle timeout often 30-60 s"]
+    subgraph DC["Provisioning network"]
+        SRV["ztp-server<br/>10.10.10.5:5555 control<br/>10.10.10.5:5556 discovery"]
+        DBF[("db.jsonl journal")]
+        ART[("artifacts and policy")]
+    end
+    DEV1 -->|"outbound UDP creates mapping 203.0.113.7:61001"| NAT
+    DEV2 -->|"outbound UDP creates mapping 203.0.113.7:61002"| NAT
+    NAT <-->|"server replies only to the mapped ip:port"| SRV
+    SRV --- DBF
+    SRV --- ART
+```
+- **Discovery scope:** multicast and broadcast stay inside the site's L2 or multicast scope (TTL 1), so devices behind NAT in a remote site use the static IP, exactly as in Appendix A. Discovery over a WAN is a roadmap item (DHCP option 43 or DNS-SD, §22.3).
+- **What the NAT implies for the protocol:** §9.1 and README Q4 (§21.1).
+
+### 4.7 Diagram index
+| # | Diagram | Type | Section |
+|---|---|---|---|
+| 1 | Component view | flowchart | §4.1 |
+| 2 | End-to-end control and event flow (Appendix A) | sequence | §4.5 |
+| 3 | Deployment and NAT topology | flowchart | §4.6 |
+| 4 | Header bit layout | ASCII | §5.2 |
+| 5 | Receive pipeline | flowchart | §5.7 |
+| 6 | Discovery exchange | sequence | §6.2 |
+| 7 | Session handshake | sequence | §7.1 |
+| 8 | Server session state machine | state | §7.4 |
+| 9 | Lost ACK | sequence | §8.7 |
+| 10 | PDF bonus scenario (seq 2 lost) | sequence | §8.8.1 |
+| 11 | Retransmission timer logic | flowchart | §8.10 |
+| 12 | Keepalive and liveness state machine | state | §9.5 |
+| 13 | Key derivation | flowchart | §10.1 |
+| 14 | Registration failure (Invalid HMAC) | sequence | §10.3 |
+| 15 | Transfer exchange | sequence | §11.2 |
+| 16 | Per-file transfer state machine | state | §11.5 |
+| 17 | Resume after restart | sequence | §12.3 |
+| 18 | Upgrade (A/B) state machine | state | §12.6 |
+| 19 | Server data model | ER | §14.7 |
+| 20 | Concurrent devices on one event loop | sequence | §14.8 |
+| 21 | Device state machine | state | §15.1 |
+| 22 | Device event loop | flowchart | §15.5 |
+| 23 | Project timeline | Gantt | PRD §11.1 |
+
 ---
 
 ## 5. Wire protocol specification
@@ -406,8 +534,8 @@ Both binaries are **single-threaded and event-driven**: a non-blocking UDP socke
 | 0x20 | REGISTER | D→S | reliable | K_s | SERIAL, MODEL, FW_VER, HW_REV, NONCE_REG (64-bit), NONCE_SRV (echo of Ns) |
 | 0x21 | REGISTER_ACK | S→D | reliable | K_s | TENANT, FW_TARGET, CFG_VER |
 | 0x22 | REGISTER_NAK | S→D | reliable* | K_boot | REASON, DETAIL |
-| 0x30 | KEEPALIVE | D→S | reliable | K_s | (empty) or HEALTH_PROBE=1 |
-| 0x31 | KEEPALIVE_ACK | S→D | ack-class | K_s | SRV_STAGE |
+| 0x30 | KEEPALIVE | D→S | reliable | K_boot while HALF_OPEN (the path probe before REGISTER, Appendix A Step 4); K_s afterwards | (empty), PATH_PROBE=1 or HEALTH_PROBE=1 |
+| 0x31 | KEEPALIVE_ACK | S→D | ack-class | same key as the KEEPALIVE | SRV_STAGE |
 | 0x40 | MANIFEST_REQ | D→S | reliable | K_s | FILE_KIND (1 = config, 2 = firmware) |
 | 0x41 | MANIFEST | S→D | reliable | K_s | FILE_ID, FILE_KIND, VERSION, FILE_SIZE, CHUNK_SIZE, CHUNK_COUNT, SHA256 |
 | 0x42 | CHUNK_REQ | D→S | reliable | K_s | FILE_ID, CHUNK_START, CHUNK_NUM (≤ 32) |
@@ -491,13 +619,39 @@ These checks run in order, and processing stops at the first failure:
 
 **No state changes before step 5.** All failures increase a counter. Only MAC failures on REGISTER (§10.3) are logged one per event; others are rate-limited in the log so that an attacker can't flood it.
 
+### 5.7 Receive pipeline (both binaries)
+```mermaid
+flowchart TD
+    A["recvfrom: one datagram"] --> B{"length 44..1200,<br/>magic, version, hdr_len ok?"}
+    B -- no --> X1["drop, count rx_malformed"]
+    B -- yes --> C{"payload_len matches,<br/>type valid for this direction?"}
+    C -- no --> X1
+    C -- yes --> E{"session_id == 0?"}
+    E -- yes --> F["pre-session: verify K_boot MAC,<br/>rate limit, then DISCOVER or fresh HELLO handler"]
+    E -- no --> G{"session found and<br/>epoch current?"}
+    G -- no --> X2["drop, count unknown or stale"]
+    G -- yes --> D["select expected key by type and state:<br/>K_boot, K_dev or K_s"]
+    D --> H{"MAC valid?<br/>(constant-time compare)"}
+    H -- no --> X3["drop, count mac_fail.<br/>First K_s frame of a HALF_OPEN session<br/>goes to the auth-failure path (10.3)"]
+    H -- yes --> I["peer address changed? update (NAT rebinding 9.4).<br/>last_rx = now"]
+    I --> J["reliability layer: process ack and sack,<br/>free acknowledged TX slots"]
+    J --> K{"seq classification"}
+    K -- duplicate --> X4["drop, immediate re-ACK"]
+    K -- ahead of expected --> X5["buffer, immediate ACK with SACK"]
+    K -- out of window --> X6["drop, count out_of_window"]
+    K -- next expected --> L["deliver, then drain buffered frames in order"]
+    L --> M["TLV parse with bounds checks"]
+    M --> N["idempotent application handler:<br/>state transition, DB update, replies queued"]
+```
+
 ---
 
 ## 6. Boot and discovery
 
 ### 6.1 Soft serial (ZTP-FR-01)
-- First boot: read 3 bytes from the CSPRNG → `ZTP-%06X` (for example `ZTP-93AF21`). Persist it in `device.state` atomically (§15.3). Logs `[BOOT] Soft serial generated: ZTP-93AF21`.
-- Later boots: load it from the state file → `[BOOT] Soft serial loaded: ZTP-93AF21`.
+- Every boot starts with `[BOOT] Device starting` (Appendix A Step 1), then the serial line, then `[BOOT] Firmware version: v1.0`, read from the active slot's header.
+- First boot: read 3 bytes from the CSPRNG → `ZTP-%06X` (for example `ZTP-93AF21`). Persist it in `device.state` atomically (§15.3). Logs `[BOOT] Soft serial generated` (the PDF §1 example text), then `[BOOT] Soft serial: ZTP-93AF21` (Appendix A Step 1 text).
+- Later boots: load it from the state file → `[BOOT] Soft serial loaded`, then `[BOOT] Soft serial: ZTP-93AF21`.
 - Demo and tests: `--serial ZTP-93AF21` overrides generation, which reproduces the PDF's table.
 
 > **Reviewer note.** 24 bits gives a 50% chance of a collision at about 4,800 devices (birthday bound). That's fine for the exercise, but a real product would derive the serial from a hardware ID (MAC address, eFuse) or use 64 bits. The server can't tell apart two devices with the same serial and model, because they share the same derived `K_dev`. Listed in §22.2.
@@ -526,7 +680,9 @@ sequenceDiagram
 > **Design rationale.** Discovery is *datagram-class* (application retries, no seq/ACK state), because no session exists yet and the server must stay stateless toward unauthenticated multicast traffic.
 
 ### 6.3 Static IP (ZTP-FR-02)
-`--server 10.10.10.5:5555` → `[DISCOVERY] Using static server IP 10.10.10.5:5555`. This path is used directly when the mode is `static`, and as the fallback otherwise.
+`--server 10.10.10.5:5555` → `[DISCOVERY] Using static server IP 10.10.10.5:5555` (the Appendix A Step 2 text), followed by `[DISCOVERY] Provisioning server found 10.10.10.5:5555 (static)`. The second line is the PDF §1 example text, so both discovery modes emit it (TC-PDF-01). This path is used directly when the mode is `static`, and as the fallback otherwise.
+
+> **Reproducing Appendix A's address exactly.** The PDF uses server 10.10.10.5. On macOS this needs no extra software: `sudo ifconfig lo0 alias 10.10.10.5/32`, then run `ztp-server --bind 10.10.10.5` and `ztp-device --server 10.10.10.5:5555`. Remove it with `sudo ifconfig lo0 -alias 10.10.10.5`. The default demo uses 127.0.0.1, which needs no sudo (TC-PDF-04).
 
 ---
 
@@ -542,10 +698,13 @@ sequenceDiagram
     Note right of S: verify MAC, rate limit, allocate random session_id, draw Ns, cache reply under serial and Nd, state HALF_OPEN with 10 s TTL
     S-->>D: HELLO_ACK seq=1 ack=1 sid=7421 (Nd echo, Ns, keepalive, grace) MAC K_boot
     Note over D,S: both compute K_dev and K_s for epoch 0
-    D->>S: REGISTER seq=2 ack=1 MAC K_s
+    D->>S: KEEPALIVE seq=2 ack=1 (path probe) MAC K_boot
+    S-->>D: KEEPALIVE_ACK ack=2 MAC K_boot
+    Note over D,S: NAT binding confirmed, first RTT sample seeds the RTO (Appendix A Step 4)
+    D->>S: REGISTER seq=3 ack=1 MAC K_s
     Note right of S: first K_s frame, see section 10
 ```
-Logs: `[UDP] HELLO sent (seq=1)`, then `[UDP] Session established (session_id=7421)`.
+Logs: `[UDP] HELLO sent (seq=1)`, `[UDP] Session established (session_id=7421)`, `[NAT] Keepalive sent`, `[NAT] Keepalive acknowledged`.
 
 ### 7.2 Session identifier
 - 32-bit, from the CSPRNG; never 0; unique among live sessions (redrawn on a collision).
@@ -651,17 +810,18 @@ The transport guarantees exactly-once delivery **within an epoch**. Across epoch
 sequenceDiagram
     participant D as Device
     participant S as Server
-    D->>S: REGISTER seq=2
+    D->>S: REGISTER seq=3
     Note right of S: delivered once, registered, REGISTER_ACK queued as server seq=2
-    S--xD: frame with ack=2 and REGISTER_ACK seq=2 (lost)
-    Note left of D: RTO for seq 2 expires
-    D->>S: REGISTER seq=2 RETX
-    Note right of S: seq 2 is at or below rcv_ack, duplicate ignored, not re-processed
-    S-->>D: ACK ack=2 sent immediately
+    S--xD: REGISTER_ACK seq=2 carrying ack=3 (lost)
+    Note left of D: RTO for seq 3 expires
+    D->>S: REGISTER seq=3 RETX
+    Note right of S: seq 3 is at or below rcv_ack, duplicate ignored, not re-processed
+    S-->>D: ACK ack=3 sent immediately
     Note right of S: REGISTER_ACK seq=2 has its own RTO and is retransmitted
     S-->>D: REGISTER_ACK seq=2 RETX
     D-->>S: ACK ack=2
 ```
+Server log for this case: `[UDP] Duplicate packet seq=3 ignored` (TC-REL-04).
 The data was received, so the receiver's state is already correct. The sender's retransmission is recognised as a duplicate and **not applied again**. The immediate re-ACK stops further retransmissions. The response (REGISTER_ACK) is a reliable frame in the other direction, so its own loss is repaired separately. Since ACKs are cumulative, **any** later frame or ACK from the peer also repairs an earlier lost ACK.
 
 ### 8.8 Worked timelines
@@ -699,6 +859,20 @@ The second copy hits `s ≤ rcv_ack` → dropped and re-ACKed. The counter `rx_d
 ### 8.9 Sequence wraparound
 Comparisons use serial-number arithmetic (RFC 1982): `seq_lt(a,b) = (int32_t)(a-b) < 0`. A sequence space resets to 1 on every epoch. At 1000 frames/s, wrapping 2³¹ takes about 24 days. For safety, the device forces a re-key (resume) when `next_seq > 2³⁰`, so wraparound is defined but never reached in practice (TC-UNIT-06).
 
+### 8.10 Retransmission timer logic (sender side)
+```mermaid
+flowchart TD
+    T["timer fires for TX slot with seq N"] --> A{"slot already ACKed or SACKed?"}
+    A -- yes --> Z["free slot, and if never retransmitted<br/>take RTT sample (Karn) and update SRTT, RTTVAR, RTO"]
+    A -- no --> B{"retries below 8?"}
+    B -- no --> F["raise SESSION_FAILED:<br/>device resumes (12.3) or re-HELLOs,<br/>server moves session to IDLE_GRACE"]
+    B -- yes --> C["retransmit identical bytes with RETX flag,<br/>retries + 1, RTO x2 capped at 4 s,<br/>log: Retransmitting seq=N (timeout)"]
+    C --> R["re-arm timer at now + RTO"]
+    S["ACK arrives with SACK bits"] --> G{"3 later frames SACKed<br/>and N still unacked?"}
+    G -- yes --> H["fast retransmit N once per RTO period,<br/>log: Retransmitting seq=N (fast, sack)"]
+    G -- no --> W["wait for timer"]
+```
+
 ---
 
 ## 9. NAT awareness and keepalives (ZTP-FR-10, FR-11)
@@ -710,7 +884,8 @@ Comparisons use serial-number arithmetic (RFC 1982): `seq_lt(a,b) = (int32_t)(a-
 4. **The server replies from the address the device targeted.** On multi-homed servers, bind to a specific IP (`--bind`) or use `IP_PKTINFO` (Linux) or `IP_RECVDSTADDR` (BSD/macOS) to source replies correctly. Otherwise a stateful NAT or firewall drops replies that come from an unexpected address.
 
 ### 9.2 Keepalives
-- The device sends KEEPALIVE when **no frame has been sent for `keepalive_interval`** (20 s in production / 2 s in the demo; the config's `keepalive_interval` overrides it in production). The trigger is idle time, so it costs nothing while a transfer is running.
+- **Path probe (Appendix A Step 4).** Right after HELLO_ACK, and before REGISTER, the device sends one KEEPALIVE(PATH_PROBE) under K_boot. It (a) confirms that the NAT mapping works in both directions before any state-changing request is sent, (b) gives the first RTT sample, which replaces the 500 ms initial RTO with a measured one, and (c) matches the order of the PDF's Appendix A (keepalive before registration). The probe changes no authentication state on the server. A device with a bad K_dev still passes it, because K_boot comes from the model key, and then fails at REGISTER, which is where "Invalid HMAC" is recorded.
+- **Periodic keepalives.** The device sends KEEPALIVE when **no frame has been sent for `keepalive_interval`** (20 s in production / 2 s in the demo; the config's `keepalive_interval` overrides it in production). The trigger is idle time, so it costs nothing while a transfer is running.
 - KEEPALIVE is reliable, so a lost one is retransmitted. The server answers immediately with **KEEPALIVE_ACK** (ack-class, carrying the ACK fields).
 - Logs: `[NAT] Keepalive sent`, `[NAT] Keepalive acknowledged (rtt=3 ms)`.
 
@@ -728,6 +903,33 @@ Comparisons use serial-number arithmetic (RFC 1982): `seq_lt(a,b) = (int32_t)(a-
 When a frame passes the MAC check for session S but arrives from a different `ip:port` than `S.peer`:
 `[NAT] Peer address changed 203.0.113.7:40001 -> 203.0.113.7:40999 (rebinding)` → `S.peer` is updated, and all later replies go to the new address. **This happens only after the MAC check,** so a spoofed packet from another address can't hijack the return path (TC-NAT-06). Simulated with the device flag `--rebind-after N`, which closes the socket and opens a new one with a new ephemeral port.
 
+### 9.5 Keepalive and liveness state machine (device side)
+```mermaid
+stateDiagram-v2
+    [*] --> PROBE: session established
+    PROBE --> ALIVE: path-probe KEEPALIVE_ACK
+    ALIVE --> ALIVE: any authenticated frame received
+    ALIVE --> KEEPALIVE_WAIT: idle for one interval, KEEPALIVE sent
+    KEEPALIVE_WAIT --> ALIVE: KEEPALIVE_ACK or any authenticated frame
+    KEEPALIVE_WAIT --> KEEPALIVE_WAIT: RTO expired, KEEPALIVE retransmitted
+    PROBE --> DEAD: retries exhausted
+    KEEPALIVE_WAIT --> DEAD: no authenticated frame for 3 intervals or retries exhausted
+    DEAD --> RESUMING: device registered, backoff with jitter
+    DEAD --> REHELLO: device not registered yet
+    RESUMING --> ALIVE: HELLO_ACK RESUMED
+    RESUMING --> REHELLO: resume rejected or session unknown
+    REHELLO --> PROBE: new session established
+```
+The server's view is simpler: `last_rx` is refreshed by every authenticated frame. A session idle for 3 intervals moves to `IDLE_GRACE` and is deleted after the grace period (§7.4).
+
+### 9.6 Why keepalives and timeout detection matter in real deployments (ZTP-DEL-12; README text)
+1. **NAT and firewall state expires silently.** If nothing is sent for longer than the middlebox's UDP idle timer (often 30–60 s, sometimes 20 s), the mapping disappears. The server's next reply is dropped, and *neither side notices* without a liveness mechanism. Keepalives refresh the mapping.
+2. **The server can't reach the device on its own.** Behind NAT, only traffic the device initiates opens the path. The device therefore has to keep it open while it expects replies or pushes, for example during long verifications or when it's OPERATIONAL and awaiting future config changes.
+3. **Fast failure detection.** Without timeouts, a device whose server has crashed, or whose link has changed (Wi-Fi to cellular, DHCP renumbering), would wait forever. Three missed intervals bound detection to about 60 s, and then resume restores the session.
+4. **Server resource hygiene.** Devices that disappear (power loss, decommissioning) must not hold session memory forever. Idle detection plus the grace period reclaims it while still allowing a quick resume.
+5. **Detecting rebinding.** A keepalive arriving from a new source port shows the NAT has rebound, so the server updates the return path (§9.4) before real traffic is lost.
+6. **Cost-aware.** Keepalives are triggered by idle time and are small (88 bytes per round trip), and the interval is set by policy for battery-powered or metered links.
+
 ---
 
 ## 10. Identity, authentication and registration (ZTP-FR-12..14)
@@ -736,7 +938,7 @@ When a frame passes the MAC check for session S but arrives from a different `ip
 ```
 K_mfg[model]   32 B   in the firmware image (device) / keys.conf (server)
    │
-   ├── K_boot = HMAC(K_mfg, "ZTP-BOOT-v1")                       DISCOVER, OFFER, fresh HELLO/HELLO_ACK, NAK
+   ├── K_boot = HMAC(K_mfg, "ZTP-BOOT-v1")                       DISCOVER, OFFER, fresh HELLO/HELLO_ACK, path-probe KEEPALIVE/ACK, NAK
    │
    └── K_dev  = HMAC(K_mfg, "ZTP-DEV-v1" ‖ serial)               resume HELLO/HELLO_ACK, root of K_s
           │
@@ -758,6 +960,22 @@ K_mfg[model]   32 B   in the firmware image (device) / keys.conf (server)
 | NONCE_REG | 0x00000000000F04F8 (984312) | The nonce the PDF requires; input to the replay cache |
 | NONCE_SRV | Ns from HELLO_ACK | Explicit proof of freshness (it is also bound in K_s) |
 | *(frame MAC)* | trunc16(HMAC(K_s, …)) | Authenticity and integrity of all of the above |
+| *(header)* session_id | 7421 | The session it belongs to. Appendix A lists it as a REGISTER field; here it is carried in the authenticated header |
+
+The device logs these fields at the default level, in the same layout as Appendix A Step 5, so the log shows what was sent:
+```
+[AUTH] REGISTER: session_id=7421 soft_serial=ZTP-93AF21 model=EDGE-GW-100 firmware=v1.0 nonce=984312
+```
+
+**Key derivation, as a diagram:**
+```mermaid
+flowchart TD
+    KM["K_mfg per model<br/>device: firmware image, server: keys.conf"] -->|"HMAC with label ZTP-BOOT-v1"| KB["K_boot<br/>DISCOVER, OFFER, fresh HELLO and HELLO_ACK,<br/>path-probe KEEPALIVE, REGISTER_NAK"]
+    KM -->|"HMAC with label ZTP-DEV-v1 and serial"| KD["K_dev, per device<br/>resume HELLO and HELLO_ACK"]
+    KD -->|"HMAC with label ZTP-SK-v1, Nd, Ns, session_id, epoch"| KS["K_s, per session and epoch<br/>every in-session frame"]
+    ND["Nd: device nonce, CSPRNG"] -.-> KS
+    NS["Ns: server challenge, CSPRNG"] -.-> KS
+```
 
 ### 10.3 Verification and failure path (ZTP-FR-13)
 ```mermaid
@@ -766,6 +984,8 @@ sequenceDiagram
     participant S as Server
     D->>S: HELLO (MAC K_boot ok)
     S-->>D: HELLO_ACK sid=8812
+    D->>S: KEEPALIVE path probe (MAC K_boot ok)
+    S-->>D: KEEPALIVE_ACK
     D->>S: REGISTER MAC under wrong K_s
     Note right of S: MAC mismatch on first K_s frame of a HALF_OPEN session, so auth failure for claimed serial
     S-->>D: REGISTER_NAK reason=BAD_MAC detail Invalid HMAC (MAC K_boot, terminal)
@@ -814,7 +1034,7 @@ The demo exercises 1 and 2 with `ztp-device --replay-test`, which keeps the raw 
 | Firmware v1.1 | `artifacts/fw_EDGE-GW-100_v1.1.bin` | 64 KiB | 64 |
 | Firmware v1.0 | `artifacts/fw_EDGE-GW-050_v1.0.bin` | 48 KiB | 48 |
 
-Config (JSON, ZTP-FR-15), extending the PDF example:
+Config (JSON, ZTP-FR-15). It is a **strict superset** of the PDF's Appendix A "Example Configuration": the keys `interfaces.wan = "eth0"`, `interfaces.lan = "eth1"`, `mtu = 1500` and `keepalive_interval = 20` appear unchanged, and QA checks them verbatim (TC-PDF-03). JSON was chosen over YAML because a minimal key scanner is enough on the device, while YAML would need a real parser.
 ```json
 {
   "config_version": 3,
@@ -864,6 +1084,26 @@ sequenceDiagram
 - On restart, or after the session is lost, the device sends MANIFEST_REQ again. **If the manifest's sha256 equals the map's** → it continues and requests only the missing chunks: `[PROVISION] Resuming firmware: 32/64 chunks present, requesting 32`. If they differ (the artifact changed on the server) → the partial is discarded (TC-PROV-10).
 - > **Reviewer note.** Because the map is written every 16 chunks, up to 15 chunks may be fetched again after a crash. They are already on disk, but their bits weren't persisted. That's a deliberate tradeoff of fsync cost against refetch cost, and it is harmless because writing a chunk is idempotent.
 
+### 11.5 Per-file transfer state machine (device side)
+One instance runs per artifact: config first, then firmware.
+```mermaid
+stateDiagram-v2
+    [*] --> NEED_MANIFEST
+    NEED_MANIFEST --> CHECK_PARTIAL: MANIFEST received
+    CHECK_PARTIAL --> FETCHING: no partial, or map sha matches and chunks missing
+    CHECK_PARTIAL --> DISCARD: map sha differs from manifest
+    CHECK_PARTIAL --> VERIFYING: all chunks already present
+    DISCARD --> FETCHING: partial and map deleted, file preallocated
+    FETCHING --> FETCHING: CHUNK_DATA written, map persisted every 16 chunks
+    FETCHING --> VERIFYING: bitmap complete
+    FETCHING --> NEED_MANIFEST: session lost, then resumed or re-registered
+    VERIFYING --> DONE: SHA-256 equals manifest
+    VERIFYING --> DISCARD: mismatch, attempt below 2
+    VERIFYING --> FAILED: mismatch after 2 attempts
+    DONE --> [*]: TRANSFER_DONE ok sent
+    FAILED --> [*]: STATUS_REPORT FAILED HASH_MISMATCH
+```
+
 ---
 
 ## 12. Version upgrade and restart (ZTP-FR-21..23)
@@ -898,7 +1138,7 @@ sequenceDiagram
     D->>S: UPGRADE_STATUS installed v1.1 (epoch 1, seq 1)
     S-->>D: ACK
 ```
-Logs: `[UDP] Session resumed (session_id=7421, epoch=1)` on the device; `[AUTH] Resume accepted for ZTP-93AF21 (no re-registration)` on the server.
+Logs: `[UDP] Session resumed (session_id=7421) epoch=1` on the device (the Appendix A Step 8 text, verbatim as a prefix); `[AUTH] Resume accepted for ZTP-93AF21 (no re-registration)` on the server.
 
 **Fallbacks**
 | Situation | Server reply | Device behaviour | DB effect |
@@ -921,6 +1161,25 @@ Logs: `[UDP] Session resumed (session_id=7421, epoch=1)` on the device; `[AUTH] 
 ### 12.5 Rollback
 If validation on the new firmware fails (§13), for example a version mismatch or the test hook `--fail-validate`: switch `active_slot` back (an atomic state write) → `[UPGRADE] Validation failed on v1.1, rolled back to v1.0` → UPGRADE_STATUS(rolled_back) and STATUS_REPORT(FAILED, VALIDATION_FAILED). The DB keeps registration `Success` with stage `FAILED` and a note.
 
+### 12.6 Upgrade state machine (A/B slots)
+```mermaid
+stateDiagram-v2
+    [*] --> COMPARE: REGISTER_ACK or resume carries fw target
+    COMPARE --> CURRENT: running at or above target
+    COMPARE --> DOWNLOAD: running below target
+    DOWNLOAD --> VERIFY: image complete in inactive slot
+    VERIFY --> DOWNLOAD: hash or header mismatch, retry
+    VERIFY --> NOTIFY: hash, model and version verified
+    NOTIFY --> COMMIT: UPGRADE_STATUS installing acknowledged
+    COMMIT --> REBOOT: device.state written atomically, active slot B
+    REBOOT --> CONFIRM: execv, restart detected, session resumed
+    CONFIRM --> COMMITTED: validation passes on new firmware
+    CONFIRM --> ROLLBACK: validation fails
+    ROLLBACK --> [*]: active slot back to A, report FAILED
+    COMMITTED --> [*]: OPERATIONAL
+    CURRENT --> [*]: no restart, go to VALIDATE
+```
+
 ---
 
 ## 13. Validation and operational state (ZTP-FR-24..27)
@@ -933,6 +1192,28 @@ If validation on the new firmware fails (§13), for example a version mismatch o
 If all three pass → STATUS_REPORT(OPERATIONAL), and wait for STATUS_ACK → `[STATE] Device is OPERATIONAL`. Persist `stage=OPERATIONAL`. The device stays in operational mode, sending keepalives; with `--exit-when-operational` (demo) it exits 0 after a short hold.
 
 If a check fails: firmware problems trigger the rollback (§12.5). A missing or corrupt config triggers one re-fetch of the config, then FAILED. An unhealthy session waits for recovery (resume), with a 3-minute or 30-second validation deadline, then FAILED.
+
+### 13.1 Validation flow, the transition to OPERATIONAL
+```mermaid
+flowchart TD
+    V0["enter VALIDATE<br/>(after resume, or directly when firmware is current)"] --> C1{"config.json present,<br/>sha matches, required keys,<br/>config_version as assigned?"}
+    C1 -- no --> R1{"config re-fetched once already?"}
+    R1 -- no --> RF["re-fetch config (11.5), then re-validate"]
+    RF --> C1
+    R1 -- yes --> FAIL["STATUS_REPORT FAILED,<br/>stage FAILED"]
+    C1 -- yes --> L1["log: [VALIDATION] Configuration present"]
+    L1 --> C2{"active slot version equals fw target<br/>and image hash ok?"}
+    C2 -- no --> RB["rollback to previous slot (12.5)"]
+    RB --> FAIL
+    C2 -- yes --> L2["log: [VALIDATION] Firmware v1.1 verified"]
+    L2 --> C3{"fresh KEEPALIVE health-probe round trip,<br/>last RX recent, SRTT below 1000 ms?"}
+    C3 -- no --> W["wait for session recovery<br/>within validation deadline"]
+    W --> C3
+    W -- deadline passed --> FAIL
+    C3 -- yes --> L3["log: [VALIDATION] Session healthy"]
+    L3 --> SR["STATUS_REPORT OPERATIONAL, wait for STATUS_ACK"]
+    SR --> OP["persist stage OPERATIONAL<br/>log: [STATE] Device is OPERATIONAL<br/>keepalives continue"]
+```
 
 ---
 
@@ -1002,7 +1283,8 @@ At startup each artifact is loaded, sized and hashed. A missing or unreadable ar
 | stage | enum HELLO…OPERATIONAL/FAILED | OPERATIONAL |
 | attempts / failed_attempts | u16 | 1 / 0 |
 | last_seen, last_src | UTC, ip:port | … |
-| **notes** (outcome detail) | str | "Legacy device", "Invalid HMAC", "Resumed after upgrade", "Transfer resumed" |
+| **notes** (registration outcome and policy; shown in the default dump) | str | "Legacy device", "Invalid HMAC", "Unknown model" |
+| provisioning_notes (verbose dump only) | str | "Transfer resumed", "Resumed after upgrade", "Re-registered after session expiry" |
 
 **Durability:** every change is appended as one JSON line to `state/db.jsonl` (`fflush` + `fsync` on registration events, buffered for stage events). At startup the server replays the journal to rebuild memory, so **records survive server restarts**, and duplicate detection keeps working across them (TC-SRV-06). The journal is compacted on clean shutdown.
 ```json
@@ -1012,16 +1294,27 @@ At startup each artifact is loaded, sized and hashed. A missing or unreadable ar
 > **Design rationale.** An append-only journal is the simplest storage that is both crash-safe and auditable, and it needs no dependencies. SQLite is the obvious next step (§22.3).
 
 ### 14.5 Dump and summary (ZTP-FR-31, FR-32)
-Triggered by `SIGUSR1` (while running), by `SIGINT` or `SIGTERM` (dump, summary, exit), or by `--dump-on-exit`/`--run-for N` (demo). Written to stdout, the server log and `logs/db_dump.txt`:
+Triggered by `SIGUSR1` (while running), by `SIGINT` or `SIGTERM` (dump, summary, exit), or by `--dump-on-exit`/`--run-for N` (demo). Written to stdout, the server log and `logs/db_dump.txt`.
+
+**Default dump: exactly the PDF's "Example of a Dump from Server DB".** It has the same title, the same six columns in the same order (*Device ID, Registration Status, Firmware Assigned, Config Version, Registration Time, Notes*), the same time format (`YYYY-MM-DD HH:MM:SS`), `—` for empty cells, and the same notes text ("Invalid HMAC", "Legacy device"). It is checked by TC-PDF-02.
 ```
-================================ Device Registration Details ================================
-Device ID    Status   Firmware  Config  Registration Time    Stage        Att  Notes
-ZTP-93AF21   Success  v1.1      v3      2026-11-10 14:32:10  OPERATIONAL  1    —
-ZTP-84BC19   Failed   —         —       2026-11-10 14:32:10  FAILED       3    Invalid HMAC
-ZTP-71DD08   Success  v1.1      v3      2026-11-10 14:32:10  OPERATIONAL  1    Transfer resumed
-ZTP-55AC90   Success  v1.1      v3      2026-11-10 14:32:11  OPERATIONAL  1    —
-ZTP-19FE77   Success  v1.0      v2      2026-11-10 14:32:11  OPERATIONAL  1    Legacy device
-=============================================================================================
+Device Registration Details
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+| Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            |
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-10 14:32:10 | —                |
+| ZTP-84BC19 | Failed              | —                 | —              | 2026-11-10 14:32:10 | Invalid HMAC     |
+| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-10 14:32:10 | —                |
+| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-10 14:32:11 | —                |
+| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-10 14:32:11 | Legacy device    |
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+```
+The five demo devices, their outcomes, versions and notes reproduce the five rows of the PDF's example. Only the timestamps differ, because they are real. In the default dump, **Notes** holds only registration-outcome and policy notes, as in the PDF: "Invalid HMAC", "Unknown model", "Legacy device".
+
+**Extended dump** (`--dump-verbose`, also written to `logs/db_dump_verbose.txt`). It appends extra columns *after* the PDF's columns, so the PDF format is never broken: `Model | FW Initial | Tenant | Stage | Attempts | Failed Attempts | Last Seen | Last Source | Provisioning Notes`. The last column holds events such as "Transfer resumed", "Resumed after upgrade" and "Re-registered after session expiry".
+
+**The summary follows the dump:**
+```
 Summary
   Registered successfully : 4   ZTP-93AF21, ZTP-71DD08, ZTP-55AC90, ZTP-19FE77
   Failed registration     : 1   ZTP-84BC19 (Invalid HMAC, 3 attempts)
@@ -1042,6 +1335,105 @@ Summary
 | Floods | Per-IP token bucket; half-open TTL of 10 s; `SERVER_BUSY` |
 | Slow or stuck devices | Idle → grace → delete; no unbounded queues |
 | Bad configuration | Fail fast at startup (missing artifact, unparseable policy, missing key for a model) |
+
+### 14.7 Server data model
+```mermaid
+erDiagram
+    POLICY_ENTRY ||--o{ DEVICE_RECORD : "assigns fw and config to"
+    DEVICE_RECORD ||--o{ JOURNAL_EVENT : "persisted as"
+    DEVICE_RECORD ||--o| SESSION : "has at most one live"
+    SESSION ||--|| REL_STATE : "owns"
+    ARTIFACT ||--o{ POLICY_ENTRY : "referenced by"
+    DEVICE_RECORD {
+        string device_id PK "soft serial"
+        string model
+        string registration_status "Success or Failed"
+        datetime registration_time
+        string firmware_assigned
+        int config_version
+        string tenant
+        string stage
+        int attempts
+        string notes
+    }
+    SESSION {
+        int session_id PK
+        int epoch
+        string state
+        string peer_addr
+        int last_resume_ctr
+        datetime last_rx
+    }
+    REL_STATE {
+        int next_seq
+        int snd_una
+        int rcv_ack
+        int rto_ms
+    }
+    POLICY_ENTRY {
+        string match PK "model or serial"
+        string firmware
+        int config_version
+        string tenant
+        string notes
+    }
+    ARTIFACT {
+        string path PK
+        string kind "config or firmware"
+        string version
+        int size
+        string sha256
+    }
+    JOURNAL_EVENT {
+        datetime ts
+        string serial FK
+        string ev
+    }
+```
+
+### 14.8 Concurrent devices on one event loop
+Three of the demo devices register at the same time. Each datagram is processed to completion in microseconds, so the sessions interleave without locks.
+```mermaid
+sequenceDiagram
+    participant A as ZTP-93AF21
+    participant B as ZTP-84BC19 (bad key)
+    participant C as ZTP-19FE77 (legacy)
+    participant S as Server event loop
+    participant DB as DB
+    A->>S: HELLO
+    B->>S: HELLO
+    S-->>A: HELLO_ACK sid 7421
+    C->>S: HELLO
+    S-->>B: HELLO_ACK sid 8812
+    S-->>C: HELLO_ACK sid 9930
+    A->>S: REGISTER
+    S->>DB: ZTP-93AF21 Success v1.1 v3
+    B->>S: REGISTER (bad MAC)
+    S->>DB: ZTP-84BC19 Failed Invalid HMAC
+    S-->>A: REGISTER_ACK cruise_ops v1.1 v3
+    S-->>B: REGISTER_NAK Invalid HMAC
+    C->>S: REGISTER
+    S->>DB: ZTP-19FE77 Success v1.0 v2 Legacy device
+    S-->>C: REGISTER_ACK cruise_ops v1.0 v2
+    Note over S: chunks for A and C are interleaved fairly, at most 64 datagrams per wakeup
+```
+
+### 14.9 Coverage of the PDF's §9 "Server Robustness"
+| PDF §9 point | Design element | QA |
+|---|---|---|
+| Handle multiple devices registering concurrently | Single-threaded event loop with per-session state machines (§14.1, §14.8) | TC-SRV-01/09, TC-PERF-01 |
+| Accept and process registration requests from multiple devices at the same time | No device blocks another; fair draining of datagrams; rate limits per IP (§10.5) | TC-SRV-09, TC-AUTH-10 |
+| Determine and assign the appropriate firmware and configuration per device | Policy engine: serial > model > default (§14.3) | TC-SRV-02, TC-UPG-06 |
+| Track 1. device identifier | `device_id` (§14.4) | TC-SRV-03 |
+| Track 2. timestamp of registration | `registration_time` | TC-SRV-03 |
+| Track 3. firmware version assigned | `firmware_assigned` | TC-SRV-03 |
+| Track 4. configuration version assigned | `config_version` | TC-SRV-03 |
+| Track 5. registration outcome (success or failure) | `registration_status` + `notes` | TC-SRV-03, TC-AUTH-03 |
+| In-memory structure or database (file-backed or in-memory) | Both: in-memory table plus the `db.jsonl` journal | TC-SRV-06 |
+| Dump the contents of the database | Default dump in the PDF format (§14.5) | TC-SRV-04, TC-PDF-02 |
+| Summary: devices successfully registered | "Registered successfully" line | TC-SRV-05 |
+| Summary: devices that failed registration | "Failed registration" line with reasons | TC-SRV-05 |
+| Summary: firmware and configuration versions per device | "Firmware / config per device" block | TC-SRV-05 |
 
 ---
 
@@ -1104,6 +1496,53 @@ reg_attempts=0             last_fail_reason=
 **Atomic write procedure** (`util_atomic_write`, used for every state, map and slot change): write `file.tmp` → `fsync(fd)` → `rename(tmp, file)` → `fsync(dirfd)`. A reader therefore sees either the old file or the new one, never a torn mixture (TC-UNIT-13). On a parse error at boot, `device.state.bak` (the previous generation) is used.
 
 > **Reviewer note.** The state file contains no secrets (§12.3). The factory key lives in the binary, as it would in a firmware image.
+
+### 15.4 Event catalogue (device FSM)
+Events come from three sources: **NET** (an authenticated, in-order frame delivered by the reliability layer), **TMR** (the timer heap) and **SYS** (process start or signals).
+| # | Event | Source | Valid in state(s) | Guard | Action | Next state |
+|---|---|---|---|---|---|---|
+| E1 | `START` | SYS | — | state file says no live session | load or generate serial; log BOOT lines | DISCOVERY |
+| E2 | `START_RESUME` | SYS | — | `session_id` saved, stage ≥ REGISTERED | log `Restart detected` if `pending_reboot` | RESUME |
+| E3 | `OFFER_OK` / `STATIC_ADDR` | NET / SYS | DISCOVERY | OFFER MAC and nonce ok | log `Provisioning server found` | SESSION |
+| E4 | `DISC_TIMEOUT` | TMR | DISCOVERY | 3 attempts used | fall back to static | SESSION |
+| E5 | `HELLO_ACK` | NET | SESSION | Nd echo matches, MAC K_boot ok | derive K_s; send path-probe KEEPALIVE | SESSION (probing) |
+| E6 | `PROBE_ACK` | NET | SESSION | — | RTT sample; send REGISTER | REGISTER |
+| E7 | `REGISTER_ACK` | NET | REGISTER | MAC K_s ok | persist stage REGISTERED, session_id; MANIFEST_REQ(config) | CONFIG |
+| E8 | `REGISTER_NAK` | NET | REGISTER | MAC K_boot ok | attempts++; backoff | SESSION (or FAILED at 3) |
+| E9 | `MANIFEST` | NET | CONFIG, FIRMWARE | — | per-file FSM (§11.5) | (unchanged) |
+| E10 | `CHUNK_DATA` | NET | CONFIG, FIRMWARE | chunk not already present | write at offset; set bit; persist map every 16 | (unchanged) |
+| E11 | `FILE_VERIFIED` | internal | CONFIG | config sha ok | TRANSFER_DONE; persist CONFIG_OK | FIRMWARE |
+| E12 | `FW_CURRENT` | internal | FIRMWARE | running ≥ target | log "no upgrade required" | VALIDATE |
+| E13 | `FW_VERIFIED` | internal | FIRMWARE | image sha and header ok | UPGRADE_STATUS(installing) | UPGRADE |
+| E14 | `UPGRADE_ACKED` | NET | UPGRADE | — | atomic commit (§12.1 step 5) | RESTART |
+| E15 | `EXEC` | internal | RESTART | — | flush logs, `execv` | BOOT (new process) |
+| E16 | `RESUMED` | NET | RESUME | MAC K_dev ok, epoch +1 | log `Session resumed`; continue from the persisted stage | CONFIG / FIRMWARE / VALIDATE |
+| E17 | `RESUME_REJECTED` / `SESSION_UNKNOWN` | NET | RESUME | — | fresh HELLO (and REGISTER) | SESSION |
+| E18 | `VALIDATION_OK` | internal | VALIDATE | 3 checks pass (§13.1) | STATUS_REPORT(OPERATIONAL) | VALIDATE (await ack) |
+| E19 | `STATUS_ACK` | NET | VALIDATE | — | persist OPERATIONAL; log `[STATE] Device is OPERATIONAL` | OPERATIONAL |
+| E20 | `VALIDATION_FAIL` | internal | VALIDATE | after rollback or re-fetch | STATUS_REPORT(FAILED) | FAILED |
+| E21 | `IDLE` | TMR | SESSION…OPERATIONAL | nothing sent for one interval | KEEPALIVE | (unchanged) |
+| E22 | `SESSION_DEAD` | TMR / reliability | any connected state | 3 intervals silent, or retries exhausted | log timeout; backoff with jitter | RESUME (registered) / SESSION |
+| E23 | `RTO` | TMR | any | unacked frame | retransmit (§8.10) | (unchanged) |
+| E24 | `SIGINT` / `SIGTERM` | SYS | any | — | persist the map and state, print counters, exit | — |
+
+### 15.5 Device event loop
+```mermaid
+flowchart TD
+    S0["start: parse CLI, open log (append), load or create device.state"] --> S1["boot logic: first boot, restart detected, or resume? Pick the start state"]
+    S1 --> L["event loop"]
+    L --> P["poll(socket, timeout = next timer deadline)"]
+    P --> R{"datagram ready?"}
+    R -- yes --> RX["receive pipeline (5.7), deliver in-order frames as NET events to the FSM"]
+    R -- no --> TM["fire expired timers as TMR events:<br/>RTO, delayed ACK, keepalive, liveness, backoff"]
+    RX --> TX["flush the send queue within window W"]
+    TM --> TX
+    TX --> Q{"FSM in RESTART?"}
+    Q -- yes --> EX["flush logs, execv self (same argv)"]
+    Q -- no --> Z{"OPERATIONAL with exit flag, or FAILED?"}
+    Z -- yes --> END["print counters, exit 0 or 1"]
+    Z -- no --> L
+```
 
 ---
 
@@ -1176,6 +1615,26 @@ These are emitted exactly as in the PDF's sample: `Received packet seq=N (out of
 - `logs/server.log`, `logs/device_<serial>.log` (the device appends across restarts, so the log of the restart is continuous), `logs/db_dump.txt`.
 - Counters at exit, from both sides: `tx, rx, retx_timeout, retx_fast, dup, ooo, out_of_window, mac_fail, replay_rejected, rate_limited, sessions_peak, srtt_ms`.
 
+### 17.4 Rule for conformance with the PDF's log lines
+Every log line the PDF shows, whether in the §1 "Example output", Appendix A Steps 1–9 or the bonus "Sample Log Output", is emitted **verbatim as the prefix of the message** (the text after the timestamp). Extra detail may follow only *after* that prefix, for example `[NAT] Keepalive acknowledged (rtt=2 ms)`. The messages are string constants in `common/logmsg.h`, so they can't drift, and QA matches them with a fixed-string prefix (`grep -F`).
+| PDF line | Emitted by | When |
+|---|---|---|
+| `[BOOT] Soft serial generated` | device | First boot (§6.1) |
+| `[DISCOVERY] Provisioning server found` | device | OFFER verified, or static address configured (§6.3) |
+| `[BOOT] Device starting` | device | Every process start |
+| `[BOOT] Soft serial: ZTP-93AF21` | device | Every boot |
+| `[BOOT] Firmware version: v1.0` | device | Every boot (version of the active slot) |
+| `[DISCOVERY] Using static server IP 10.10.10.5:5555` | device | Static mode or fallback |
+| `[UDP] HELLO sent (seq=1)` | device | First HELLO transmission |
+| `[UDP] Session established (session_id=7421)` | device | HELLO_ACK verified |
+| `[NAT] Keepalive sent` / `[NAT] Keepalive acknowledged` | device | Path probe and periodic keepalives (§9.2) |
+| `[AUTH] Registration successful` / `[AUTH] Assigned tenant: cruise_ops` | device (and server, with a sid prefix) | REGISTER_ACK |
+| `[PROVISION] Receiving config (chunk i/N)` / `[PROVISION] Config checksum verified` | device | §11 |
+| `[UPGRADE] Current: v1.0 -> Target: v1.1` / `[UPGRADE] Upgrade complete, restarting device` | device | §12.1 |
+| `[BOOT] Restart detected` / `[UDP] Session resumed (session_id=7421)` | device | §12.3 |
+| `[VALIDATION] Configuration present` / `[VALIDATION] Firmware v1.1 verified` / `[STATE] Device is OPERATIONAL` | device | §13 |
+| `[UDP] Received packet seq=3 (out of order, expected=2)`, `[UDP] Buffered packet seq=3`, `[UDP] Retransmitting seq=2 (timeout)`, `[UDP] Duplicate packet seq=2 ignored` | both | §8.4, §8.3 |
+
 ---
 
 ## 18. Security analysis
@@ -1223,7 +1682,10 @@ Toolchain: gcc ≥ 9 or clang ≥ 11, GNU make, POSIX sh. No other dependencies 
 ztp-server [--bind 0.0.0.0] [--port 5555] [--disc-port 5556] [--mcast 239.255.90.90]
            [--policy conf/policy.conf] [--keys conf/keys.conf] [--db state/db.jsonl]
            [--log logs/server.log] [--demo-timers] [--run-for SECS] [--dump-on-exit]
-           [--loss P] [--reorder P] [--dup P] [--delay MS] [--seed N] [-v|-q]
+           [--loss P] [--reorder P] [--dup P] [--delay MS] [--seed N] [-v|-q] [--dump-verbose]
+           # test hooks (QA and demo only, clearly marked, refused unless --test-hooks is given):
+           [--first-session-id N]   # deterministic first sid, e.g. 7421 to reproduce Appendix A exactly
+           [--corrupt-chunk IDX] [--drop-seq tx:N]
 ```
 **Device**
 ```
@@ -1234,7 +1696,10 @@ ztp-device --state-dir DIR --model MODEL [--fw v1.0] [--serial ZTP-XXXXXX]
            # test hooks (compiled in, clearly marked, used only by demo and QA):
            [--bad-key] [--replay-test] [--reuse-nonce] [--crash-after-chunks N]
            [--rebind-after SECS] [--fail-validate] [--restart-mode exec|exit]
+           [--crash-at download|verified|committed|post-exec] [--drop-seq tx:N]
+           [--test-hooks] [--nonce N]   # fixed REGISTER nonce (e.g. 984312, as in Appendix A)
 ```
+> **Reviewer note.** `--first-session-id` makes session IDs predictable. It exists only so that the Appendix A transcript can be reproduced byte for byte (TC-APX-03), and the server refuses it unless `--test-hooks` is also given.
 
 ### 19.3 Demo scenario (`scripts/run_demo.sh`; the PRD §5.2 scenarios S1–S5)
 1. Clean `state/` and `logs/`; run `mkartifacts`.
@@ -1334,6 +1799,9 @@ Specifically: a lost HELLO or REGISTER is retransmitted with identical bytes and
 | *Bonus:* how loss and reordering were simulated | §16 |
 | Required Q1–Q5 / bonus B1–B4 | §21.1 / §21.2 |
 | Logs (where to find them, how to read them) | §17 |
+| Why keepalives and session-timeout detection matter in real deployments (PDF §4: "Explain in your README…") | §9.6 (ZTP-DEL-12) |
+| Walkthrough of the Appendix A example with real logs | §4.5, Appendix A |
+| The DB dump and summary, compared with the PDF's example | §14.5 |
 
 ---
 
@@ -1422,61 +1890,89 @@ Specifically: a lost HELLO or REGISTER is retransmitted with identical bytes and
 ---
 
 ## Appendix A: Annotated end-to-end log transcript
-The flow of device ZTP-93AF21 at 15% loss, following the PDF's Appendix A. Lines prefixed `#` are annotations. Timestamps are shortened.
+This is the device ZTP-93AF21 run with **exactly the PDF's Appendix A parameters**: model EDGE-GW-100, firmware v1.0, static server 10.10.10.5:5555 (lo0 alias, §6.3), first session ID 7421 (test hook) and REGISTER nonce 984312 (test hook `--nonce`). The run uses 15% loss, so that reliability events appear alongside the Appendix A steps. Lines with `# Step n` mark the PDF's Appendix A steps, and the text after the timestamp starts with the PDF's wording verbatim (§17.4). Other `#` text is annotation, and timestamps are shortened. QA checks this transcript in TC-APX-01..10.
+
+Command:
+```sh
+sudo ifconfig lo0 alias 10.10.10.5/32
+ztp-server --bind 10.10.10.5 --test-hooks --first-session-id 7421 --demo-timers --loss 0.15 --seed 7 &
+ztp-device --state-dir state/93AF21 --serial ZTP-93AF21 --model EDGE-GW-100 --fw v1.0 \
+           --discover static --server 10.10.10.5:5555 --demo-timers --loss 0.15 --seed 8 \
+           --test-hooks --nonce 984312
+```
 
 **Device (`logs/device_ZTP-93AF21.log`)**
 ```
-10.001 [BOOT] Device starting (boot #1)
-10.001 [BOOT] Soft serial: ZTP-93AF21 (set via --serial; normally "generated" on first boot)
-10.001 [BOOT] Firmware version: v1.0 (slot A)
-10.002 [DISCOVERY] Sending DISCOVER to 239.255.90.90:5556 (attempt 1/3)
-10.004 [DISCOVERY] Provisioning server found 127.0.0.1:5555 (OFFER verified)
-10.004 [UDP] HELLO sent (seq=1)
-10.505 [UDP] Retransmitting seq=1 (timeout)          # HELLO lost (simulated)
-10.507 [UDP] Session established (session_id=7421)
-10.508 [AUTH] REGISTER sent (nonce=984312)
-10.511 [AUTH] Registration successful
-10.511 [AUTH] Assigned tenant: cruise_ops (fw target v1.1, config v3)
+10.001 [BOOT] Device starting (boot #1)                                  # Step 1
+10.001 [BOOT] Soft serial generated                                      # PDF §1 example (first boot)
+10.001 [BOOT] Soft serial: ZTP-93AF21                                    # Step 1
+10.001 [BOOT] Firmware version: v1.0 (slot A)                            # Step 1
+10.002 [DISCOVERY] Using static server IP 10.10.10.5:5555                # Step 2
+10.002 [DISCOVERY] Provisioning server found 10.10.10.5:5555 (static)    # PDF §1 example
+10.003 [UDP] HELLO sent (seq=1)                                          # Step 3
+10.504 [UDP] Retransmitting seq=1 (timeout)                              #   HELLO lost (simulated); same bytes and Nd
+10.506 [UDP] Session established (session_id=7421)                       # Step 3
+10.506 [NAT] Keepalive sent                                              # Step 4 (path probe, seq=2)
+10.508 [NAT] Keepalive acknowledged (rtt=2 ms)                           # Step 4
+10.508 [AUTH] REGISTER: session_id=7421 soft_serial=ZTP-93AF21 model=EDGE-GW-100 firmware=v1.0 nonce=984312   # Step 5
+10.511 [AUTH] Registration successful                                    # Step 5
+10.511 [AUTH] Assigned tenant: cruise_ops (fw target v1.1, config v3)    # Step 5
 10.512 [PROVISION] Config manifest: v3, 2310 bytes, 3 chunks, sha256=5c1e…
-10.514 [PROVISION] Receiving config (chunk 1/3)
-10.515 [UDP] Received packet seq=6 (out of order, expected=5)
+10.514 [PROVISION] Receiving config (chunk 1/3)                          # Step 6 (server seq=4)
+10.515 [UDP] Received packet seq=6 (out of order, expected=5)            #   chunk 2/3 (seq 5) lost
 10.515 [UDP] Buffered packet seq=6
-10.716 [PROVISION] Receiving config (chunk 2/3)      # seq 5 repaired after server RTO
-10.716 [PROVISION] Receiving config (chunk 3/3)
-10.717 [PROVISION] Config checksum verified
-10.718 [UPGRADE] Current: v1.0 -> Target: v1.1
+10.716 [PROVISION] Receiving config (chunk 2/3)                          # Step 6, seq 5 repaired after the server's RTO
+10.716 [PROVISION] Receiving config (chunk 3/3)                          # Step 6, drained from the buffer
+10.717 [PROVISION] Config checksum verified                              # Step 6
+10.718 [UPGRADE] Current: v1.0 -> Target: v1.1                           # Step 7
 10.719 [PROVISION] Firmware manifest: v1.1, 65536 bytes, 64 chunks
 ...    [PROVISION] Firmware 32/64 (50%)
-11.402 [UDP] Duplicate packet seq=41 ignored          # network duplicate
+11.402 [UDP] Duplicate packet seq=41 ignored                             #   network duplicate
 ...    [PROVISION] Firmware 64/64 (100%)
 11.630 [PROVISION] Firmware checksum verified
 11.631 [UPGRADE] Installed v1.1 into slot B
-11.633 [UPGRADE] Upgrade complete, restarting device
+11.633 [UPGRADE] Upgrade complete, restarting device                     # Step 7
 11.640 [BOOT] Device starting (boot #2)
-11.640 [BOOT] Restart detected (pending upgrade to v1.1)
+11.640 [BOOT] Restart detected (pending upgrade to v1.1)                 # Step 8
+11.640 [BOOT] Soft serial: ZTP-93AF21
 11.641 [BOOT] Firmware version: v1.1 (slot B)
-11.643 [UDP] Session resumed (session_id=7421, epoch=1)  # no REGISTER sent
-11.650 [NAT] Keepalive sent
+11.643 [UDP] Session resumed (session_id=7421) epoch=1                   # Step 8, no REGISTER sent
+11.650 [NAT] Keepalive sent                                              #   health probe
 11.652 [NAT] Keepalive acknowledged (rtt=2 ms)
-11.653 [VALIDATION] Configuration present (v3, sha ok)
-11.653 [VALIDATION] Firmware v1.1 verified
-11.653 [VALIDATION] Session healthy (rtt=2 ms)
-11.656 [STATE] Device is OPERATIONAL
-13.656 [NAT] Keepalive sent
+11.653 [VALIDATION] Configuration present (v3, sha ok)                   # Step 9
+11.653 [VALIDATION] Firmware v1.1 verified                               # Step 9
+11.653 [VALIDATION] Session healthy (rtt=2 ms)                           # Step 9 (session health)
+11.656 [STATE] Device is OPERATIONAL                                     # Step 9
+13.656 [NAT] Keepalive sent                                              # periodic (Step 4 continues)
 13.658 [NAT] Keepalive acknowledged
 ```
 **Server (`logs/server.log`, excerpt for sid 7421)**
 ```
-10.004 [DISCOVERY] DISCOVER from 127.0.0.1:50122 model=EDGE-GW-100, OFFER sent
-10.507 [UDP] [sid=7421 ZTP-93AF21] Session established (HELLO seq=1 dup -> cached HELLO_ACK)
+10.504 [UDP] [sid=7421 ZTP-93AF21] HELLO seq=1 received (serial ZTP-93AF21, EDGE-GW-100, v1.0), HELLO_ACK seq=1 sent
+10.506 [UDP] [sid=7421 ZTP-93AF21] Session established
+10.507 [NAT] [sid=7421 ZTP-93AF21] Keepalive (path probe) acknowledged
 10.511 [AUTH] [sid=7421 ZTP-93AF21] Registration successful (EDGE-GW-100, fw v1.0, nonce=984312)
 10.511 [AUTH] [sid=7421 ZTP-93AF21] Assigned tenant: cruise_ops, fw v1.1, config v3
 10.511 [DB]   ZTP-93AF21 Success fw=v1.1 cfg=v3
+10.513 [PROVISION] [sid=7421 ZTP-93AF21] Sending config v3 (3 chunks)
 10.716 [UDP] [sid=7421] Retransmitting seq=5 (timeout)
+10.720 [PROVISION] [sid=7421 ZTP-93AF21] Sending firmware v1.1 (64 chunks)
 11.633 [UPGRADE] [sid=7421 ZTP-93AF21] Device installing v1.1, awaiting resume (grace 30 s)
 11.643 [AUTH] [sid=7421 ZTP-93AF21] Resume accepted (ctr=2, epoch=1), no re-registration
 11.656 [STATE] [sid=7421 ZTP-93AF21] OPERATIONAL
 ```
+
+**Mapping to the PDF's Appendix A.**
+| PDF step | PDF values | Reproduced here |
+|---|---|---|
+| Device information | Soft serial ZTP-93AF21, model EDGE-GW-100, firmware v1.0 | `--serial`, `--model`, `--fw` |
+| 2 | Server 10.10.10.5, UDP port 5555 | lo0 alias plus `--bind 10.10.10.5` (port 5555 is the default) |
+| 3 | HELLO seq=1, HELLO_ACK seq=1, session_id=7421 | HELLO and HELLO_ACK are both seq=1 in their own spaces; sid via `--first-session-id 7421` |
+| 5 | nonce = 984312 | `--nonce 984312` (test hook; normally a random 64-bit value) |
+| 5 | tenant cruise_ops | policy.conf |
+| 6 | the example config, 3 chunks | cfg_v3.json (a superset; 3 chunks) |
+| 7 | v1.0 → v1.1 | policy firmware v1.1 |
+| 8–9 | resume with the same session_id, then validation | §12.3, §13 |
 
 ---
 

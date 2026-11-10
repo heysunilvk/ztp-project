@@ -28,6 +28,7 @@
 12. [QA timeline, dependencies, assumptions, risks](#12-qa-timeline-dependencies-assumptions-risks)
 13. [Caveats: what is not or cannot be tested](#13-caveats-what-is-not-or-cannot-be-tested)
 14. [QA enhancement suggestions](#14-qa-enhancement-suggestions)
+15. [PDF conformance matrix](#15-pdf-conformance-matrix)
 
 ---
 
@@ -89,7 +90,7 @@ Real NAT hardware, real flash or power-loss rigs, IPv6, Windows, and production 
 |---|---|---|---|---|
 | ZTP-93AF21 | EDGE-GW-100 | v1.0 | — | Success, v1.1, v3, OPERATIONAL |
 | ZTP-84BC19 | EDGE-GW-100 | v1.0 | `--bad-key` | Failed, —, —, FAILED, "Invalid HMAC", attempts 3 |
-| ZTP-71DD08 | EDGE-GW-100 | v1.0 | `--crash-after-chunks 40`, `--replay-test` | Success, v1.1, v3, OPERATIONAL, "Transfer resumed" |
+| ZTP-71DD08 | EDGE-GW-100 | v1.0 | `--crash-after-chunks 40`, `--replay-test` | Success, v1.1, v3, OPERATIONAL; Notes "—" (verbose dump: "Transfer resumed") |
 | ZTP-55AC90 | EDGE-GW-100 | v1.1 | `--rebind-after 3` | Success, v1.1, v3, OPERATIONAL |
 | ZTP-19FE77 | EDGE-GW-050 | v0.9 | static discovery | Success, v1.0, v2, OPERATIONAL, "Legacy device" |
 
@@ -164,7 +165,7 @@ Each case gives its preconditions and steps in short form, followed by the expec
 | TC-REL-01 | Every frame carries a seq | FR-05, BON-02 | P1 | Decode the pcap of a full run (`pcapcheck.sh --dump-hdr`) | Every datagram has a valid header with seq; reliable seqs increase per direction and epoch |
 | TC-REL-02 | Retransmission on timeout | FR-06, FR-07, BON-03 | P1 | Drop one data frame (scripted) | `[UDP] Retransmitting seq=N (timeout)` once; delivered once; the ACK advances |
 | TC-REL-03 | The PDF scenario: seq 2 lost, seq 3 buffered | BON-04, BON-08 | P1 | Scripted: drop TX seq 2 once, in a run with ≥ 3 consecutive frames | Logs, in order: `Received packet seq=3 (out of order, expected=2)`, `Buffered packet seq=3`, `Retransmitting seq=2 (timeout)` or fast; application order is 1, 2, 3 |
-| TC-REL-04 | Lost ACK: data received | BON-07, BON-05 | P1 | Drop the ACK of REGISTER on the server's TX (scripted) | The device retransmits REGISTER; server logs `Duplicate packet seq=2 ignored`; **one** REGISTER processed (DB attempts = 1) |
+| TC-REL-04 | Lost ACK: data received | BON-07, BON-05 | P1 | Drop the ACK of REGISTER on the server's TX (scripted) | The device retransmits REGISTER (device seq=3, after HELLO=1 and the path-probe KEEPALIVE=2); server logs `Duplicate packet seq=3 ignored`; **one** REGISTER processed (DB attempts = 1) |
 | TC-REL-05 | Heavy duplication | FR-08, BON-05 | P1 | `--dup 1.0` (every datagram duplicated) on both sides | Completes; dup counters ≈ the number of frames; DB rows, stage transitions and chunk writes each happen once |
 | TC-REL-06 | Window limit respected | FR-06 | P1 | Debug log of in-flight counts during a 1 MiB transfer | Never more than `ZTP_TX_WINDOW` unacknowledged |
 | TC-REL-07 | Fast retransmit | FR-06 | P2 | Drop one frame in the middle of the window (scripted) | `Retransmitting seq=N (fast, sack)` before the RTO expires |
@@ -203,7 +204,7 @@ Each case gives its preconditions and steps in short form, followed by the expec
 | TC ID | Title | Req | Pri | Steps / setup | Expected result |
 |---|---|---|---|---|---|
 | TC-PROV-01 | Config in chunks with hash | FR-15, FR-17, FR-18 | P1 | ZTP-93AF21 | `Receiving config (chunk 1/3)` … `(3/3)`, `Config checksum verified` |
-| TC-PROV-02 | Config is valid JSON | FR-15 | P1 | Parse the saved `config.json` with an external tool (`python3 -m json.tool` or `jq`) | Valid; contains `interfaces`, `mtu`, `keepalive_interval`, `config_version` |
+| TC-PROV-02 | Config is valid JSON | FR-15 | P1 | Parse the saved `config.json` with an external tool (`python3 -m json.tool` or `jq`) | Valid JSON; contains `config_version` and the PDF example's keys (the exact values are checked in TC-PDF-03) |
 | TC-PROV-03 | Firmware in chunks with hash | FR-16, FR-17, FR-18 | P1 | ZTP-93AF21 | 64 chunks; `Firmware checksum verified`; the slot file's SHA equals the server artifact's |
 | TC-PROV-04 | Datagram size cap | FR-20, NFR-02 | P1 | pcap of the full demo → maximum UDP payload | ≤ 1200 bytes (expected maximum 1076) |
 | TC-PROV-05 | No IP fragments | FR-20 | P1 | pcap filter `ip[6:2] & 0x3fff != 0` | 0 packets; DF bit set (Linux) |
@@ -219,7 +220,7 @@ Each case gives its preconditions and steps in short form, followed by the expec
 |---|---|---|---|---|---|
 | TC-UPG-01 | Outdated firmware upgraded | FR-21 | P1 | ZTP-93AF21 (v1.0) | `[UPGRADE] Current: v1.0 -> Target: v1.1`; `Upgrade complete, restarting device` |
 | TC-UPG-02 | Process restart | FR-22 | P1 | Both `--restart-mode exec` and `exit` (supervised) | `[BOOT] Restart detected`; boot_count increased; no leaked fds (`lsof` before and after shows the same count) |
-| TC-UPG-03 | Resume without re-registration | FR-23 | P1 | After TC-UPG-01 | `[UDP] Session resumed (session_id=<same>, epoch=1)`; the device log has exactly **1** `REGISTER sent`; the server log has exactly 1 `Registration successful` for the serial |
+| TC-UPG-03 | Resume without re-registration | FR-23 | P1 | After TC-UPG-01 | `[UDP] Session resumed (session_id=<same>) epoch=1`; the device log has exactly **1** `REGISTER sent`; the server log has exactly 1 `Registration successful` for the serial |
 | TC-UPG-04 | One DB row per serial | FR-23, FR-30 | P1 | After the full demo | The dump has exactly one row per serial; attempts = 1 for every device except the bad-key one |
 | TC-UPG-05 | Already current: no upgrade | FR-21 | P1 | ZTP-55AC90 (v1.1) | `Firmware v1.1 is current, no upgrade required`; no restart; no firmware chunks transferred |
 | TC-UPG-06 | Legacy device path | FR-29, FR-21 | P1 | ZTP-19FE77 (EDGE-GW-050, v0.9) | Upgrades to v1.0; cfg v2; note "Legacy device" |
@@ -242,7 +243,7 @@ Each case gives its preconditions and steps in short form, followed by the expec
 | TC-SRV-01 | 5-device concurrent demo | FR-28 | P1 | `make demo` | Every final DB row matches §4.1 |
 | TC-SRV-02 | Per-device assignment | FR-29 | P1 | Demo + `policy_override.conf` | Each device gets the firmware and config of its model, or of its serial override |
 | TC-SRV-03 | DB record fields | FR-30 | P1 | Inspect the dump and `db.jsonl` | Device ID, timestamp, firmware assigned, config version and outcome present for every row |
-| TC-SRV-04 | Dump on demand | FR-31, DEL-11 | P1 | `kill -USR1 <server>` during the demo; SIGINT at the end | The dump is printed both times; its columns match DESIGN §14.5 (a superset of the PDF's table) |
+| TC-SRV-04 | Dump on demand | FR-31, DEL-11 | P1 | `kill -USR1 <server>` during the demo; SIGINT at the end | The dump is printed both times, in the default PDF format (exact format checks in TC-PDF-02); `--dump-verbose` adds the extra columns **after** Notes only |
 | TC-SRV-05 | Summary | FR-32 | P1 | At the end of the demo | Lists 4 successes, 1 failure with reason, and firmware/config per device |
 | TC-SRV-06 | DB persists across a server restart | NFR-10 | P1 | Restart the server after the demo; dump | The same rows are rebuilt from the journal |
 | TC-SRV-07 | Fuzzing malformed datagrams | NFR-07 | P1 | 1M random and mutated datagrams at the control and discovery ports, ASan build | No crash, hang or sanitizer report; counters increase |
@@ -285,21 +286,60 @@ Each case gives its preconditions and steps in short form, followed by the expec
 | TC-DEL-07 | README: bonus coverage | DEL-08 | P1 | §9 checklist | 3 bonus topics + 4 bonus answers present |
 | TC-DEL-08 | Sanitizer-clean demo | NFR-11 | P1 | `make asan demo` | No ASan or UBSan reports |
 | TC-DEL-09 | Logs committed | DEL-09, DEL-10 | P1 | `git ls-files logs/` (in the submission) | The server and every client log are present |
+| TC-DEL-10 | README: why keepalives matter | DEL-12 | P1 | §9 checklist, item 18 | A dedicated README section explains NAT/firewall idle expiry, why the server can't initiate, failure detection, resource hygiene and rebinding (DESIGN §9.6), and agrees with the implemented timers |
 
 ### 5.15 End-to-end (E2E)
 | TC ID | Title | Req | Pri | Steps / setup | Expected result |
 |---|---|---|---|---|---|
-| TC-E2E-01 | Appendix A flow, single device | FR-33, FR-01..27 | P1 | ZTP-93AF21 alone, no impairment | The log lines appear in the order of PDF Appendix A Steps 1–9 (an ordered-subsequence check) |
+| TC-E2E-01 | Appendix A flow, single device | FR-33, FR-01..27 | P1 | ZTP-93AF21 alone, no impairment, 127.0.0.1 (runs everywhere, including CI) | All of TC-APX-01..09 pass, and the PDF lines appear in Appendix A order (an ordered-subsequence check; §5.17) |
 | TC-E2E-02 | Full demo under impairment | FR-28..32, NFR-03 | P1 | `make demo` (15% loss, 10% reorder, 5% dup) × 10 seeds | PASS for all seeds; the dump matches §4.1 |
 
-**Total: 119 catalogued test cases** (P1: 100, P2: 18, P3: 1), plus the exploratory TC-PERF-01b (§8).
+### 5.17 Conformance with PDF Appendix A (APX), one test per step
+**Setup (the reference run)**, the same as DESIGN Appendix A: `sudo ifconfig lo0 alias 10.10.10.5/32`; server `--bind 10.10.10.5 --test-hooks --first-session-id 7421`; device `--serial ZTP-93AF21 --model EDGE-GW-100 --fw v1.0 --discover static --server 10.10.10.5:5555 --test-hooks --nonce 984312`; no impairment (TC-APX-01..09) and 15% loss, 10% reorder, 5% dup (TC-APX-10). On CI (no sudo needed for an alias, but a fixed IP isn't guaranteed) the same tests run against `127.0.0.1`, and only the address is substituted.
+
+**Matching rule**, from DESIGN §17.4: each PDF line must appear **verbatim as the prefix** of a log message (`grep -F`). Order is checked as an ordered subsequence across the whole device log. Server-side evidence is checked in `server.log` for the same sid.
+
+```mermaid
+flowchart LR
+    A["run reference scenario"] --> B["collect device_ZTP-93AF21.log,<br/>server.log, pcap"]
+    B --> C["check_appendix_a.sh:<br/>verbatim prefix match per step"]
+    C --> D["ordered-subsequence check<br/>Steps 1 to 9"]
+    D --> E["cross-check server log,<br/>DB row, pcap headers"]
+    E --> F{"all 9 steps pass?"}
+    F -- yes --> G["TC-APX-01..09 PASS,<br/>then repeat under impairment (APX-10)"]
+    F -- no --> H["defect with step number,<br/>seed and log excerpt"]
+```
+
+| TC ID | PDF Appendix A step | Req | Pri | Check | Expected result: the PDF's text, verbatim |
+|---|---|---|---|---|---|
+| TC-APX-01 | Step 1: Device boot (device information: ZTP-93AF21, EDGE-GW-100, v1.0) | FR-01, FR-33 | P1 | Device log | `[BOOT] Device starting` → `[BOOT] Soft serial: ZTP-93AF21` → `[BOOT] Firmware version: v1.0` |
+| TC-APX-02 | Step 2: Server discovery (static IP 10.10.10.5, UDP port 5555) | FR-02, FR-33 | P1 | Device log; `lsof` shows the device's UDP socket sending to 10.10.10.5:5555 | `[DISCOVERY] Using static server IP 10.10.10.5:5555` |
+| TC-APX-03 | Step 3: UDP session (HELLO seq=1 with soft_serial; HELLO_ACK seq=1 with session_id=7421) | FR-03, FR-04, FR-05, FR-33 | P1 | Device log + pcap header decode (`pcapcheck.sh --dump-hdr`) | `[UDP] HELLO sent (seq=1)` → `[UDP] Session established (session_id=7421)`. The pcap shows HELLO with seq=1 and the SERIAL TLV `ZTP-93AF21`, and HELLO_ACK with seq=1 and session_id=7421 |
+| TC-APX-04 | Step 4: NAT keepalive | FR-10, FR-33 | P1 | Device log order | `[NAT] Keepalive sent` → `[NAT] Keepalive acknowledged`, appearing **after** Step 3 and **before** Step 5 (the path probe); periodic keepalives continue after OPERATIONAL |
+| TC-APX-05 | Step 5: Secure registration (session_id=7421, soft_serial, model, firmware v1.0, nonce=984312) | FR-12, FR-13, FR-29, FR-33 | P1 | Device log, server log, DB | `[AUTH] REGISTER: session_id=7421 soft_serial=ZTP-93AF21 model=EDGE-GW-100 firmware=v1.0 nonce=984312`, then `[AUTH] Registration successful` → `[AUTH] Assigned tenant: cruise_ops`. The server logs the same; the DB row is Success |
+| TC-APX-06 | Step 6: Config provisioning (the example config, 3 chunks) | FR-15, FR-17, FR-18, FR-33 | P1 | Device log; saved config (with TC-PDF-03) | `[PROVISION] Receiving config (chunk 1/3)` → `(chunk 2/3)` → `(chunk 3/3)` → `[PROVISION] Config checksum verified` |
+| TC-APX-07 | Step 7: Firmware upgrade (v1.0 → v1.1) | FR-16, FR-21, FR-22, FR-33 | P1 | Device log; slot B header | `[UPGRADE] Current: v1.0 -> Target: v1.1` → `[UPGRADE] Upgrade complete, restarting device`; slot B header = v1.1 |
+| TC-APX-08 | Step 8: Resume after restart, without duplicate registration | FR-22, FR-23, FR-33 | P1 | Device log; server log; DB | `[BOOT] Restart detected` → `[UDP] Session resumed (session_id=7421)`. **No** `[AUTH] REGISTER:` line after the restart; the server has exactly 1 `Registration successful` for ZTP-93AF21; the DB has one row with attempts = 1 |
+| TC-APX-09 | Step 9: Validation and operational mode | FR-24..27, FR-33 | P1 | Device log; server log; DB | `[VALIDATION] Configuration present` → `[VALIDATION] Firmware v1.1 verified` → `[STATE] Device is OPERATIONAL`; the server's DB stage is OPERATIONAL |
+| TC-APX-10 | Steps 1–9 under impairment | FR-09, NFR-03, FR-33 | P1 | Same checks, run with 15% loss, 10% reorder and 5% dup × 10 seeds | All step checks of APX-01..09 still pass in order; extra retransmission, out-of-order or duplicate lines may appear in between |
+
+### 5.18 Conformance with the PDF's other examples and its scope (PDF)
+| TC ID | PDF item | Req | Pri | Steps / setup | Expected result |
+|---|---|---|---|---|---|
+| TC-PDF-01 | §1 "Example output" | FR-01, FR-02, FR-33 | P1 | First boot (empty state dir, no `--serial`), once in static and once in multicast mode | Both runs contain `[BOOT] Soft serial generated` and `[DISCOVERY] Provisioning server found`, in that order |
+| TC-PDF-02 | §9 "Example of a Dump from Server DB" | FR-31, FR-30, FR-32, DEL-11 | P1 | Full demo, then `logs/db_dump.txt` | Title `Device Registration Details`; header columns exactly `Device ID, Registration Status, Firmware Assigned, Config Version, Registration Time, Notes` in that order; times match `^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`; `—` in empty cells. The rows match the PDF's 5 example rows: ZTP-93AF21 Success v1.1 v3 —; ZTP-84BC19 Failed — — Invalid HMAC; ZTP-71DD08 Success v1.1 v3; ZTP-55AC90 Success v1.1 v3; ZTP-19FE77 Success v1.0 v2 Legacy device: **an exact match apart from the timestamps**. Provisioning notes such as "Transfer resumed" appear only in `--dump-verbose` |
+| TC-PDF-03 | Appendix A "Example Configuration" | FR-15 | P1 | Parse the received `config.json` with `jq` (or `python3 -m json.tool`) | `.interfaces.wan == "eth0"`, `.interfaces.lan == "eth1"`, `.mtu == 1500`, `.keepalive_interval == 20`; extra keys allowed |
+| TC-PDF-04 | Appendix A addressing (10.10.10.5:5555) | FR-02 | P3 | Local Mac with the lo0 alias (requires sudo); the alias is removed afterwards | The reference run works on the exact PDF address; logs show `10.10.10.5:5555` |
+| TC-PDF-05 | Overview / Scope & Expectations: UDP only, "not a REST or API exercise", C or Python, no UI | FR-03, NFR-01, DEL-04 | P1 | `git ls-files` (only `.c`, `.h`, `.sh`, Makefile, docs); `grep -rniE 'http|SOCK_STREAM|listen\(|accept\('` over the code; `nm` of both binaries | C sources only; no HTTP, REST or TCP code; no listening TCP sockets at runtime (`lsof -iTCP` empty for both processes); interaction is CLI and logs only |
+
+**Total: 135 catalogued test cases** (P1: 115, P2: 18, P3: 2), plus the exploratory TC-PERF-01b (§8).
 
 ### 5.16 Where each test runs
 | Environment | What runs there |
 |---|---|
-| **Local Mac** (developer, daily) | All of L1, all of L3/L4 with netsim, TC-DISC-05a (Wi-Fi broadcast), TC-SIM-04 (dummynet), the pcap cases, the performance cases (TC-PERF-01/02: timing is measured locally, not on shared runners), `leaks`/ASan soak |
-| **CI `macos-latest`** | Clean build, `make test`, demo, ASan, impairment rows M1–M4 (a second, clean macOS environment) |
-| **CI `ubuntu-latest`** (the only Linux) | gcc build, `make test`, demo, ASan, rows M1–M4, TC-SIM-03 (netem), TC-DISC-05b (broadcast), valgrind (TC-PERF-04, Linux half), row M7 |
+| **Local Mac** (developer, daily) | All of L1, all of L3/L4 with netsim, the TC-APX reference run on 10.10.10.5 (lo0 alias) and TC-PDF-04, TC-DISC-05a (Wi-Fi broadcast), TC-SIM-04 (dummynet), the pcap cases, the performance cases (TC-PERF-01/02: timing is measured locally, not on shared runners), `leaks`/ASan soak |
+| **CI `macos-latest`** | Clean build, `make test`, demo, ASan, impairment rows M1–M4 (a second, clean macOS environment), TC-APX-01..10 and TC-PDF-01/02/03/05 on 127.0.0.1 |
+| **CI `ubuntu-latest`** (the only Linux) | gcc build, `make test`, demo, ASan, rows M1–M4, TC-SIM-03 (netem), TC-DISC-05b (broadcast), valgrind (TC-PERF-04, Linux half), row M7, TC-APX-01..10 and TC-PDF-01/02/03/05 on 127.0.0.1 |
 
 ---
 
@@ -369,7 +409,9 @@ README checklist (TC-DEL-05..07). Each item must be present **and** must agree w
 | 15 | Bonus Q1–Q4 | DEL-08 | ☐ |
 | 16 | Build and run instructions | DEL-05 | ☐ |
 | 17 | Where the server and client logs are | DEL-09/10 | ☐ |
-| 18 | Why "keepalives matter in real deployments" (PDF §4) | FR-10 | ☐ |
+| 18 | Why "keepalives matter in real deployments" (PDF §4) | DEL-12 | ☐ |
+| 19 | Walkthrough of the Appendix A example with real logs | FR-33 | ☐ |
+| 20 | The DB dump, shown in the PDF example format | FR-31 | ☐ |
 
 Log checks (TC-LOG-01..04, TC-DEL-09) are automated in `tests/check_logs.sh`.
 
@@ -381,39 +423,39 @@ Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row is �
 ### 10.1 Functional
 | PRD ID | DESIGN § | Test cases | Status |
 |---|---|---|---|
-| ZTP-FR-01 | §6.1 | TC-DISC-01, TC-DISC-02 | ☐ |
-| ZTP-FR-02 | §6.3 | TC-DISC-03 | ☐ |
-| ZTP-FR-03 | §4.3 | TC-SESS-08 | ☐ |
-| ZTP-FR-04 | §7 | TC-SESS-01, TC-SESS-04 | ☐ |
+| ZTP-FR-01 | §6.1 | TC-DISC-01, TC-DISC-02, TC-APX-01, TC-PDF-01 | ☐ |
+| ZTP-FR-02 | §6.3 | TC-DISC-03, TC-APX-02, TC-PDF-01, TC-PDF-04 | ☐ |
+| ZTP-FR-03 | §4.3, §1.3 | TC-SESS-08, TC-APX-03, TC-PDF-05 | ☐ |
+| ZTP-FR-04 | §7 | TC-SESS-01, TC-SESS-04, TC-APX-03 | ☐ |
 | ZTP-FR-05 | §5.2, §8.1 | TC-UNIT-03, TC-UNIT-06, TC-REL-01 | ☐ |
 | ZTP-FR-06 | §8.3 | TC-UNIT-07, TC-SESS-02/03/05, TC-REL-02/06/07 | ☐ |
 | ZTP-FR-07 | §8.4 | TC-UNIT-10, TC-REL-02, TC-REL-11 | ☐ |
 | ZTP-FR-08 | §8.5 | TC-UNIT-09, TC-REL-05 | ☐ |
 | ZTP-FR-09 | §8, §16 | TC-REL-09, TC-PERF-03 | ☐ |
-| ZTP-FR-10 | §9.2 | TC-NAT-01, TC-NAT-02 | ☐ |
+| ZTP-FR-10 | §9.2, §9.5 | TC-NAT-01, TC-NAT-02, TC-APX-04 | ☐ |
 | ZTP-FR-11 | §9.3 | TC-NAT-03/04/05/07, TC-SESS-05 | ☐ |
-| ZTP-FR-12 | §10.2 | TC-AUTH-01 | ☐ |
+| ZTP-FR-12 | §10.2 | TC-AUTH-01, TC-APX-05 | ☐ |
 | ZTP-FR-13 | §10.1–10.3 | TC-UNIT-02, TC-UNIT-16, TC-AUTH-02, TC-AUTH-03 | ☐ |
 | ZTP-FR-14 | §10.4 | TC-AUTH-04/05/06/07 | ☐ |
-| ZTP-FR-15 | §11.1 | TC-PROV-01, TC-PROV-02 | ☐ |
+| ZTP-FR-15 | §11.1 | TC-PROV-01, TC-PROV-02, TC-PDF-03, TC-APX-06 | ☐ |
 | ZTP-FR-16 | §11.1 | TC-PROV-03 | ☐ |
 | ZTP-FR-17 | §11.2 | TC-PROV-01/03/06 | ☐ |
 | ZTP-FR-18 | §11.3 | TC-UNIT-01, TC-PROV-07, TC-PROV-10 | ☐ |
 | ZTP-FR-19 | §11.4 | TC-UNIT-14, TC-PROV-08/09/10 | ☐ |
 | ZTP-FR-20 | §5.5 | TC-PROV-04, TC-PROV-05 | ☐ |
-| ZTP-FR-21 | §12.1 | TC-UNIT-12, TC-UPG-01/05/06 | ☐ |
-| ZTP-FR-22 | §12.2 | TC-UPG-02 | ☐ |
-| ZTP-FR-23 | §12.3 | TC-UPG-03/04/08, TC-SESS-07, TC-NAT-05, TC-AUTH-07 | ☐ |
+| ZTP-FR-21 | §12.1, §12.6 | TC-UNIT-12, TC-UPG-01/05/06, TC-APX-07 | ☐ |
+| ZTP-FR-22 | §12.2 | TC-UPG-02, TC-APX-07, TC-APX-08 | ☐ |
+| ZTP-FR-23 | §12.3 | TC-APX-08, TC-UPG-03/04/08, TC-SESS-07, TC-NAT-05, TC-AUTH-07 | ☐ |
 | ZTP-FR-24 | §13 | TC-UNIT-17, TC-VAL-01, TC-VAL-02 | ☐ |
 | ZTP-FR-25 | §13, §12.5 | TC-VAL-03, TC-UPG-09 | ☐ |
 | ZTP-FR-26 | §13 | TC-VAL-04 | ☐ |
-| ZTP-FR-27 | §13 | TC-VAL-01, TC-VAL-05 | ☐ |
+| ZTP-FR-27 | §13, §13.1 | TC-VAL-01, TC-VAL-05, TC-APX-09 | ☐ |
 | ZTP-FR-28 | §14.1 | TC-SRV-01, TC-SRV-09, TC-PERF-01, TC-E2E-02 | ☐ |
 | ZTP-FR-29 | §14.3 | TC-UNIT-11, TC-SRV-02, TC-UPG-06, TC-AUTH-09 | ☐ |
 | ZTP-FR-30 | §14.4 | TC-SRV-03, TC-AUTH-03, TC-UPG-04, TC-VAL-05 | ☐ |
-| ZTP-FR-31 | §14.5 | TC-SRV-04 | ☐ |
+| ZTP-FR-31 | §14.5 | TC-SRV-04, TC-PDF-02 | ☐ |
 | ZTP-FR-32 | §14.5 | TC-SRV-05 | ☐ |
-| ZTP-FR-33 | §17 | TC-LOG-01, TC-E2E-01 | ☐ |
+| ZTP-FR-33 | §17, §17.4, §4.5 | TC-LOG-01, TC-E2E-01, TC-APX-01..10, TC-PDF-01 | ☐ |
 
 ### 10.2 Bonus
 | PRD ID | DESIGN § | Test cases | Status |
@@ -432,7 +474,7 @@ Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row is �
 |---|---|---|---|
 | ZTP-NFR-01 | §4.2, §19 | TC-DEL-01, TC-UNIT-01 | ☐ |
 | ZTP-NFR-02 | §5.5 | TC-PROV-04 | ☐ |
-| ZTP-NFR-03 | §8 | TC-REL-09, TC-NAT-07, TC-E2E-02, §6 matrix | ☐ |
+| ZTP-NFR-03 | §8 | TC-REL-09, TC-NAT-07, TC-E2E-02, TC-APX-10, §6 matrix | ☐ |
 | ZTP-NFR-04 | §16.3 | TC-PERF-02 | ☐ |
 | ZTP-NFR-05 | §14 | TC-PERF-01, TC-SRV-08, TC-AUTH-10 | ☐ |
 | ZTP-NFR-06 | §10, §18 | TC-UNIT-05, TC-AUTH-08, TC-AUTH-11, TC-NAT-06, TC-SESS-06, TC-DISC-07 | ☐ |
@@ -455,9 +497,10 @@ Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row is �
 | ZTP-DEL-08 | §21.2, §21.3 | TC-DEL-07 | ☐ |
 | ZTP-DEL-09 | §17.3 | TC-DEL-02, TC-DEL-09 | ☐ |
 | ZTP-DEL-10 | §17.3 | TC-DEL-02, TC-DEL-09 | ☐ |
-| ZTP-DEL-11 | §14.5 | TC-DEL-02, TC-SRV-04 | ☐ |
+| ZTP-DEL-11 | §14.5 | TC-DEL-02, TC-SRV-04, TC-PDF-02 | ☐ |
+| ZTP-DEL-12 | §9.6, §21.3 | TC-DEL-10 | ☐ |
 
-**Coverage:** 63 of 63 PRD requirements have at least one test case. No test case is orphaned: each one in §5 references at least one PRD ID.
+**Coverage:** 64 of 64 PRD requirements have at least one test case. No test case is orphaned: each one in §5 references at least one PRD ID.
 
 ---
 
@@ -551,3 +594,96 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 5. **Code coverage** (`gcov`/`llvm-cov`) with a target of ≥ 85% lines in `common/` and ≥ 75% overall.
 6. **A Wireshark Lua dissector** for the ZTP header, which makes pcap review and defect reports much faster.
 7. **Chaos mode in the demo**: random kill -9 of devices and the server during runs, checked against the invariants.
+
+---
+
+## 15. PDF conformance matrix
+This is the clause-by-clause check that the test plan covers **every point in the assignment PDF**. Each row gives the PRD requirement ([PRD Appendix: PDF coverage map](PRD_ZTP.md#appendix-pdf-coverage-map)), the DESIGN section, and the test cases that must pass.
+
+| # | PDF section and clause | PRD ID | DESIGN § | Test cases |
+|---|---|---|---|---|
+| 1 | Overview: ZTP over UDP transport | FR-03 | §1.3, §5 | TC-SESS-08, TC-PDF-05 |
+| 2 | Overview: not a REST or API exercise | FR-03, NFR-01 | §1.3 | TC-PDF-05 |
+| 3 | Scope: language C or Python | NFR-01 | §1.3 | TC-DEL-01, TC-PDF-05 |
+| 4 | Scope: working code and a README | DEL-01..08, DEL-12 | §19, §21 | TC-DEL-02, TC-DEL-04..07, TC-DEL-10 |
+| 5 | Scope: correctness and fundamentals over UI or packaging | — (scope) | §1.3 | TC-PDF-05 (no UI or HTTP code) |
+| 6 | Problem statement: unconfigured device to OPERATIONAL | FR-01..27 | §4.5 | TC-E2E-01, TC-APX-01..10 |
+| 7 | §1 Generate or load a soft serial | FR-01 | §6.1 | TC-DISC-01/02, TC-APX-01 |
+| 8 | §1 Static IP discovery | FR-02 | §6.3 | TC-DISC-03, TC-APX-02, TC-PDF-04 |
+| 9 | §1 Broadcast or multicast discovery (bonus) | BON-01 | §6.2 | TC-DISC-04..08 |
+| 10 | §1 Example output (`Soft serial generated`, `Provisioning server found`) | FR-33 | §6.1, §6.3, §17.4 | TC-PDF-01 |
+| 11 | §2 All communication over UDP | FR-03 | §5.1 | TC-SESS-08 |
+| 12 | §2 Session handshake | FR-04 | §7 | TC-SESS-01/02/03, TC-APX-03 |
+| 13 | §2 Sequence numbers | FR-05 | §5.2, §8.1 | TC-UNIT-03/06, TC-REL-01 |
+| 14 | §2 Timeouts | FR-06 | §8.3 | TC-UNIT-07, TC-REL-02, TC-SESS-05 |
+| 15 | §2 Retransmission logic | FR-06 | §8.3, §8.10 | TC-REL-02/07, TC-SESS-02 |
+| 16 | §2 Session identifier | FR-04 | §7.2 | TC-SESS-01/04, TC-APX-03 |
+| 17 | §3 Acknowledgements | FR-07 | §8.4 | TC-UNIT-10, TC-REL-02/11 |
+| 18 | §3 Duplicate detection | FR-08 | §8.5 | TC-UNIT-09, TC-REL-05 |
+| 19 | §3 Retransmissions on timeout | FR-06 | §8.3 | TC-REL-02 |
+| 20 | §3 Simulated packet loss of 10–20% | FR-09, NFR-03 | §8, §16 | TC-REL-09, matrix rows M2–M4, TC-APX-10, TC-E2E-02 |
+| 21 | §4 Device may be behind NAT or a firewall | FR-11 | §4.6, §9.1, §9.4 | TC-NAT-05/06 |
+| 22 | §4 Periodic keepalive messages | FR-10 | §9.2 | TC-NAT-01/02, TC-APX-04 |
+| 23 | §4 Session timeout detection | FR-11 | §9.3, §9.5 | TC-NAT-03/04/07 |
+| 24 | §4 README: why this matters for real deployments | DEL-12 | §9.6 | TC-DEL-10 |
+| 25 | §5 REGISTER carries soft serial, metadata, nonce | FR-12 | §10.2 | TC-AUTH-01, TC-APX-05 |
+| 26 | §5 HMAC verification | FR-13 | §10.1, §10.3 | TC-UNIT-02/16, TC-AUTH-02/03/08 |
+| 27 | §5 Replay protection | FR-14 | §10.4 | TC-AUTH-04/05/06/07 |
+| 28 | §6 Configuration payload (JSON or YAML) | FR-15 | §11.1 | TC-PROV-01/02, TC-PDF-03 |
+| 29 | §6 Firmware blob (mock) | FR-16 | §11.1 | TC-PROV-03 |
+| 30 | §6 Transfer in chunks | FR-17 | §11.2 | TC-PROV-01/03/06, TC-APX-06 |
+| 31 | §6 Integrity hash | FR-18 | §11.3 | TC-PROV-07/10 |
+| 32 | §6 Resume transfers after failure | FR-19 | §11.4, §11.5 | TC-PROV-08/09 |
+| 33 | §6 No reliance on IP fragmentation | FR-20 | §5.5 | TC-PROV-04/05 |
+| 34 | §7 Outdated firmware: simulate upgrade | FR-21 | §12.1, §12.6 | TC-UPG-01/05/06, TC-APX-07 |
+| 35 | §7 Restart the device process | FR-22 | §12.2 | TC-UPG-02, TC-APX-07/08 |
+| 36 | §7 Resume without duplicate registration | FR-23 | §12.3 | TC-UPG-03/04/08, TC-APX-08 |
+| 37 | §8 Validate configuration availability | FR-24 | §13, §13.1 | TC-VAL-01/02, TC-APX-09 |
+| 38 | §8 Validate firmware version | FR-25 | §13 | TC-VAL-03, TC-UPG-09, TC-APX-09 |
+| 39 | §8 Validate session health | FR-26 | §13 | TC-VAL-04 |
+| 40 | §8 Transition to OPERATIONAL | FR-27 | §13.1, §15.1 | TC-VAL-01/05, TC-APX-09 |
+| 41 | §9 Multiple devices concurrently | FR-28 | §14.1, §14.8 | TC-SRV-01/09, TC-PERF-01 |
+| 42 | §9 Accept and process registrations at the same time | FR-28 | §14.8, §14.9 | TC-SRV-09, TC-AUTH-10 |
+| 43 | §9 Determine and assign firmware and config per device | FR-29 | §14.3 | TC-SRV-02, TC-UPG-06, TC-AUTH-09 |
+| 44 | §9 Track: device ID, timestamp, firmware, config version, outcome | FR-30 | §14.4 | TC-SRV-03 |
+| 45 | §9 In-memory or file-backed store | FR-30, NFR-10 | §14.4 | TC-SRV-06 |
+| 46 | §9 Dump the database | FR-31 | §14.5 | TC-SRV-04 |
+| 47 | §9 Summary: successes, failures, versions per device | FR-32 | §14.5 | TC-SRV-05 |
+| 48 | §9 "Example of a Dump from Server DB" (format and rows) | FR-31 | §14.5 | TC-PDF-02 |
+| 49 | README Q1 reliability over UDP | DEL-06 | §21.1 | TC-DEL-05 |
+| 50 | README Q2 replay prevention | DEL-06 | §21.1 | TC-DEL-05 |
+| 51 | README Q3 why IP fragmentation is avoided | DEL-06 | §21.1 | TC-DEL-05 |
+| 52 | README Q4 how NAT affects the design | DEL-06 | §21.1 | TC-DEL-05 |
+| 53 | README Q5 behaviour under packet loss | DEL-06 | §21.1 | TC-DEL-05, TC-PERF-03 |
+| 54 | Notes: reasoning and tradeoffs | DEL-07 | §3, §22 | TC-DEL-06 |
+| 55 | Appendix A scenario: no configuration, certificates or credentials | (A-02) | §3.1 | TC-DISC-01 (empty state), TC-PDF-01 |
+| 56 | Appendix A device information (ZTP-93AF21, EDGE-GW-100, v1.0) | FR-01 | App. A | TC-APX-01 |
+| 57 | Appendix A Step 1 Device boot | FR-01, FR-33 | §6.1 | TC-APX-01 |
+| 58 | Appendix A Step 2 Server discovery (10.10.10.5:5555) | FR-02 | §6.3 | TC-APX-02, TC-PDF-04 |
+| 59 | Appendix A Step 3 UDP session (HELLO, HELLO_ACK, session_id) | FR-04, FR-05 | §7.1 | TC-APX-03 |
+| 60 | Appendix A Step 4 NAT keepalive | FR-10 | §9.2 | TC-APX-04 |
+| 61 | Appendix A Step 5 Secure registration (fields, nonce, tenant) | FR-12, FR-13 | §10.2 | TC-APX-05 |
+| 62 | Appendix A Step 6 Configuration provisioning (example config, 3 chunks) | FR-15, FR-17, FR-18 | §11 | TC-APX-06, TC-PDF-03 |
+| 63 | Appendix A Step 7 Firmware upgrade (v1.0 → v1.1) | FR-21, FR-22 | §12.1 | TC-APX-07 |
+| 64 | Appendix A Step 8 Resume after restart | FR-23 | §12.3 | TC-APX-08 |
+| 65 | Appendix A Step 9 Validation and OPERATIONAL | FR-24..27 | §13 | TC-APX-09 |
+| 66 | Bonus assumptions: 10–20% loss, reordering, duplicates | NFR-03, BON-04/05 | §8 | TC-REL-05/09/10, TC-APX-10 |
+| 67 | Bonus req. 1: sequence numbers on every message | BON-02 | §5.3 | TC-REL-01 |
+| 68 | Bonus req. 2: ACKs and retransmission | BON-03 | §8.3 | TC-REL-02 |
+| 69 | Bonus req. 3: idempotent processing | BON-05 | §8.6 | TC-REL-04/05, TC-PROV-11, TC-SESS-02 |
+| 70 | Bonus req. 4: packet loss simulation in code | BON-06 | §16 | TC-SIM-01..04, TC-UNIT-15 |
+| 71 | Bonus sample packet flow diagram | BON-04 | §8.8.1 | TC-REL-03 |
+| 72 | Bonus out-of-order example (expected 2, received 3, buffer) | BON-04 | §8.4 | TC-REL-03, TC-UNIT-08 |
+| 73 | Bonus sample log output (4 lines) | BON-08 | §17.2 | TC-LOG-02, TC-REL-03/04 |
+| 74 | Bonus README Q1–Q4 | DEL-08, BON-07 | §21.2 | TC-DEL-07 |
+| 75 | Expected Submission 1: implements ZTP | DEL-01 | §19 | TC-DEL-02, TC-E2E-02 |
+| 76 | Expected Submission 1: runnable or buildable as submitted | DEL-02 | §19.1 | TC-DEL-01 |
+| 77 | Expected Submission 1: device and server logic separated | DEL-03 | §4.2 | TC-DEL-03 |
+| 78 | Expected Submission 1: UDP sockets for all provisioning traffic | DEL-04 | §4.3 | TC-SESS-08 |
+| 79 | Expected Submission 1: build and run instructions | DEL-05 | §19 | TC-DEL-04 |
+| 80 | Expected Submission 2: README minimum topics (6) | DEL-07 | §21.3 | TC-DEL-06 |
+| 81 | Expected Submission 2: README bonus topics (3) | DEL-08 | §21.3 | TC-DEL-07 |
+| 82 | Expected Submission 3: server logs | DEL-09 | §17.3 | TC-DEL-02/09 |
+| 83 | Expected Submission 3: client logs | DEL-10 | §17.3 | TC-DEL-02/09 |
+
+**Result:** all 83 PDF clauses map to at least one requirement, design section and test case.
