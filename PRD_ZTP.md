@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Document | PRD_ZTP.md (Product Manager persona) |
-| Version | 0.9, Draft for review |
+| Version | 0.1, Draft for review |
 | Date | 2026-11-10 |
 | Status | Awaiting sign-off from Architecture, QA and PM |
-| Owner | Product Manager (TBD) |
+| Owner | Sunil Vallamkonda (Product Manager) |
 | Companion documents | [DESIGN.md](DESIGN.md) (Architect: how it is built) · [QA_TEST_PLAN.md](QA_TEST_PLAN.md) (QA: how it is proven) |
 | Source of truth for requirements | `UDP‑Based Zero Touch Provisioning (ZTP) Assignment.pdf` (referred to below as "the PDF") |
 
@@ -47,7 +47,7 @@
 
 | Version | Date | Change |
 |---|---|---|
-| 0.9 | 2026-11-10 | First complete draft for architecture, development and QA review |
+| 0.1 | 2026-11-10 | First complete draft for architecture, development and QA review |
 
 ---
 

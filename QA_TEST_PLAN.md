@@ -3,11 +3,11 @@
 | Field | Value |
 |---|---|
 | Document | QA_TEST_PLAN.md (QA persona) |
-| Version | 0.9, Draft for review |
+| Version | 0.1, Draft for review |
 | Date | 2026-11-10 |
-| Owner | QA Lead (TBD) |
+| Owner | Sunil Vallamkonda (QA Lead) |
 | Companion documents | [PRD_ZTP.md](PRD_ZTP.md) (requirement IDs and acceptance criteria) · [DESIGN.md](DESIGN.md) (the behaviour under test; constants in Appendix B) |
-| Test basis | PRD v0.9 (requirement IDs), DESIGN v0.9 (§5 wire spec, §8 reliability, §10 auth, §19 demo) |
+| Test basis | PRD v0.1 (requirement IDs), DESIGN v0.1 (§5 wire spec, §8 reliability, §10 auth, §19 demo) |
 
 > **Alignment rules.** Every test case (`TC-*`) traces to at least one PRD requirement ID, and every PRD requirement has at least one test case (§10). Constants such as timers, sizes and ports are **not** restated here: tests refer to them by name from DESIGN Appendix B, so a design change can't silently invalidate a test. The demo fixture is the five devices defined in PRD §5.2 and DESIGN §19.3.
 
@@ -376,7 +376,7 @@ Log checks (TC-LOG-01..04, TC-DEL-09) are automated in `tests/check_logs.sh`.
 ---
 
 ## 10. Requirements traceability matrix
-Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row is ☐ at v0.9.
+Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row is ☐ at v0.1.
 
 ### 10.1 Functional
 | PRD ID | DESIGN § | Test cases | Status |

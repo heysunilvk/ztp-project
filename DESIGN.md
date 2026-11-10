@@ -3,10 +3,10 @@
 | Field | Value |
 |---|---|
 | Document | DESIGN.md (Architect persona) |
-| Version | 0.9, Draft for review |
+| Version | 0.1, Draft for review |
 | Date | 2026-11-10 |
 | Status | For review by senior architects and developers |
-| Owner | Architect (TBD) |
+| Owner | Sunil Vallamkonda (Architect) |
 | Implementation language | C11, POSIX sockets, no third-party libraries |
 | Companion documents | [PRD_ZTP.md](PRD_ZTP.md) (requirements: *what* and *why*) · [QA_TEST_PLAN.md](QA_TEST_PLAN.md) (verification: *how it is proven*) |
 | Source | `UDP‑Based Zero Touch Provisioning (ZTP) Assignment.pdf` (referred to below as "the PDF") |
