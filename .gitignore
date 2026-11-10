@@ -1,0 +1,12 @@
+# local-only files
+ztp-assignment-analysis.md
+.DS_Store
+# build / run outputs (for later milestones)
+*.o
+*.a
+/ztp-server
+/ztp-device
+/mkartifacts
+/state/
+/artifacts/
+*.pcap
