@@ -286,6 +286,198 @@ static void send_register_ack(srv_session_t *ss, bool already)
     rel_send(ss->rel, &m, pl, (uint16_t)w.len, s->now);
 }
 
+/* ---- transfer (§11.2) and the small-MTU fallback (§5.8) ---- */
+
+/* A CHUNK_DATA that no longer fits becomes a 52 B fill frame at the same seq (§5.8 step 2). */
+static uint16_t fill_frame(void *ctx, uint8_t type, const uint8_t *p, uint16_t len, uint8_t *out)
+{
+    if (type != ZT_CHUNK_DATA || len < ZTP_CHUNK_HDR_LEN) {
+        memcpy(out, p, len);
+        return len;
+    }
+    ztp_chunk_t c = {.file_id = p[0], .flags = CHUNK_F_MTU_REDUCED, .chunk_index = be32_get(p + 2), .data_len = 0};
+    return (uint16_t)ztp_chunk_encode(out, ZTP_CHUNK_HDR_LEN, &c);
+}
+
+static void step_down(srv_session_t *ss, bool emsgsize)
+{
+    srv_t *s = ss->srv;
+    if (ss->max_dgram <= ZTP_MIN_DGRAM) return;
+    if (!s->cfg.c.net.mtu_fallback) {
+        log_sess(LOG_WARN, T_UDP, ss->session_id, ss->serial,
+                 "Datagram too big for the path (%s) and net.mtu_fallback is off: transfer cannot continue",
+                 emsgsize ? "EMSGSIZE" : "device request");
+        return;
+    }
+    ss->max_dgram = ZTP_MIN_DGRAM;
+    int dropped = rel_step_down(ss->rel, ZTP_MIN_DGRAM, fill_frame, ss, s->now);
+    ss->nreq = 0;   /* requests at the old chunk size: the device re-requests after the new MANIFEST */
+    s->c.mtu_stepdowns++;
+    if (emsgsize) log_sess(LOG_INFO, T_UDP, ss->session_id, ss->serial, LM_UDP_MTU_EMSGSIZE);
+    else log_sess(LOG_INFO, T_UDP, ss->session_id, ss->serial, "Device reports a small path MTU: datagram limit now 508");
+    log_sess(LOG_DEBUG, T_UDP, ss->session_id, ss->serial, "%d queued frames dropped at the step-down", dropped);
+    db_prov_note(&s->db, ss->serial, "Datagram limit reduced to 508", wall_ms());
+    srv_sess_journal(s, ss);
+}
+
+void srv_sess_pump(srv_session_t *ss)
+{
+    srv_t *s = ss->srv;
+    while (ss->nreq && !ss->doomed && rel_in_flight(ss->rel) + rel_queued(ss->rel) < (uint32_t)s->relcfg.window) {
+        const srv_artifact_t *a = srv_artifact_by_id(&s->artifacts, ss->req[0].file_id);
+        if (!a || (size_t)ZTP_HDR_LEN + ZTP_CHUNK_HDR_LEN + ss->chunk_size > ss->max_dgram) {
+            ss->nreq = 0;   /* stale request at an old chunk size (§5.8) */
+            break;
+        }
+        uint8_t data[ZTP_CHUNK_SIZE_CAP], pl[ZTP_MAX_PAYLOAD];
+        uint32_t idx = ss->req[0].next++;
+        int n = srv_artifact_read(a, idx, ss->chunk_size, data);
+        if (ss->req[0].next >= ss->req[0].end) {
+            memmove(&ss->req[0], &ss->req[1], (size_t)(ss->nreq - 1) * sizeof ss->req[0]);
+            ss->nreq--;
+        }
+        if (n < 0) continue;
+        ztp_chunk_t c = {.file_id = a->file_id, .chunk_index = idx, .data_len = (uint16_t)n, .data = data};
+        int pl_len = ztp_chunk_encode(pl, sizeof pl, &c);
+        rel_msg_t m = {ZT_CHUNK_DATA, 0, false, ss->k_s, ZK_SESSION};
+        rel_send(ss->rel, &m, pl, (uint16_t)pl_len, s->now);
+        if (rel_take_tx_error(ss->rel) == -EMSGSIZE) step_down(ss, true);
+    }
+}
+
+static const srv_artifact_t *assigned(srv_session_t *ss, uint8_t kind)
+{
+    char v[9];
+    if (kind == FK_CONFIG) {
+        snprintf(v, sizeof v, "v%d", ss->assign.config_version);
+        return srv_artifact_for(&ss->srv->artifacts, FK_CONFIG, ss->assign.config_file, v);
+    }
+    return srv_artifact_for(&ss->srv->artifacts, FK_FIRMWARE, ss->assign.firmware_file, ss->assign.firmware);
+}
+
+static void on_manifest_req(srv_session_t *ss, uint32_t seq, const tlv_set_t *t)
+{
+    srv_t *s = ss->srv;
+    uint8_t kind = 0;
+    uint16_t want = 0;
+    if (!tlv_get_u8(t, TAG_FILE_KIND, &kind) || !tlv_get_u16(t, TAG_MAX_DGRAM, &want) ||
+        (kind != FK_CONFIG && kind != FK_FIRMWARE)) {
+        send_bad_request(ss, seq, "MANIFEST_REQ needs FILE_KIND (1 or 2) and MAX_DGRAM");
+        return;
+    }
+    if (want < ss->max_dgram && want >= ZTP_MIN_DGRAM) step_down(ss, false);   /* black hole seen by the device */
+    const srv_artifact_t *a = assigned(ss, kind);
+    if (!a) {
+        send_bad_request(ss, seq, "no artifact of this kind is assigned");
+        return;
+    }
+    uint32_t lim = want < ss->max_dgram ? want : ss->max_dgram, cs = (uint32_t)s->cfg.c.xfer.chunk_size;
+    while (cs > ZTP_CHUNK_SIZE_MIN && ZTP_HDR_LEN + ZTP_CHUNK_HDR_LEN + cs > lim) cs /= 2;
+    ss->chunk_size = cs;
+    ss->nreq = 0;
+    uint32_t count = (a->size + cs - 1) / cs;
+    uint8_t pl[128];
+    tlv_writer_t w;
+    tlv_writer_init(&w, pl, sizeof pl);
+    tlv_put_u8(&w, TAG_FILE_ID, a->file_id);
+    tlv_put_u8(&w, TAG_FILE_KIND, kind);
+    tlv_put_str(&w, TAG_VERSION, a->version);
+    tlv_put_u32(&w, TAG_FILE_SIZE, a->size);
+    tlv_put_u16(&w, TAG_CHUNK_SIZE, (uint16_t)cs);
+    tlv_put_u32(&w, TAG_CHUNK_COUNT, count);
+    tlv_put_bytes(&w, TAG_SHA256, a->sha256, 32);
+    rel_msg_t m = {ZT_MANIFEST, 0, false, ss->k_s, ZK_SESSION};
+    rel_send(ss->rel, &m, pl, (uint16_t)w.len, s->now);
+    if (ss->st == SS_REGISTERED) {
+        srv_sess_set_state(s, ss, SS_PROVISIONING);
+        srv_sess_journal(s, ss);
+    }
+    if (kind == FK_CONFIG)
+        log_sess(LOG_INFO, T_PROVISION, ss->session_id, ss->serial, LM_PROV_SEND_CONFIG, (unsigned)ss->assign.config_version,
+                 (unsigned)count);
+    else
+        log_sess(LOG_INFO, T_PROVISION, ss->session_id, ss->serial, LM_PROV_SEND_FW, a->version, (unsigned)count);
+}
+
+static void on_chunk_req(srv_session_t *ss, uint32_t seq, const tlv_set_t *t)
+{
+    srv_t *s = ss->srv;
+    uint8_t id = 0;
+    uint32_t start = 0;
+    uint16_t num = 0;
+    const srv_artifact_t *a;
+    if (!tlv_get_u8(t, TAG_FILE_ID, &id) || !tlv_get_u32(t, TAG_CHUNK_START, &start) ||
+        !tlv_get_u16(t, TAG_CHUNK_NUM, &num) || !(a = srv_artifact_by_id(&s->artifacts, id)) ||
+        (a != assigned(ss, a->kind)) || !ss->chunk_size) {
+        send_bad_request(ss, seq, "CHUNK_REQ for a file that is not this session's");
+        return;
+    }
+    uint32_t count = (a->size + ss->chunk_size - 1) / ss->chunk_size;
+    if (num == 0 || num > s->cfg.c.xfer.chunk_req_max || start >= count || num > count - start) {
+        send_bad_request(ss, seq, "CHUNK_REQ range out of bounds");
+        return;
+    }
+    if (ss->nreq >= 4) {   /* the device pipelines at most a couple of runs; drop the oldest */
+        memmove(&ss->req[0], &ss->req[1], 3 * sizeof ss->req[0]);
+        ss->nreq = 3;
+    }
+    ss->req[ss->nreq].file_id = id;
+    ss->req[ss->nreq].next = start;
+    ss->req[ss->nreq].end = start + num;
+    ss->nreq++;
+    log_sess(LOG_DEBUG, T_PROVISION, ss->session_id, ss->serial, "CHUNK_REQ file %u chunks %u..%u", (unsigned)id,
+             (unsigned)start, (unsigned)(start + num - 1));
+}
+
+static void on_transfer_done(srv_session_t *ss, const tlv_set_t *t)
+{
+    srv_t *s = ss->srv;
+    uint8_t id = 0;
+    uint16_t result = 0;
+    tlv_get_u8(t, TAG_FILE_ID, &id);
+    tlv_get_u16(t, TAG_RESULT, &result);
+    const srv_artifact_t *a = srv_artifact_by_id(&s->artifacts, id);
+    if (!a) return;
+    if (result == RC_OK) {
+        db_stage(&s->db, ss->serial, a->kind == FK_CONFIG ? SST_CONFIG_SENT : SST_FW_SENT, wall_ms());
+        ss->db_stage = a->kind == FK_CONFIG ? SST_CONFIG_SENT : SST_FW_SENT;
+        log_sess(LOG_INFO, T_PROVISION, ss->session_id, ss->serial, "%s %s delivered and verified by the device (max in flight %u)",
+                 a->kind == FK_CONFIG ? "Config" : "Firmware", a->version, (unsigned)rel_max_in_flight(ss->rel));
+    } else {
+        char note[64];
+        snprintf(note, sizeof note, "Transfer of %s failed: %s", a->version, ztp_reason_name(result));
+        db_prov_note(&s->db, ss->serial, note, wall_ms());
+        log_sess(LOG_INFO, T_PROVISION, ss->session_id, ss->serial, "%s", note);
+    }
+}
+
+static void on_status_report(srv_session_t *ss, const tlv_set_t *t)
+{
+    srv_t *s = ss->srv;
+    uint8_t st = 0;
+    uint16_t reason = 0;
+    tlv_get_u8(t, TAG_REPORT_STATE, &st);
+    tlv_get_u16(t, TAG_REASON, &reason);
+    if (st == RPT_FAILED) {
+        db_stage(&s->db, ss->serial, SST_FAILED, wall_ms());
+        ss->db_stage = SST_FAILED;
+        char note[64];
+        snprintf(note, sizeof note, "Device failed: %s", ztp_reason_name(reason));
+        db_prov_note(&s->db, ss->serial, note, wall_ms());
+        srv_sess_set_state(s, ss, SS_FAILED);
+        srv_sess_journal(s, ss);
+        log_sess(LOG_INFO, T_STATE, ss->session_id, ss->serial, "FAILED (%s)", ztp_reason_name(reason));
+    } else if (st == RPT_OPERATIONAL) {
+        db_stage(&s->db, ss->serial, SST_OPERATIONAL, wall_ms());
+        ss->db_stage = SST_OPERATIONAL;
+        srv_sess_set_state(s, ss, SS_OPERATIONAL);
+        srv_sess_journal(s, ss);
+        log_sess(LOG_INFO, T_STATE, ss->session_id, ss->serial, LM_STATE_SRV_OPERATIONAL);
+    }
+    rel_msg_t m = {ZT_STATUS_ACK, 0, false, ss->k_s, ZK_SESSION};
+    rel_send(ss->rel, &m, NULL, 0, s->now);
+}
+
 /* §10.2, §10.3: a REGISTER that passed the K_s MAC check, delivered in order. */
 static void on_register(srv_session_t *ss, uint32_t seq, const tlv_set_t *t)
 {
@@ -374,6 +566,18 @@ void srv_sess_deliver(void *ctx, uint8_t type, uint8_t flags, uint32_t seq, cons
     switch (type) {
     case ZT_REGISTER:
         on_register(ss, seq, &t);
+        break;
+    case ZT_MANIFEST_REQ:
+        if (ss->st != SS_HALF_OPEN) on_manifest_req(ss, seq, &t);
+        break;
+    case ZT_CHUNK_REQ:
+        if (ss->st != SS_HALF_OPEN) on_chunk_req(ss, seq, &t);
+        break;
+    case ZT_TRANSFER_DONE:
+        if (ss->st != SS_HALF_OPEN) on_transfer_done(ss, &t);
+        break;
+    case ZT_STATUS_REPORT:
+        if (ss->st != SS_HALF_OPEN) on_status_report(ss, &t);
         break;
     case ZT_KEEPALIVE: {
         uint8_t pl[8];
@@ -549,6 +753,7 @@ void srv_on_ctl_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct 
         log_sess(LOG_INFO, T_UDP, ss->session_id, ss->serial, LM_UDP_SRV_ESTABLISHED);
     }
     if (ss->st != SS_HALF_OPEN) db_seen(&s->db, ss->serial, NULL, wall_ms());
+    if (!ss->doomed) srv_sess_pump(ss);
     if (ss->doomed) srv_sess_free(s, ss, NULL);   /* a terminal reply was sent from inside delivery */
 }
 

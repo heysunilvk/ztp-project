@@ -119,7 +119,7 @@ for v in $rates; do
 done
 
 # --- TC-DISC-07: forged OFFERs are ignored, the genuine server is used -------------------------
-start_server d07 --test-hooks --no-discovery
+start_server sd07 --test-hooks --no-discovery
 "$SIM" rogue-offer --disc-port "$DPORT" --secs 5 > "$T/d07.sim" 2>&1 &
 RPID=$!
 sleep 0.3
@@ -132,7 +132,7 @@ if has "$T/d07.log" "127.0.0.1:9 "; then bad "TC-DISC-07: the device used the ro
 stop_server
 
 # --- TC-DISC-08: a replayed genuine OFFER (old disc_nonce) is ignored --------------------------
-start_server d08
+start_server sd08
 "$SIM" replay-offer --disc-port "$DPORT2" --capture "127.0.0.1:$DPORT" --secs 5 > "$T/d08.sim" 2>&1 &
 RPID=$!
 sleep 0.5

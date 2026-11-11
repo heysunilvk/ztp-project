@@ -61,16 +61,16 @@ expect_line "$T/d1.log" "[AUTH] REGISTER: session_id=" TC-AUTH-01
 expect_line "$T/d1.log" "TLVs: SERIAL MODEL FW_VER HW_REV(A1) NONCE_REG NONCE_SRV" TC-AUTH-01
 expect_line "$T/d1.log" "[AUTH] Registration successful" TC-AUTH-02
 expect_line "$T/d1.log" "[AUTH] Assigned tenant: cruise_ops" TC-AUTH-02
-grep -q '^stage=REGISTERED$' "$T/d1.state/device.state" && ok || bad "TC-AUTH-02: stage not persisted"
+grep -q '^stage=\(REGISTERED\|CONFIG_OK\|FW_STAGED\)$' "$T/d1.state/device.state" && ok || bad "TC-AUTH-02: stage not persisted"
 expect_line "$T/s1.log" "ZTP-93AF21] Registration successful" "TC-AUTH-02 (server)"
 expect_line "$T/s1.log" "ZTP-93AF21] Assigned tenant: cruise_ops, fw v1.1, config 3" "TC-AUTH-02 (server)"
 expect_line "$T/s1.log" "Policy: EDGE-GW-100 -> fw v1.1, cfg 3, keepalive 2 s, grace 30 s (source: profile:demo)" TC-AUTH-02
-# TC-REL-11: an idle registered session: KEEPALIVE_ACKs and ACKs are never acknowledged (no ping-pong).
-# The device ACKs only the server's reliable frames (HELLO_ACK, REGISTER_ACK: at most 2 standalone ACKs),
-# however many idle keepalives follow.
-n_ack=$(grep -c 'tx ACK seq=' "$T/d1.log" || true)
-n_ka=$(grep -c 'tx KEEPALIVE seq=' "$T/d1.log" || true)
-[ "$n_ack" -le 2 ] && [ "$n_ka" -ge 3 ] && ok || bad "TC-REL-11: device sent $n_ack ACKs for $n_ka keepalives"
+# TC-REL-11: once the session is idle (after provisioning), KEEPALIVE_ACKs are never acknowledged and
+# nothing ping-pongs: at most one trailing ACK for the last delivered frame, while keepalives continue.
+awk '/\[STATE\] Provisioned/ { idle = 1 } idle' "$T/d1.log" > "$T/d1.idle"
+n_ack=$(grep -c 'tx ACK seq=' "$T/d1.idle" || true)
+n_ka=$(grep -c 'tx KEEPALIVE seq=' "$T/d1.idle" || true)
+[ "$n_ack" -le 1 ] && [ "$n_ka" -ge 2 ] && ok || bad "TC-REL-11: idle device sent $n_ack ACKs for $n_ka keepalives"
 
 # --- TC-AUTH-09: UNKNOWN_MODEL leaves a Failed row "Unknown model" -----------------------------------
 run_device d2 20 --serial ZTP-999999 --model EDGE-GW-999

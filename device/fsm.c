@@ -54,6 +54,11 @@ void dev_backoff(device_t *d, const char *why)
 
 void dev_fail(device_t *d, const char *reason)
 {
+    if (d->in_rx) {   /* called from a deliver callback: finish after rel_on_rx returns (no use-after-free) */
+        snprintf(d->fail_reason, sizeof d->fail_reason, "%s", reason);
+        d->fail_pending = true;
+        return;
+    }
     dev_session_end(d);
     d->st.stage = ST_FAILED;
     snprintf(d->st.last_fail_reason, sizeof d->st.last_fail_reason, "%s", reason);

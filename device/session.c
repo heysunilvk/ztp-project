@@ -15,7 +15,7 @@ static int sess_tx(void *ctx, const uint8_t *frame, size_t len, bool to_source)
     return dev_send(d, frame, len, &d->server);
 }
 
-static void send_keepalive(device_t *d, bool probe)
+void dev_send_keepalive(device_t *d, bool probe)
 {
     uint8_t pl[8];
     tlv_writer_t w;
@@ -70,7 +70,7 @@ static void on_hello_ack(device_t *d, const uint8_t *p, uint16_t n)
     LOGD(T_NAT, "keepalive %d s, dead after %d intervals, grace %d s", d->keepalive_s, d->dead_intervals, d->grace_s);
     d->fsm = DS_PROBING;
     if (d->cfg.c.nat.path_probe) {
-        send_keepalive(d, true);
+        dev_send_keepalive(d, true);
     } else {
         send_register(d);
     }
@@ -126,9 +126,8 @@ static void on_register_ack(device_t *d, const uint8_t *p, uint16_t n)
     snprintf(d->st.server, sizeof d->st.server, "%s", d->server_str);
     if (dev_state_save(d->state_path, &d->st) != 0) LOGW(T_ERROR, "cannot persist state");
     d->fsm = DS_REGISTERED;
-    LOGI(T_STATE, "Registered (fw target %s, config v%u); provisioning arrives in milestone M4", fw, (unsigned)cfg);
-    if (d->cfg.c.run.exit_when_operational)
-        d->hold_until = d->now + (uint64_t)d->cfg.c.run.operational_hold_s * 1000u;
+    LOGD(T_STATE, "Registered (fw target %s, config v%u)", fw, (unsigned)cfg);
+    dev_provision_next(d);   /* E7: config, then firmware, from the persisted stage */
 }
 
 static void sess_deliver(void *ctx, uint8_t type, uint8_t flags, uint32_t seq, const uint8_t *p, uint16_t n)
@@ -136,6 +135,9 @@ static void sess_deliver(void *ctx, uint8_t type, uint8_t flags, uint32_t seq, c
     device_t *d = ctx;
     if (type == ZT_HELLO_ACK) on_hello_ack(d, p, n);
     else if (type == ZT_REGISTER_ACK) on_register_ack(d, p, n);
+    else if (type == ZT_MANIFEST) dev_xfer_on_manifest(d, p, n);
+    else if (type == ZT_CHUNK_DATA) dev_xfer_on_chunk(d, p, n);
+    else if (type == ZT_STATUS_ACK) dev_xfer_on_status_ack(d);
     else if (type == ZT_ERROR) {
         tlv_set_t t;
         uint16_t reason = 0;
@@ -197,6 +199,7 @@ static void on_register_nak(device_t *d, const uint8_t *buf, size_t len, const z
 void dev_session_start(device_t *d)
 {
     dev_session_end(d);
+    if (d->st.max_dgram && d->st.max_dgram < d->relcfg.max_dgram) d->relcfg.max_dgram = d->st.max_dgram;   /* §5.8 */
     d->rel = rel_new(&d->relcfg, sess_tx, sess_deliver, d);
     if (!d->rel) { dev_fail(d, "out of memory"); return; }
     rel_set_ack_key(d->rel, d->k_boot, ZK_BOOT);
@@ -224,6 +227,7 @@ void dev_session_start(device_t *d)
 
 void dev_session_end(device_t *d)
 {
+    dev_xfer_suspend(d);
     rel_free(d->rel);
     d->rel = NULL;
     d->sid = 0;
@@ -259,7 +263,7 @@ static void on_error(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_
 
 void dev_session_rx(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_t *h, const struct sockaddr_in *src)
 {
-    if (!d->rel || (d->fsm != DS_SESSION && d->fsm != DS_PROBING && d->fsm != DS_REGISTER && d->fsm != DS_REGISTERED)) {
+    if (!d->rel || d->fsm < DS_SESSION || d->fsm > DS_PROVISIONED || d->fsm == DS_BACKOFF) {
         d->c.rx_unknown++;
         return;
     }
@@ -296,7 +300,16 @@ void dev_session_rx(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_t
     }
     d->last_auth_rx = d->now;
     const ztp_type_info_t *ti = ztp_type_info(h->type);
-    if (ti->cls == ZC_RELIABLE) rel_on_rx(d->rel, h, buf + ZTP_HDR_LEN, d->now);
+    if (ti->cls == ZC_RELIABLE) {
+        d->in_rx = true;
+        rel_on_rx(d->rel, h, buf + ZTP_HDR_LEN, d->now);
+        d->in_rx = false;
+        if (d->fail_pending) {
+            d->fail_pending = false;
+            dev_fail(d, d->fail_reason);
+            return;
+        }
+    }
     else rel_on_ack(d->rel, h, d->now);
     if (!d->rel) return;   /* a handler ended the session */
 
@@ -315,7 +328,7 @@ static uint64_t dead_deadline(const device_t *d)
 
 static uint64_t keepalive_due(const device_t *d)
 {
-    if (!d->sid || d->ka_seq || (d->fsm != DS_REGISTER && d->fsm != DS_REGISTERED)) return UINT64_MAX;
+    if (!d->sid || d->ka_seq || d->fsm < DS_REGISTER || d->fsm > DS_PROVISIONED) return UINT64_MAX;
     return d->last_tx + (uint64_t)d->keepalive_s * 1000u;
 }
 
@@ -326,6 +339,7 @@ uint64_t dev_session_deadline(const device_t *d)
     if ((x = dead_deadline(d)) < t) t = x;
     if ((x = keepalive_due(d)) < t) t = x;
     if (d->hold_until && d->hold_until < t) t = d->hold_until;
+    if ((x = dev_xfer_deadline(d)) < t) t = x;
     return t;
 }
 
@@ -338,6 +352,8 @@ void dev_session_timer(device_t *d)
         d->exit_code = 0;
         return;
     }
+    dev_xfer_timer(d);
+    if (!d->rel || d->fsm == DS_FAILED) return;
     if (rel_on_timer(d->rel, d->now) == REL_E_FAILED) {
         if (d->sid == 0) {   /* E6a: HELLO budget exhausted */
             if (d->cfg.c.nat.blocked_hint) {
@@ -360,5 +376,5 @@ void dev_session_timer(device_t *d)
         dev_backoff(d, "session timeout");   /* not registered yet: a fresh HELLO (§9.3) */
         return;
     }
-    if (d->now >= keepalive_due(d)) send_keepalive(d, false);   /* E21 */
+    if (d->now >= keepalive_due(d)) dev_send_keepalive(d, false);   /* E21 */
 }

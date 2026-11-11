@@ -64,7 +64,7 @@ void srv_sess_journal(srv_t *s, srv_session_t *ss)
     r.sid = ss->session_id;
     r.epoch = ss->epoch;
     r.last_resume_ctr = ss->last_resume_ctr;
-    r.max_dgram = s->relcfg.max_dgram;
+    r.max_dgram = ss->max_dgram;
     r.keepalive_s = ss->assign.nat.keepalive_interval_s;
     r.grace_s = ss->assign.nat.grace_s;
     snprintf(r.serial, sizeof r.serial, "%s", ss->serial);
@@ -112,6 +112,7 @@ srv_session_t *srv_sess_new(srv_t *s, const char *serial, const char *model)
     rel_set_session(ss->rel, sid, 0);
     rel_set_ack_key(ss->rel, s->keys.k_boot, ZK_BOOT);
     rel_set_log_tag(ss->rel, sid, serial);
+    ss->max_dgram = (uint16_t)s->cfg.c.net.max_datagram;
     ss->created_ms = ss->last_rx_ms = s->now;
     ss->half_open_deadline = s->now + (uint64_t)s->cfg.c.nat.half_open_ttl_s * 1000u;
 
@@ -163,6 +164,7 @@ void srv_sess_restore(srv_t *s)
         s->hook_first_sid = keep;
         if (!ss) continue;
         ss->epoch = js[i].epoch;
+        if (js[i].max_dgram) ss->max_dgram = js[i].max_dgram;
         ss->last_resume_ctr = js[i].last_resume_ctr;
         srv_policy_resolve(&s->policy, &s->cfg, ss->model, ss->serial, &ss->assign);
         rel_set_session(ss->rel, ss->session_id, ss->epoch);
@@ -222,6 +224,7 @@ void srv_sess_run_timers(srv_t *s)
             continue;
         }
         bool failed = rel_on_timer(e->rel, s->now) == REL_E_FAILED;
+        if (!failed) srv_sess_pump(e);
         if (e->st == SS_HALF_OPEN) {
             if (failed) srv_sess_free(s, e, "retries exhausted");
             continue;

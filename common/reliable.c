@@ -61,6 +61,9 @@ struct rel {
     bool      ack_pending;
     uint64_t  ack_deadline;
 
+    int      last_tx_err;
+    uint32_t max_in_flight;
+
     /* logging */
     uint32_t log_sid;
     char     log_serial[17];
@@ -184,7 +187,9 @@ static int emit(rel_t *r, uint8_t type, uint8_t flags, uint32_t seq, const uint8
     r->st.tx++;
     LOGD(T_UDP, "tx %s seq=%u ack=%u sack=%08x len=%d%s", ztp_type_name(type), (unsigned)seq, (unsigned)h.ack,
          (unsigned)h.sack, n, (flags & ZF_RETX) ? " RETX" : "");
-    return r->tx(r->ctx, frame, (size_t)n, to_source);
+    int rc = r->tx(r->ctx, frame, (size_t)n, to_source);
+    if (rc < 0) r->last_tx_err = rc;
+    return rc;
 }
 
 static void send_ack(rel_t *r, bool to_source)
@@ -197,6 +202,14 @@ static void send_ack(rel_t *r, bool to_source)
 static tx_slot_t *slot_of(rel_t *r, uint32_t seq) { return &r->tx_slots[seq % ZTP_TX_WINDOW_MAX]; }
 
 uint32_t rel_in_flight(const rel_t *r) { return r->next_seq - r->snd_una; }
+uint32_t rel_max_in_flight(const rel_t *r) { return r->max_in_flight; }
+
+int rel_take_tx_error(rel_t *r)
+{
+    int e = r->last_tx_err;
+    r->last_tx_err = 0;
+    return e;
+}
 uint32_t rel_queued(const rel_t *r) { return (uint32_t)r->qlen; }
 bool     rel_idle(const rel_t *r) { return rel_in_flight(r) == 0 && r->qlen == 0; }
 bool     rel_failed(const rel_t *r) { return r->failed; }
@@ -225,6 +238,7 @@ static int transmit_new(rel_t *r, uint8_t type, uint8_t flags, bool keepalive, c
     s->rto_ms = r->rto;
     s->first_sent = s->last_sent = now;
     s->deadline = now + s->rto_ms;
+    if (rel_in_flight(r) > r->max_in_flight) r->max_in_flight = rel_in_flight(r);
     emit(r, type, flags, seq, key, key_id, payload, len, false);
     return (int)seq;
 }
@@ -261,6 +275,34 @@ int rel_send(rel_t *r, const rel_msg_t *m, const uint8_t *payload, uint16_t len,
 int rel_send_ackclass(rel_t *r, const rel_msg_t *m, const uint8_t *payload, uint16_t len, bool to_source)
 {
     return emit(r, m->type, m->flags, r->next_seq, m->key, m->key_id, payload, len, to_source);
+}
+
+int rel_step_down(rel_t *r, uint16_t max_dgram, rel_fill_fn fill, void *ctx, uint64_t now)
+{
+    r->cfg.max_dgram = max_dgram;
+    /* in flight: holes are filled in order, without renumbering (§5.8 step 2) */
+    for (uint32_t seq = r->snd_una; seq_lt(seq, r->next_seq); seq++) {
+        tx_slot_t *s = slot_of(r, seq);
+        if (!s->in_use || s->sacked || (size_t)ZTP_HDR_LEN + s->len <= max_dgram) continue;
+        uint8_t out[ZTP_MAX_PAYLOAD];
+        s->len = fill(ctx, s->type, s->payload, s->len, out);
+        memcpy(s->payload, out, s->len);
+        s->retries++;
+        s->retransmitted = true;
+        s->last_sent = now;
+        s->deadline = now + s->rto_ms;
+        emit(r, s->type, (uint8_t)(s->flags | ZF_RETX), s->seq, s->key, s->key_id, s->payload, s->len, false);
+    }
+    /* queued, not yet sequenced: dropped; the peer re-requests them (§5.8 step 2) */
+    int dropped = 0, kept = 0;
+    for (int i = 0; i < r->qlen; i++) {
+        queued_t *q = &r->q[(r->qhead + i) % r->cfg.queue_max];
+        if ((size_t)ZTP_HDR_LEN + q->len > max_dgram) { dropped++; continue; }
+        if (kept != i) r->q[(r->qhead + kept) % r->cfg.queue_max] = *q;
+        kept++;
+    }
+    r->qlen = kept;
+    return dropped;
 }
 
 /* ---- RTT / RTO (RFC 6298) ---- */

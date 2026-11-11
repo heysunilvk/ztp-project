@@ -105,11 +105,12 @@ jobs:
           sudo tcpdump -i lo -U -w rel01.pcap 'udp and (portrange 25555-25557)' 2> tcpdump.err &
           sleep 2
           ZTP_PORT=25555 sh tests/m2_session.sh build/ztp-server build/ztp-device
+          ZTP_PORT=25555 sh tests/m4_provision.sh build/ztp-server build/ztp-device build/mkartifacts
           sleep 1
           sudo pkill -INT tcpdump || true
           sleep 1
           if build/pcapcheck --max-size 1200 rel01.pcap 25555 25556 > rel01.txt; then
-            echo "::notice::TC-REL-01: $(cat rel01.txt)"
+            echo "::notice::TC-REL-01 / TC-PROV-04: $(cat rel01.txt)"
           else
             echo "::error::TC-REL-01: $(cat rel01.txt)"
             exit 1

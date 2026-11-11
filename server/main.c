@@ -206,6 +206,11 @@ int main(int argc, char **argv)
         return rc;
     }
 
+    if ((rc = srv_artifacts_load(&s->artifacts, &s->policy, err, sizeof err))) {
+        fprintf(stderr, "%s\n", err);
+        LOGW(T_ERROR, "%s", err);
+        return rc;
+    }
     if (db_open(&s->db, c->paths.db, c->limits.max_failed_records, err, sizeof err) != 0) {
         fprintf(stderr, "%s\n", err);
         LOGW(T_ERROR, "%s", err);
@@ -284,6 +289,7 @@ int main(int argc, char **argv)
     netsim_log_totals(&s->ns);
     netsim_free(&s->ns);
     db_close(&s->db, true);
+    srv_artifacts_free(&s->artifacts);
     free(s->nonces);
     srv_policy_free(&s->policy);
     srv_keys_free(&s->keys);

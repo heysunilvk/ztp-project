@@ -504,6 +504,42 @@ static void test_sacked_head_stall(void)
     rel_free(r);
 }
 
+static uint16_t test_fill(void *ctx, uint8_t type, const uint8_t *p, uint16_t len, uint8_t *out)
+{
+    memset(out, 0xEE, 8);
+    return 8;
+}
+
+static void test_step_down(void)
+{
+    /* §5.8: frames above the new limit are rewritten at the same seq (fill frames) and resent at once;
+     * queued frames above it are dropped */
+    rel_cfg_t cfg = default_cfg();
+    cfg.window = 2;
+    cfg.queue_max = 4;
+    cap_t c = {0};
+    rel_t *r = rel_new(&cfg, cap_tx, cap_deliver, &c);
+    rel_msg_t m = {ZT_CHUNK_DATA, 0, false, KEY, ZK_SESSION};
+    uint8_t big[1032] = {0}, small[100] = {0};
+    CHECK_EQ_INT(rel_send(r, &m, big, sizeof big, 0), 1);
+    CHECK_EQ_INT(rel_send(r, &m, small, sizeof small, 0), 2);
+    CHECK_EQ_INT(rel_send(r, &m, big, sizeof big, 0), 0);     /* queued */
+    CHECK_EQ_INT(rel_send(r, &m, small, sizeof small, 0), 0);  /* queued */
+    int before = c.n;
+    CHECK_EQ_INT(rel_step_down(r, ZTP_MIN_DGRAM, test_fill, NULL, 10), 1);   /* the big queued one */
+    CHECK_EQ_INT(c.n, before + 1);                                          /* seq 1 resent as a fill frame */
+    ztp_hdr_t h = hdr_of(&c, c.n - 1);
+    CHECK(h.seq == 1 && (h.flags & ZF_RETX) && h.payload_len == 8 && c.len[c.n - 1] == ZTP_HDR_LEN + 8);
+    CHECK_EQ_INT(rel_queued(r), 1);
+    CHECK_EQ_INT(rel_send(r, &m, big, sizeof big, 20), ZTP_E_TOOBIG);       /* the new limit holds */
+    ztp_hdr_t a = ack_hdr(2, 0);
+    rel_on_ack(r, &a, 30);                                                  /* the small queued one goes out */
+    h = hdr_of(&c, c.n - 1);
+    CHECK(h.seq == 3 && h.payload_len == sizeof small);
+    CHECK_EQ_INT(rel_max_in_flight(r), 2);
+    rel_free(r);
+}
+
 static void test_piggyback(void)
 {
     /* a reply sent from inside deliver() carries the ACK, so no standalone ACK follows */
@@ -655,6 +691,7 @@ void suite_reliable(void)
     test_receiver();
     test_fast_retx_and_window();
     test_sacked_head_stall();
+    test_step_down();
     test_piggyback();
     test_pdf_scenario();
     test_lost_ack();

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "artifacts.h"
 #include "auth.h"
 #include "config.h"
 #include "db.h"
@@ -38,6 +39,11 @@ typedef struct srv_session {
     bool     ks_verified;             /* a frame under K_s has been verified (REGISTER) */
     bool     doomed;                  /* free after the current datagram (terminal reply sent) */
     uint32_t last_resume_ctr;
+    /* transfer (§11.2): chunk requests served by a pump that reads on demand, O(window) memory */
+    uint16_t max_dgram;               /* the session's datagram limit: 1200, or 508 after §5.8 */
+    uint32_t chunk_size;              /* from the last MANIFEST */
+    struct { uint8_t file_id; uint32_t next, end; } req[4];
+    int      nreq;
     uint8_t  cached_hello_ack[ZTP_MAX_DGRAM_CAP];
     uint16_t cached_hello_ack_len;
     uint8_t  cur_key_id;              /* key of the frame being delivered (KEEPALIVE_ACK uses it) */
@@ -98,6 +104,7 @@ struct srv {
     srv_nonce_t    *nonces;           /* REGISTER nonce cache (§10.4 mechanism 3), ring */
     size_t          nonce_cap, nonce_next;
     srv_db_t        db;
+    srv_artifacts_t artifacts;
 
     /* the datagram being processed (duplicates are re-ACKed to its source, §5.7) */
     struct sockaddr_in cur_src;
@@ -125,5 +132,6 @@ void srv_on_disc_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct
 int  srv_send(srv_t *s, int fd, const uint8_t *frame, size_t len, const struct sockaddr_in *dst);
 bool srv_rate_ok(srv_t *s, const struct sockaddr_in *src);
 bool srv_nonce_seen(srv_t *s, const char *serial, uint64_t nonce);   /* also records it */
+void srv_sess_pump(srv_session_t *ss);                                /* send requested chunks into the window */
 
 #endif

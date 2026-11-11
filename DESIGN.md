@@ -374,7 +374,9 @@ ztp/
 │   ├── fsm.[ch]             device state machine (§15)
 │   ├── discovery.c          static, multicast and broadcast discovery (§6)
 │   ├── session.c            HELLO, resume, keepalive, liveness (§7, §9, §12.3)
-│   ├── transfer.c           manifest, CHUNK_REQ, bitmap persistence, hash verify (§11)
+│   ├── transfer.c           chunk bitmap: persistence, next missing run, chunk-size conversion (§11.4, §5.8)
+│   ├── provision.c          per-file transfer FSM: manifest, CHUNK_REQ, writes, hash verify, black hole (§11.5)
+│   ├── natsim.c             NAT emulator and --rebind-after (§9.8)
 │   ├── upgrade.c            A/B slots, install, rollback (§12)
 │   ├── validate.c           validation checks (§13)
 │   └── persist.c            device.state load/store (§15.3)
@@ -386,7 +388,9 @@ ztp/
 │   ├── artifacts.c          manifests and chunk reads (§11)
 │   ├── handlers.c           per-message-type dispatch
 │   └── db.c                 in-memory DB, JSONL journal, dump and summary (§14.4–14.5)
-├── tools/mkartifacts.c      deterministic mock firmware and configs
+├── tools/mkartifacts.c      deterministic mock firmware and configs; --test-set boundary files; --keys demo keys
+├── tools/netspike.c         M1 multicast/broadcast platform spike
+├── tests/peer_sim/, tests/pcapcheck/   QA protocol peer and pcap checker (QA §3)
 ├── conf/server.json device.json policy.json keys.json   runtime configuration (§25)
 ├── conf/profiles/{server,device}/  default, demo, strict-nat, cgnat, lan, metered overlays, one file per side (§25.7)
 ├── scripts/run_demo.sh  run_scale.sh  netem.sh (Linux/CI)  dummynet.sh (macOS)  pcapcheck.sh
@@ -1315,7 +1319,8 @@ sequenceDiagram
 
   After power loss the map can therefore *under*-claim chunks (they are fetched again, which is harmless), but it never *over*-claims them. The whole-file SHA-256 check (§11.3) is the final guard either way.
 - On restart, or after the session is lost, the device sends MANIFEST_REQ again. **If the manifest's sha256 equals the map's** → it continues and requests only the missing chunks: `[PROVISION] Resuming firmware: 32/64 chunks present, requesting 32`. If they differ (the artifact changed on the server) → the partial is discarded (TC-PROV-10). If only the chunk size differs (an MTU fallback, §5.8), the bitmap is converted (one 1024 B chunk = four 256 B chunks) and the partial is kept.
-- > **Reviewer note.** Because the map is written every 16 chunks, up to 15 chunks may be fetched again after a crash. They are already on disk, but their bits weren't persisted. That's a deliberate tradeoff of fsync cost against refetch cost, and it is harmless because writing a chunk is idempotent.
+- **File names.** The transfer files are `xfer_<kind>.part` and `xfer_<kind>.map`, keyed by file kind (1 config, 2 firmware) rather than the server's FILE_ID, because a FILE_ID can change when the server restarts with a different policy; the manifest's sha256 decides whether a partial still applies.
+- > **Reviewer note.** Because the map is written every 16 chunks (`xfer.persist_every_chunks`), up to 16 chunks may be fetched again after a crash (a kill between a chunk write and the next map save). They are already on disk, but their bits weren't persisted. That's a deliberate tradeoff of fsync cost against refetch cost, and it is harmless because writing a chunk is idempotent.
 
 ### 11.5 Per-file transfer state machine (device side)
 One instance runs per artifact: config first, then firmware.

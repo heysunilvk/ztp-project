@@ -4,6 +4,8 @@
  *   mkartifacts [--out DIR]                 artifacts/ for conf/policy.json:
  *                                            fw_EDGE-GW-100_v1.1.bin (65,536 B), fw_EDGE-GW-050_v1.0.bin
  *                                            (49,152 B), cfg_v3.json (2,310 B), cfg_v2.json
+ *   mkartifacts --test-set DIR              QA §4.2 boundary files: fw_tiny (1 B), fw_1023, fw_1024, fw_1025,
+ *                                            fw_64k, fw_1m (raw deterministic bytes, no header)
  *   mkartifacts --keys FILE MODEL...        keys.json with the demo-derived K_fleet and K_mfg per model
  *                                            (the same derivation as device/keys.c), mode 0600
  *
@@ -103,10 +105,38 @@ static int write_keys(const char *path, int nmodels, char **models)
     return 0;
 }
 
+static int write_raw(const char *dir, const char *name, size_t n)
+{
+    char path[512];
+    snprintf(path, sizeof path, "%s/%s", dir, name);
+    uint8_t *b = malloc(n ? n : 1);
+    if (!b) return -1;
+    for (size_t off = 0, ctr = 0; off < n; ctr++) {
+        uint8_t blk[SHA256_DIGEST_LEN], in[64];
+        int k = snprintf((char *)in, sizeof in, "%s|%zu", name, ctr);
+        sha256(in, (size_t)k, blk);
+        size_t m = n - off < sizeof blk ? n - off : sizeof blk;
+        memcpy(b + off, blk, m);
+        off += m;
+    }
+    int rc = atomic_write_file(path, b, n);
+    free(b);
+    printf("mkartifacts: %s (%zu bytes)\n", path, n);
+    return rc;
+}
+
 int main(int argc, char **argv)
 {
     const char *out = "artifacts";
     if (argc >= 3 && !strcmp(argv[1], "--keys")) return write_keys(argv[2], argc - 3, argv + 3);
+    if (argc == 3 && !strcmp(argv[1], "--test-set")) {
+        if (mkdir(argv[2], 0755) != 0 && errno != EEXIST) { perror(argv[2]); return 1; }
+        static const struct { const char *name; size_t n; } T[] = {
+            {"fw_tiny", 1}, {"fw_1023", 1023}, {"fw_1024", 1024}, {"fw_1025", 1025}, {"fw_64k", 65536}, {"fw_1m", 1048576}};
+        int rc = 0;
+        for (size_t i = 0; i < sizeof T / sizeof T[0]; i++) rc |= write_raw(argv[2], T[i].name, T[i].n);
+        return rc ? 1 : 0;
+    }
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--out") && i + 1 < argc) out = argv[++i];
         else { fprintf(stderr, "usage: mkartifacts [--out DIR] | --keys FILE MODEL...\n"); return 2; }

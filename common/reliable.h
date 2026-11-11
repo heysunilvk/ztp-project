@@ -95,6 +95,14 @@ uint64_t rel_next_deadline(const rel_t *r);
 /* Run due retransmissions and delayed ACKs. Returns 0, or REL_E_FAILED. */
 int    rel_on_timer(rel_t *r, uint64_t now);
 
+/* The most recent transmit error from the tx callback (e.g. -EMSGSIZE), cleared by reading it. */
+int      rel_take_tx_error(rel_t *r);
+/* §5.8 step-down: lower the datagram limit. Every in-flight frame that no longer fits is rewritten
+ * through fill() (same seq, new payload, e.g. a CHUNK_DATA fill frame) and retransmitted at once;
+ * queued frames that don't fit are dropped. Returns the number of frames dropped from the queue. */
+typedef uint16_t (*rel_fill_fn)(void *ctx, uint8_t type, const uint8_t *payload, uint16_t len, uint8_t *out);
+int      rel_step_down(rel_t *r, uint16_t max_dgram, rel_fill_fn fill, void *ctx, uint64_t now);
+uint32_t rel_max_in_flight(const rel_t *r);    /* high-water mark (TC-REL-06) */
 uint32_t rel_in_flight(const rel_t *r);        /* sent and not cumulatively ACKed */
 uint32_t rel_queued(const rel_t *r);
 bool     rel_idle(const rel_t *r);             /* nothing in flight or queued */

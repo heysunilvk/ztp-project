@@ -14,6 +14,11 @@ extern int util_atomic_fault;   /* set by tests; the write then fails at that po
  * rename path.tmp -> path, fsync the directory. Returns 0 or -1 (errno set). */
 int atomic_write_file(const char *path, const void *data, size_t len);
 
+/* fsync that also flushes the drive cache on macOS (F_FULLFSYNC), falling back to fsync. */
+int util_full_fsync(int fd);
+/* fsync the directory containing path (makes a rename durable). */
+void util_fsync_dir(const char *path);
+
 /* Read a whole file (≤ max bytes) into a malloc'd, NUL-terminated buffer. If path is missing
  * or unreadable and path.bak exists, falls back to path.bak when use_bak is true.
  * Returns 0, or -1 (errno set; E2BIG if larger than max). */

@@ -188,6 +188,8 @@ int main(int argc, char **argv)
                        !strcmp(c->sim.mtu_mode, "blackhole") ? NS_MTU_BLACKHOLE : NS_MTU_EMSGSIZE, c->sim.seed};
     netsim_init(&d->ns, &nc);
     dev_nat_init(d);
+    d->x.fd = -1;
+    if (!d->st.max_dgram || d->st.max_dgram > c->net.max_datagram) d->st.max_dgram = (uint16_t)c->net.max_datagram;
     rel_cfg_from(&d->relcfg, c, 8);
     d->keepalive_s = c->nat.keepalive_interval_s;
     d->dead_intervals = c->nat.dead_intervals;

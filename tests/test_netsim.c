@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "log.h"
+#include "net.h"
 #include "netsim.h"
 #include "test.h"
 
@@ -198,8 +199,26 @@ static void test_send_path(void)
     close(rx);
 }
 
+static void test_df(void)
+{
+    /* TC-PROV-05: the don't-fragment option is set on both platforms */
+    char err[100];
+    int fd = udp_open("127.0.0.1", 0, false, err, sizeof err);
+    CHECK(fd >= 0);
+    CHECK_EQ_INT(udp_set_df(fd), 0);
+    int v = 0;
+    socklen_t l = sizeof v;
+#if defined(IP_MTU_DISCOVER) && defined(IP_PMTUDISC_DO)
+    CHECK(getsockopt(fd, IPPROTO_IP, IP_MTU_DISCOVER, &v, &l) == 0 && v == IP_PMTUDISC_DO);
+#elif defined(IP_DONTFRAG)
+    CHECK(getsockopt(fd, IPPROTO_IP, IP_DONTFRAG, &v, &l) == 0 && v == 1);
+#endif
+    close(fd);
+}
+
 void suite_netsim(void)
 {
+    test_df();
     test_determinism();
     test_rates();
     test_send_path();

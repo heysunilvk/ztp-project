@@ -13,6 +13,7 @@
 #include "net.h"
 #include "netsim.h"
 #include "reliable.h"
+#include "transfer.h"
 
 /* ---- persisted state, <state-dir>/device.state (§15.3) ---- */
 typedef struct {
@@ -44,7 +45,10 @@ typedef enum {
     DS_SESSION,         /* HELLO sent, waiting for HELLO_ACK */
     DS_PROBING,         /* HELLO_ACK verified, path-probe KEEPALIVE in flight */
     DS_REGISTER,        /* probe acknowledged, REGISTER sent, waiting for REGISTER_ACK / NAK */
-    DS_REGISTERED,      /* REGISTER_ACK received; CONFIG arrives in M4 (keepalives only for now) */
+    DS_REGISTERED,      /* REGISTER_ACK received */
+    DS_CONFIG,          /* downloading the config (§11.5) */
+    DS_FIRMWARE,        /* downloading the firmware into the inactive slot */
+    DS_PROVISIONED,     /* config (and firmware) done; upgrade and validation arrive in M5 */
     DS_BACKOFF,         /* waiting (full jitter) before re-discovery */
     DS_FAILED,
     DS_EXIT,
@@ -53,6 +57,24 @@ typedef enum {
 typedef struct {
     uint64_t rx_malformed, rx_unknown, rx_stale, mac_fail, timeouts;
 } dev_counters_t;
+
+/* One file transfer (§11.5): config first, then firmware. Files: xfer_<kind>.part / .map */
+typedef struct {
+    bool          active;
+    uint8_t       kind, file_id;
+    char          version[9];
+    uint32_t      size, chunk_size, count;
+    uint8_t       sha256[32];
+    dev_xfermap_t map;
+    int           fd;
+    char          part[CFG_PATH + 32], mappath[CFG_PATH + 32];
+    bool          req_out, req_acked;
+    uint32_t      req_start, req_num, req_seq;
+    uint64_t      req_acked_ms;   /* when the CHUNK_REQ was ACKed, or the last chunk arrived */
+    bool          probed;         /* black-hole liveness probe sent (§5.8) */
+    uint32_t      since_persist, writes, dups;
+    int           hash_attempt;
+} dev_xfer_t;
 
 typedef struct {
     cfg_t       cfg;
@@ -100,6 +122,12 @@ typedef struct {
         char     bind_ip[16];
     } nat;
 
+    dev_xfer_t  x;
+    uint64_t    fail_after;          /* FAILED once STATUS_ACK arrives, or at this deadline */
+    bool        in_rx;               /* inside the engine's deliver callback: the engine must not be freed */
+    bool        fail_pending;        /* dev_fail() requested from inside delivery */
+    char        fail_reason[48];
+
     dev_counters_t c;
 } device_t;
 
@@ -115,6 +143,16 @@ void dev_session_end(device_t *d);
 void dev_session_rx(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_t *h, const struct sockaddr_in *src);
 void dev_session_timer(device_t *d);
 uint64_t dev_session_deadline(const device_t *d);
+
+/* provision.c (§11) */
+void     dev_provision_next(device_t *d);   /* after REGISTER_ACK: config, then firmware, by persisted stage */
+void     dev_xfer_on_manifest(device_t *d, const uint8_t *p, uint16_t n);
+void     dev_xfer_on_chunk(device_t *d, const uint8_t *p, uint16_t n);
+void     dev_xfer_on_status_ack(device_t *d);
+void     dev_xfer_timer(device_t *d);
+uint64_t dev_xfer_deadline(const device_t *d);
+void     dev_xfer_suspend(device_t *d);     /* session lost: persist the map, close the part file */
+void     dev_send_keepalive(device_t *d, bool probe);
 
 /* natsim.c */
 bool     dev_nat_active(const device_t *d);
