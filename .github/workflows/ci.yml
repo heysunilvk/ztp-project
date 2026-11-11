@@ -58,7 +58,8 @@ jobs:
       - name: Multicast via lo (127.0.0.1), as configured
         id: mcast_lo
         continue-on-error: true
-        run: build/netspike mcast 239.255.90.90 127.0.0.1 && echo "::notice::mcast via lo: ok" || { echo "::warning::mcast via lo: FAILED"; exit 1; }
+        run: |
+          build/netspike mcast 239.255.90.90 127.0.0.1 && echo "::notice::mcast via lo: ok" || { echo "::warning::mcast via lo: FAILED"; exit 1; }
       - name: Multicast via lo after 'ip link set lo multicast on' + route
         id: mcast_lo_fixed
         if: steps.mcast_lo.outcome == 'failure'
