@@ -388,7 +388,7 @@ ztp/
 │   ├── artifacts.c          manifests and chunk reads (§11)
 │   ├── handlers.c           per-message-type dispatch
 │   └── db.c                 in-memory DB, JSONL journal, dump and summary (§14.4–14.5)
-├── tools/mkartifacts.c      deterministic mock firmware and configs; --test-set boundary files; --keys demo keys
+├── tools/mkartifacts.c      deterministic mock firmware and configs; --test-set boundary files; --fw one image with a valid header; --keys demo keys
 ├── tools/netspike.c         M1 multicast/broadcast platform spike
 ├── tests/peer_sim/, tests/pcapcheck/   QA protocol peer and pcap checker (QA §3)
 ├── conf/server.json device.json policy.json keys.json   runtime configuration (§25)
@@ -1407,8 +1407,8 @@ sequenceDiagram
 |---|---|---|---|
 | Session deleted after `nat.grace_s` (the server keeps a tombstone for 24 h) | terminal ERROR `SESSION_EXPIRED` (K_boot) | Fresh HELLO + REGISTER | Same row (upsert by serial). Provisioning note (verbose dump) "Re-registered after session expiry". **No duplicate row** |
 | Session id never seen, or the tombstone has expired | terminal ERROR `SESSION_UNKNOWN` (K_boot) | Fresh HELLO + REGISTER | As above |
-| `resume_ctr` not newer than the last seen | terminal ERROR `RESUME_REJECTED` (K_boot) | Increase the counter, persist it, retry once; if rejected again, fresh HELLO + REGISTER | none (provisioning note if it re-registers) |
-| No reply to the resume HELLO (server down, path blocked, or a bad K_dev MAC silently dropped) | — | The resume HELLO budget is exhausted (E17b): back off with jitter and **resume again** (a new ctr and epoch), for up to `net.resume_cycles` (10; demo 3) cycles. Only then fresh HELLO + REGISTER | none (provisioning note if it re-registers) |
+| `resume_ctr` not newer than the last seen | terminal ERROR `RESUME_REJECTED` (K_boot) | Increase the counter, persist it, retry once; if rejected again, fresh HELLO + REGISTER | none (provisioning note "Re-registered" if it re-registers) |
+| No reply to the resume HELLO (server down, path blocked, or a bad K_dev MAC silently dropped) | — | The resume HELLO budget is exhausted (E17b): back off with jitter and **resume again** (a new ctr and epoch), for up to `net.resume_cycles` (10; demo 3) cycles. Only then fresh HELLO + REGISTER | none (provisioning note "Re-registered" if it re-registers) |
 
 > **Design rationale.** Persisting `resume_ctr` instead of `K_s` means **no session key is ever written to disk**, on either side. The resume proves possession of K_dev again, and the new Nd2 and Ns2 give fresh keys for the new epoch. The persisted state is therefore not a secret, apart from what the firmware image already contains.
 
@@ -1885,6 +1885,8 @@ flowchart TD
 | `--seed N` (`sim.seed`) | Seeds a **separate** xorshift PRNG (never the CSPRNG), so runs are reproducible | both |
 | `--nat-sim …` (`sim.nat.*`) | Device-side NAT emulator (§9.8). It acts on the device's own socket (mapping expiry, rebind, IP change, port blocking), and inbound drops happen on the device's RX because that is where a NAT drops them | Device |
 
+Held datagrams due at the same millisecond leave in the order they were sent, so only `--reorder` (and `--dup`) ever reorders; a plain `--delay` without jitter keeps the order (fixed in M5: before that, ties were released in queue order, which reordered a delayed burst).
+
 Each decision is logged under `[SIM]` at debug level, and totals are printed at exit (`[SIM] tx=980 dropped=147 (15.0%) reordered=98 duplicated=49`). QA also measures the **end-to-end** loss per direction from both processes' counters (TC-SIM-01).
 
 > **Design rationale (in code rather than netem).** It's portable (macOS has no netem), deterministic with a seed (CI can reproduce a failing pattern exactly), can be configured per process (one device at 30% while the others run at 10%), and needs no root. Its weakness is that it doesn't model a real queue or bursty loss. The OS-level tools below cover that.
@@ -2005,6 +2007,22 @@ These are the non-PDF lines that tests assert on. Each one is a `logmsg.h` const
 | `[NAT] [sid=<s> <serial>] Session idle, entering grace` | server | Idle detection | §9.3 |
 | `[NAT] [sid=<s> <serial>] Peer IP changed <old> -> <new> (allowed)` / `[NAT] [sid=<s> <serial>] Peer IP changed <old> -> <new>: RESUME_REQUIRED sent` | server | A new frame from a new IP, with `allow_ip_change` true / false | §9.4 |
 | `[UDP] Resume required by server (IP change)` | device | ERROR RESUME_REQUIRED (E25) | §9.4 |
+| `[UDP] Resuming session <s> (ctr=<c>, proposed epoch <e>, stage <stage>)` | device | Resume HELLO sent (E2, E17b, E25) | §12.3 |
+| `[UDP] Resume rejected: retrying with a new counter and epoch` / `[UDP] Resume rejected twice: registering again` | device | RESUME_REJECTED, first / second (E17, E17a) | §12.3 |
+| `[UDP] Session expired on the server: registering again` / `[UDP] Session unknown to the server: registering again` | device | SESSION_EXPIRED / SESSION_UNKNOWN | §12.3 |
+| `[UDP] No reply to the resume HELLO (cycle <i>/<n>)` | device | Resume budget exhausted (E17b) | §12.3 |
+| `[UDP] [sid=<s> <serial>] Resume for an unknown session: SESSION_EXPIRED` (or `SESSION_UNKNOWN`) | server | §12.3 fallbacks | §12.3 |
+| `[NAT] [sid=<s> <serial>] Grace period over (<g> s): session deleted, DB record kept` | server | Grace expiry (IDLE_GRACE or AWAIT_RESUME) | §9.3 |
+| `[UPGRADE] Current: <v> -> Target: <t>` / `[UPGRADE] Upgrade complete, restarting device` | device | §12.1 steps 3 and 6 | §12.1 |
+| `[UPGRADE] Staged image in slot <S> does not verify: downloading it again` | device | FW_STAGED re-check at boot fails | §12.4 |
+| `[PROVISION] Firmware header does not name <model> <v>, discarding (attempt <i>/<n>)` | device | §12.1 step 3 header check | §12.1 |
+| `[UPGRADE] [sid=<s> <serial>] Device installing <v>, awaiting resume (grace <g> s)` / `… Device running <v> after the upgrade` / `… Device rolled back to <v>` | server | UPGRADE_STATUS INSTALLING / INSTALLED / ROLLED_BACK | §12 |
+| `[BOOT] Restart detected (pending upgrade to <v>)` / `[BOOT] Firmware version: <v> (slot <S>)` | device | Boot after the commit | §12.2 |
+| `[VALIDATION] Configuration present (v<n>, sha ok)` / `[VALIDATION] Firmware <v> verified` | device | §13 checks 1 and 2 | §13 |
+| `[VALIDATION] Configuration check failed (<why>): fetching it again` / `[VALIDATION] Configuration check failed (<why>)` | device | Config check fails: re-fetch once / then FAILED | §13 |
+| `[VALIDATION] Firmware check failed: running <v>, target <t>` | device | Rollback (after an upgrade) or FAILED | §13, §12.5 |
+| `[VALIDATION] Session not healthy yet (rtt=<n> ms, srtt=<m> ms): probing again` / `[VALIDATION] Session not healthy within val.deadline_s (<d> s)` | device | Health probe too slow / deadline reached | §13.1 |
+| `[ERROR] TEST HOOK FIRED: <name>` / `[UPGRADE] Restart delayed by <s> s (test hook)` | both / device | A one-shot hook acts (§19.2) / `--restart-delay` | §19.2 |
 | `[DISCOVERY] DISCOVER sent to <group-or-bcast>:<port> (<mode>, attempt <i>/<n>)` / `[DISCOVERY] No valid OFFER after <n> DISCOVER attempts: falling back to the static address` | device | Each attempt / fallback (E4) | §6.2 |
 | `[DISCOVERY] DISCOVER from <serial> (<ip>:<port>), attempt <i>: OFFER sent (server <ip>:<port>)` | server | DISCOVER verified | §6.2 |
 | `[UDP] Reconnecting in <t> s (<reason>)` | device | Backoff with full jitter before re-discovery (E6a, E6c, E22) | §9.3 |
@@ -2106,7 +2124,7 @@ ztp-device --state-dir DIR [--model MODEL] [--fw VERSION] [--serial ZTP-XXXXXX]
 | `--rebind-after S` | device | Re-open the socket after S seconds (a new source port) | Demo S4, TC-NAT-05 |
 | `--fail-validate` | device | Make the firmware check fail after the upgrade | TC-UPG-09 |
 | `--hook-delete-config` / `--no-refetch` | device | Delete `config.json` before VALIDATE / don't re-fetch it | TC-VAL-02 |
-| `--hook-bad-fw-version V` | device | Write version V into the active slot header before VALIDATE | TC-VAL-03 |
+| `--hook-bad-fw-version V` | device | Write version V into the active slot header before VALIDATE; on the factory image (no slot file) report V as the running version | TC-VAL-03 |
 
 > **Reviewer note.** `--first-session-id` and `--nonce` make values predictable that are normally random. They exist only to reproduce the PDF's Appendix A values byte for byte, and the `--test-hooks` gate keeps them out of production use.
 
@@ -2140,7 +2158,7 @@ There is no local Linux host, and disk space on the development Mac is limited (
 | `mtu` | `ubuntu-latest` | Network namespace pair on a veth link at MTU 1280, then 576; server and device inside; `make demo-single` | TC-PROV-12 (1200 fits at 1280), TC-PROV-13 (fallback at 576) |
 | `nat-real` (optional, P2) | `ubuntu-latest` | Namespaces plus `iptables -t nat MASQUERADE` with `nf_conntrack_udp_timeout=5`; device behind the NAT | TC-NAT-08 on a real conntrack NAT |
 
-- **Status (2026-11-11).** Running on every push: `build-test` (Ubuntu gcc and clang, macOS clang; unit, CLI, session, `peer_sim` and registration tests, with broadcast TC-DISC-05 (b) on Ubuntu), `asan` (both platforms), `platform-linux` (multicast/broadcast probes, the netem availability check, and the TC-REL-01 capture checked by `tests/pcapcheck`) and `platform-macos`. **Not yet created:** `impair-matrix`, `impair-netem` (the demo under netem), `valgrind`, `mtu` and the optional `nat-real`. They all run the demo or a full provisioning flow, so they arrive with M5/M6.
+- **Status (2026-11-11, M5).** Running on every push: `build-test` (Ubuntu gcc and clang, macOS clang; unit, CLI, session, `peer_sim`, registration, provisioning and upgrade tests (`tests/m5_upgrade.sh`), with broadcast TC-DISC-05 (b) on Ubuntu), `asan` (both platforms), `platform-linux` (multicast/broadcast probes, the netem availability check, the TC-REL-01 capture of the session, provisioning and upgrade tests checked by `tests/pcapcheck`, and the strict TC-NAT-10 case, which needs 127.0.0.2) and `platform-macos`. **Not yet created:** `impair-matrix`, `impair-netem` (the demo under netem), `valgrind`, `mtu` and the optional `nat-real`. They run the 5-device demo, so they arrive with M6.
 - **Cost and footprint:** about 5–8 runner-minutes per push. Free for public repositories; 2,000 min/month on the free plan for private ones. Zero local disk.
 - **Triggers:** every push and pull request, plus `workflow_dispatch` to run the full matrix on demand.
 - **Evidence:** the CI artifacts (logs, `db_dump.txt`, the test report) back up the submission's claim that it works on Linux and macOS.

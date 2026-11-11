@@ -593,6 +593,15 @@ static void on_register(srv_session_t *ss, uint32_t seq, const tlv_set_t *t)
         send_nak(s, ss, RC_NO_POLICY, "no assignment for this model", nreg);
         return;
     }
+    /* a session of this serial deleted (grace expired) before this REGISTER: noted below; checked before the
+     * supersede, which also journals a deletion */
+    bool expired = false;
+    {
+        size_t nj;
+        const db_sess_t *js = db_sessions(&s->db, &nj);
+        for (size_t i = 0; i < nj; i++)
+            if (js[i].deleted && !strcmp(js[i].serial, serial) && wall - js[i].ts_ms < 24u * 3600u * 1000u) expired = true;
+    }
     /* success: one registered session per serial; a verified REGISTER supersedes an older one (§14.2) */
     srv_session_t *old = srv_sess_find_registered(s, serial);
     if (old && old != ss) {
@@ -608,6 +617,8 @@ static void on_register(srv_session_t *ss, uint32_t seq, const tlv_set_t *t)
     rel_set_ack_key(ss->rel, ss->k_s, ZK_SESSION);
     db_register_ok(&s->db, serial, model, hw, fw, ss->assign.firmware, ss->assign.config_version, ss->assign.tenant,
                    ss->assign.notes, src, wall);
+    if (already)   /* §12.3 fallbacks: a registered device registered again (verbose dump note only) */
+        db_prov_note(&s->db, serial, expired ? "Re-registered after session expiry" : "Re-registered", wall);
     srv_sess_journal(s, ss);
     send_register_ack(ss, already);
     log_sess(LOG_INFO, T_AUTH, ss->session_id, serial, LM_AUTH_REG_OK);

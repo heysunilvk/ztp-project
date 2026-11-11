@@ -149,7 +149,7 @@ expect_upgraded f1 "TC-UPG-10"
 
 # TC-UPG-08: the restart takes longer than the server's grace period: SESSION_EXPIRED, then a fresh REGISTER
 stop_server
-start_server s2 --set nat.grace_s=12   # the minimum the demo profile allows (2 x 2 s x 3)
+start_server s2 --set nat.grace_s=12 --dump-on-exit --dump-verbose   # 12 s: the minimum the demo profile allows
 run_device g1 40 --serial ZTP-500020 --test-hooks --restart-mode exit --restart-delay 17
 [ "$DEV_RC" -eq 75 ] && ok || bad "TC-UPG-08: first run exit $DEV_RC, want 75"
 run_device g1 40 --serial ZTP-500020 --test-hooks --restart-mode exit --restart-delay 17
@@ -158,7 +158,11 @@ expect_line "$T/g1.log" "Session expired on the server: registering again" "TC-U
 expect_line "$T/s2.log" "Grace period over" "TC-UPG-08 (server)"
 expect_line "$T/g1.log" "Server reports this device was already registered" "TC-UPG-08 (same DB row)"
 stop_server
-start_server s3
+[ "$(grep -c '| ZTP-500020 ' "$T/db_dump_verbose.txt" 2>/dev/null)" -eq 1 ] && ok || bad "TC-UPG-08: want exactly one DB row"
+expect_line "$T/db_dump_verbose.txt" "Re-registered after session expiry" "TC-UPG-08 (verbose dump note)"
+expect_no_line "$T/s2.dump" "Re-registered" "TC-UPG-08 (default dump Notes unchanged)"
+rm -f "$T/db_dump_verbose.txt"
+start_server s3 --dump-on-exit --dump-verbose
 
 # TC-UPG-09: the new firmware fails validation: roll back to slot A, report FAILED VALIDATION_FAILED
 run_device r1 40 --serial ZTP-500030 --test-hooks --fail-validate
@@ -167,6 +171,7 @@ expect_line "$T/r1.log" "Validation failed on v1.1, rolled back to v1.0" "TC-UPG
 expect_line "$T/r1.log" "[STATE] Device is FAILED" "TC-UPG-09"
 expect_state r1 active_slot A "TC-UPG-09"
 expect_state r1 pending_reboot 0 "TC-UPG-09"
+expect_line "$T/s3.log" "ZTP-500030] Device rolled back to v1.0" "TC-UPG-09 (server)"
 
 # TC-VAL-03 (a): after the upgrade the active slot's header names another version: roll back too
 run_device r2 40 --serial ZTP-500031 --test-hooks --hook-bad-fw-version v9.9
@@ -187,8 +192,13 @@ expect_line "$T/v2.log" "[STATE] Device is FAILED (reason: config missing or inv
 if [ "$(uname)" = Linux ] || ifconfig lo0 2>/dev/null | grep -q 'inet 127.0.0.2 '; then
     stop_server
     start_server s4 --set nat.allow_ip_change=false
-    run_device n1 60 --serial ZTP-500060 --nat-sim change_ip_at_s=2
-    expect_upgraded n1 "TC-NAT-10 (strict)"
+    # firmware already current (no restart, so the per-process IP-change timer can't be outrun), held OPERATIONAL
+    # for 10 s; the IP changes at 3 s and the next keepalive comes from 127.0.0.2
+    run_device n1 60 --serial ZTP-500060 --set identity.factory_fw=v1.1 --set run.operational_hold_s=10 \
+        --nat-sim change_ip_at_s=3
+    [ "$DEV_RC" -eq 0 ] && ok || bad "TC-NAT-10 (strict): device exit $DEV_RC"
+    expect_line "$T/n1.log" "[STATE] Device is OPERATIONAL" "TC-NAT-10 (strict)"
+    expect_line "$T/n1.log" "[UDP] Session resumed (session_id=" "TC-NAT-10 (strict)"
     if grep -q 'ZTP-500060\] Peer IP changed 127.0.0.1:[0-9]* -> 127.0.0.2:[0-9]*: RESUME_REQUIRED sent' "$T/s4.log"; then ok
     else bad "TC-NAT-10 (strict): no RESUME_REQUIRED in s4.log"; fi
     expect_line "$T/n1.log" "[UDP] Resume required by server (IP change)" "TC-NAT-10 (strict)"
@@ -204,5 +214,8 @@ run_device h1 10 --serial ZTP-500050 --crash-at committed
 [ "$DEV_RC" -eq 64 ] && ok || bad "--crash-at without --test-hooks: exit $DEV_RC, want 64"
 
 stop_server
+grep '| ZTP-500030 ' "$T/db_dump_verbose.txt" 2>/dev/null | grep -q 'Success' && ok || bad "TC-UPG-09: DB registration is not Success"
+grep '| ZTP-500030 ' "$T/db_dump_verbose.txt" 2>/dev/null | grep -q 'Rolled back after failed validation' && ok \
+    || bad "TC-UPG-09: no rollback note in the verbose dump"
 echo "m5 upgrade tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
