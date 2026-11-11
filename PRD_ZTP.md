@@ -87,7 +87,7 @@ The PDF says reviewers care about *"reasoning and tradeoffs more than feature co
 ### 3.2 Non-goals (and why)
 | Non-goal | Why it's out of scope | Where production would go |
 |---|---|---|
-| Confidentiality (encryption) | The PDF asks for authenticity (HMAC), not secrecy. Adding it would roughly double the crypto surface | DTLS 1.3 or an AEAD; see §14 |
+| Confidentiality (encryption) | The PDF's "secure UDP-based control channel" is specified in §5 as HMAC authenticity plus replay protection, which the design provides. Encryption would roughly double the crypto surface and change the wire format. The interpretation is explicit in DESIGN §18.1 | DTLS 1.3 or an AEAD; see §14 (N-01) |
 | Real PKI and certificates | The scenario says "no certificates" | IDevID and BRSKI (RFC 8995), SZTP (RFC 8572) |
 | Real flash writes and a bootloader | Firmware is mock data, as the PDF allows | A/B partitions with a secure boot chain |
 | GUI or REST API | The PDF says explicitly that it is "not a REST or API exercise" | An admin API on the server |
@@ -136,12 +136,12 @@ The PDF says reviewers care about *"reasoning and tradeoffs more than feature co
 | US-07 | ops admin | a DB dump and a success/failure summary | I can report rollout status | FR-31, FR-32 |
 | US-08 | evaluator | one command that builds and runs a realistic demo | I can verify the claims myself | DEL-02, DEL-05, DEL-11 |
 
-### 5.2 End-to-end scenarios (these become the demo; defined in [DESIGN §19](DESIGN.md#19-build-run-and-demo-plan))
+### 5.2 End-to-end scenarios (these become the demo; defined in [DESIGN §19](DESIGN.md#19-build-run-and-demo-plan-expected-submission-1-3))
 | Scenario | Device | Model / start firmware | Expected outcome | Notes column in DB |
 |---|---|---|---|---|
 | S1 First boot, upgrade (the Appendix A device) | ZTP-93AF21 | EDGE-GW-100 / v1.0 | Success, v1.1 / cfg v3, OPERATIONAL after restart | — |
-| S2 Bad credential | ZTP-84BC19 | EDGE-GW-100, corrupted device key | **Failed**, no firmware or config | Invalid HMAC |
-| S3 Power loss mid-download | ZTP-71DD08 | EDGE-GW-100 / v1.0 | `kill -9` during firmware download; resumes the missing chunks only; Success v1.1 / v3 | — (verbose dump: "Transfer resumed") |
+| S2 Bad credential | ZTP-84BC19 | EDGE-GW-100, with a corrupted **model key** (K_mfg), as from a counterfeit or mis-provisioned unit; the fleet bootstrap key is correct | **Failed** after 3 verified "Invalid HMAC" rejections; no firmware or config | Invalid HMAC |
+| S3 Power loss mid-download | ZTP-71DD08 | EDGE-GW-100 / v1.0 | A crash during the firmware download (the demo uses the `--crash-after-chunks 40` hook, which calls `abort()`; QA also uses a real external `kill -9`, TC-PROV-08); resumes the missing chunks only; replays of its REGISTER are rejected; Success v1.1 / v3 | — (verbose dump: "Transfer resumed") |
 | S4 Already current | ZTP-55AC90 | EDGE-GW-100 / v1.1 | Success v1.1 / v3, no upgrade or restart | — |
 | S5 Legacy model | ZTP-19FE77 | EDGE-GW-050 / v0.9 | Success v1.0 / cfg v2 after upgrade | Legacy device |
 
@@ -181,7 +181,7 @@ Priority key: **M** = Must (required by the PDF), **S** = Should (strongly impli
 
 | ID | Requirement | PDF source | Pri | Acceptance criteria |
 |---|---|---|---|---|
-| ZTP-FR-01 | The device generates a soft serial on first boot, persists it, and loads it on later boots | §1 | M | Format `ZTP-[0-9A-F]{6}`; the same serial survives restarts; logs `[BOOT] Soft serial generated` the first time, then `loaded` |
+| ZTP-FR-01 | The device generates a soft serial on first boot, persists it, and loads it on later boots | §1 | M | Format `ZTP-[0-9A-F]{6}`; the same serial survives restarts; logs `[BOOT] Soft serial generated` on first boot, `[BOOT] Soft serial loaded` on later boots (`assigned (configuration)` when set with `--serial`), each followed by `[BOOT] Soft serial: <serial>` |
 | ZTP-FR-02 | The device can find the server through a static IP and port | §1 | M | `--server IP:PORT` works; logs `[DISCOVERY] Using static server IP …` |
 | ZTP-FR-03 | All provisioning traffic uses UDP sockets only | §2, Exp. Sub. | M | No TCP sockets anywhere in the code; a pcap shows UDP only |
 | ZTP-FR-04 | A session handshake sets up a server-assigned session identifier | §2 | M | HELLO/HELLO_ACK; session_id is non-zero, random, and unique among live sessions |
@@ -189,21 +189,21 @@ Priority key: **M** = Must (required by the PDF), **S** = Should (strongly impli
 | ZTP-FR-06 | Timeouts and retransmission of unacknowledged messages | §2, §3 | M | Retransmits after RTO with exponential backoff; gives up after the retry limit and recovers |
 | ZTP-FR-07 | Acknowledgement of received messages | §3 | M | Cumulative ACK and SACK; piggybacked or as a pure ACK |
 | ZTP-FR-08 | Duplicate detection | §3 | M | Duplicates are logged, re-ACKed and never re-delivered to the application |
-| ZTP-FR-09 | Correct operation under 10–20% simulated packet loss | §3 | M | See SM-1 |
+| ZTP-FR-09 | Correct operation under 10–20% simulated packet loss | §3 | M | See SM-1. The loss rate is defined **per direction** (applied at the sender only, so it doesn't compound; DESIGN §16.1) |
 | ZTP-FR-10 | Periodic keepalive messages | §4, App. A Step 4 | M | A path-probe keepalive right after the session is established (before registration, as in Appendix A), then one whenever the session has been idle for an interval; each is acknowledged; logs `[NAT] Keepalive sent` and `[NAT] Keepalive acknowledged` |
 | ZTP-FR-11 | Detection of session timeouts, on device and server | §4 | M | Device: declares the session dead after 3 missed intervals and recovers. Server: expires an idle session after 3 intervals, then enforces a grace period |
 | ZTP-FR-12 | Registration carries the soft serial, device metadata and a nonce | §5 | M | REGISTER TLVs: serial, model, fw version, hw revision, 64-bit device nonce, echoed server nonce |
-| ZTP-FR-13 | The server checks authenticity with HMAC | §5 | M | HMAC-SHA256 over every in-session frame; a bad MAC on REGISTER gives REGISTER_NAK(Invalid HMAC) and a Failed DB row |
-| ZTP-FR-14 | Replay protection | §5 | M | Replayed REGISTER in the same session, replayed into a new session, reused nonce, replayed resume: all rejected, none changes state |
+| ZTP-FR-13 | The server checks authenticity with HMAC | §5 | M | HMAC-SHA256 on every frame. A wrong or corrupted model key gives a *verified* REGISTER_NAK(BAD_MAC, "Invalid HMAC") and a Failed DB row; an unknown model gives UNKNOWN_MODEL, and a known model without a policy gives NO_POLICY; all are deterministic (DESIGN §10.3) |
+| ZTP-FR-14 | Replay protection | §5 | M | Replayed REGISTER in the same session, replayed into a new session, reused nonce, replayed resume and replayed NAK are all rejected, and none changes state. A replayed valid frame from another address can't move the session's return address (DESIGN §9.4) |
 | ZTP-FR-15 | The server sends a configuration payload in JSON | §6 | M | The config is valid JSON and a superset of the PDF's Appendix A example: `interfaces.wan = "eth0"`, `interfaces.lan = "eth1"`, `mtu = 1500` and `keepalive_interval = 20` unchanged, plus `config_version` |
 | ZTP-FR-16 | The server sends a (mock) firmware blob | §6 | M | Per-model firmware artifact with a version header |
 | ZTP-FR-17 | Data is transferred in chunks | §6 | M | 1024-byte chunks; logs `Receiving config (chunk i/N)` |
 | ZTP-FR-18 | Integrity is validated with a hash | §6 | M | SHA-256 of the whole artifact matches the manifest before use; on mismatch, re-download (limited retries) |
 | ZTP-FR-19 | Transfers resume after a failure | §6 | M | After a crash or session loss, only the missing chunks are requested again |
-| ZTP-FR-20 | No reliance on IP fragmentation | §6 | M | Every datagram ≤ 1200 B UDP payload; DF set where the platform supports it; 0 fragments in the pcap |
+| ZTP-FR-20 | No reliance on IP fragmentation | §6 | M | Every datagram ≤ 1200 B UDP payload; DF set; 0 fragments. On a path that can't carry 1200 B (EMSGSIZE or a black hole), the session steps down to 508 B datagrams and 256 B chunks and keeps its progress (DESIGN §5.8) |
 | ZTP-FR-21 | Outdated firmware is detected and the upgrade simulated | §7 | M | Version compare; staged, verified install; logs `[UPGRADE] Current: vX -> Target: vY` |
 | ZTP-FR-22 | The device process restarts after the upgrade | §7 | M | Process re-exec; logs `[BOOT] Restart detected` |
-| ZTP-FR-23 | Provisioning resumes after the restart **without duplicate registration** | §7 | M | Authenticated resume of the same session_id; no REGISTER sent; one DB row per serial |
+| ZTP-FR-23 | Provisioning resumes after the restart **without duplicate registration** | §7 | M | Authenticated resume of the same session_id; no REGISTER sent; one DB row per serial. This also holds when the device restarts before the server notices, and across a **server** restart (resumable sessions are journaled; DESIGN §12.3, §14.4) |
 | ZTP-FR-24 | Validation: configuration is present | §8 | M | The config file exists, its hash matches, required keys are present |
 | ZTP-FR-25 | Validation: firmware version | §8 | M | The active slot's version equals the assigned version |
 | ZTP-FR-26 | Validation: session health | §8 | M | A fresh keepalive round trip succeeds, the last authenticated RX is recent, SRTT is under the threshold |
@@ -213,7 +213,10 @@ Priority key: **M** = Must (required by the PDF), **S** = Should (strongly impli
 | ZTP-FR-30 | The server stores registration details: device ID, timestamp, firmware assigned, config version, outcome | §9 | M | All five fields present in every row (plus stage, notes, attempts) |
 | ZTP-FR-31 | The server can dump its DB | §9 | M | On SIGUSR1, on SIGINT, and at the end of the demo. The default format **exactly** matches the PDF's "Example of a Dump from Server DB": title "Device Registration Details"; columns *Device ID, Registration Status, Firmware Assigned, Config Version, Registration Time, Notes* in that order; `YYYY-MM-DD HH:MM:SS`; `—` for empty cells; notes such as "Invalid HMAC" and "Legacy device". Extra fields appear only in a verbose dump |
 | ZTP-FR-32 | The server displays a summary: successful devices, failed devices, firmware and config per device | §9 | M | Summary block printed after the dump |
-| ZTP-FR-33 | Both sides emit tagged logs that follow the Appendix A flow and the §1 example output | §1 example, App. A | M | Tags `[BOOT] [DISCOVERY] [UDP] [NAT] [AUTH] [PROVISION] [UPGRADE] [VALIDATION] [STATE]`. Every log line shown in the PDF (§1 example, Appendix A Steps 1–9, bonus sample) is emitted **verbatim as a prefix**, in Appendix A order (§5.3) |
+| ZTP-FR-33 | Both sides emit tagged logs that follow the Appendix A flow and the §1 example output | §1 example, App. A | M | Tags `[BOOT] [DISCOVERY] [UDP] [NAT] [AUTH] [PROVISION] [UPGRADE] [VALIDATION] [STATE]`. Every log line shown in the PDF §1 example and Appendix A Steps 1–9 is emitted **verbatim as a prefix**, in Appendix A order (§5.3). The bonus sample lines are emitted in the **same format** with the real sequence numbers; the PDF's literal numbers are reproduced by the component test TC-REL-03 (DESIGN §17.4) |
+| ZTP-FR-34 | All operational parameters (network, NAT and keepalive timers, reliability, transfer, limits, paths, logging, simulation) are **runtime configuration** in JSON files, not hardcoded | §4, §6, §9 (operability) | M | `server.json`, `device.json`, `policy.json`, `keys.json` and named profiles; precedence defaults < file < profile < CLI, then per-device policy (tenant < model < serial) for NAT values, which the device applies over its own files and clamps (DESIGN §25.3); out-of-range or unknown keys fail fast with a clear message; `--print-config` shows each value and its source (DESIGN §25) |
+| ZTP-FR-35 | NAT and session parameters (keepalive interval, dead intervals, server idle, grace, IP-change policy) can be set per deployment **and** per tenant, model or serial, and are delivered to the device | §4 | M | A policy override changes the device's effective keepalive, shown in the device log and the verbose dump; the device clamps it to its configured bounds |
+| ZTP-FR-36 | NAT changes outside the operator's control are handled or clearly diagnosed: idle timeout below the keepalive, NAT reboot, public-IP change, outbound UDP blocked | §4 | M | Sessions survive timeout, reboot and IP change without re-registration; the server logs the advice when the NAT timeout looks shorter than the keepalive; a blocked UDP path produces the documented diagnostic and capped retries |
 
 ---
 
@@ -244,11 +247,11 @@ The PDF's bonus section is optional. **All bonus items are in scope** for this s
 | ZTP-BON-01 | Broadcast or multicast discovery | §1 (bonus) | Multicast and broadcast both supported; authenticated OFFER; falls back to static IP |
 | ZTP-BON-02 | Every UDP message has a sequence number | Bonus req. 1 | Same as FR-05, checked under impairment |
 | ZTP-BON-03 | Acknowledgement and retransmission on timeout | Bonus req. 2 | Logs `[UDP] Retransmitting seq=N (timeout)` |
-| ZTP-BON-04 | Out-of-order frames buffered and delivered in order | Bonus assumptions / example | Logs `[UDP] Received packet seq=3 (out of order, expected=2)` and `[UDP] Buffered packet seq=3`; the application sees strictly increasing seq |
+| ZTP-BON-04 | Out-of-order frames buffered and delivered in order | Bonus assumptions / example | Logs in the format `[UDP] Received packet seq=<n> (out of order, expected=<m>)` and `[UDP] Buffered packet seq=<n>`; the PDF's exact case (seq=3, expected=2) is reproduced by TC-REL-03; the application sees strictly increasing seq |
 | ZTP-BON-05 | Idempotent processing: duplicates cause no duplicate state change | Bonus req. 3 | Duplicate REGISTER, CHUNK or STATUS gives no second DB transition or file write |
 | ZTP-BON-06 | Packet loss simulated in code (plus reordering and duplication) | Bonus req. 4 | `--loss/--reorder/--dup/--seed` flags on both binaries; Linux `netem` recipe documented |
 | ZTP-BON-07 | Correct behaviour when the ACK is lost but the data arrived | Bonus README Q3 | Duplicate detected, re-ACKed, not re-applied |
-| ZTP-BON-08 | Bonus-style log output | Bonus "Sample Log Output" | All four sample log lines appear in the demo logs |
+| ZTP-BON-08 | Bonus-style log output | Bonus "Sample Log Output" | All four sample log lines appear in the demo logs in the PDF's format (generic sequence numbers, TC-LOG-02), and verbatim with the PDF's numbers in the component test TC-REL-03 |
 
 ---
 
@@ -294,16 +297,23 @@ See §3.2 for the non-goals. Also out of scope: real NAT hardware, real power-lo
 | ID | Assumption | Impact if wrong |
 |---|---|---|
 | A-01 | The implementation is C11 on POSIX (Linux and macOS), tested on loopback or a LAN | A port is needed for other operating systems |
-| A-02 | The device has no RTC and no *provisioned* credentials, but has a **per-model manufacturing secret** embedded in its firmware image (DESIGN §3.1) | If reviewers read "no stored credentials" strictly, the alternative is trust-on-first-use, which is weaker. The tradeoff is documented |
+| A-02 | The device has no RTC and no *provisioned* credentials, but carries two **factory secrets** in its firmware image: a fleet-wide **bootstrap key** (only for discovery, the handshake and authenticated rejections) and a **per-model manufacturing secret** (identity) (DESIGN §3.1, §10.1) | If reviewers read "no stored credentials" strictly, the alternative is trust-on-first-use, which is weaker. The tradeoff is documented |
 | A-03 | Firmware is mock data, and "install" is an atomic file operation (A/B slot files) | None for the evaluation |
 | A-04 | A single, trusted provisioning server, reachable by static IP or by broadcast/multicast in the same L2 segment | Multi-site setups would need a relay or DNS-SD (§14) |
 | A-05 | The demo uses 5 devices, the scale test 50 or more; impairments are 10–20% loss with reordering and duplication; timers are shortened in the demo | Production timers are documented separately (DESIGN Appendix B) |
 | A-06 | Firmware and config are assigned by model, with optional per-serial overrides | — |
 | A-07 | Reviewers value reasoning and correctness over breadth of features, as the PDF says | Scope is prioritised accordingly |
 | A-08 | Demo serials are set explicitly with `--serial` so that they match the PDF table; normal runs generate them | — |
+| A-09 | **Deployment prerequisite:** the customer's firewall or NAT allows **outbound UDP** from the device to the server's port 5555 (and 5556 for multicast or broadcast discovery), plus the replies. Nothing else is needed: no port forwarding, static mappings or inbound rules | Without it, ZTP can't work. The PDF requires UDP, so there's no TCP fallback. The device logs a clear diagnostic (FR-36) |
+| A-10 | The NAT and firewall belong to the customer or ISP, and their settings (idle timeout, NAT type, public IP) can change at any time without notice. The design assumes nothing about them | Covered by FR-35 and FR-36 and DESIGN §9.7 |
+| A-11 | **Default NAT timing:** most customer NATs keep idle UDP mappings for **≥ 30 s** (typical 30–60 s), so the default 20 s keepalive is enough. Sites with stricter timers are handled by per-tenant, model or serial overrides or the `strict-nat` profile (FR-35) | If a NAT's timeout is below the configured keepalive, replies are lost in the gap until the next keepalive rebinds; the server logs advice (FR-36). Correctness holds and efficiency drops |
+| A-12 | **NAT behaviour:** the NAT forwards replies that come from the exact server IP:port the device sent to. This holds for every RFC 4787 filtering type, including symmetric and port-restricted NATs. The design does **not** need endpoint-independent mapping, hairpinning, port preservation, a UDP ALG, UPnP/NAT-PMP or inbound reachability, and works through double NAT and CGNAT | A NAT that rewrites UDP payloads (a broken ALG) causes MAC failures, which show up as loss and then a diagnostic (DESIGN §9.7) |
+| A-13 | **Discovery scope:** multicast and broadcast discovery work only inside the device's own L2 or multicast scope and don't cross NAT. Devices behind NAT at remote sites use the static server address (as in PDF Appendix A) | Remote sites need the static address configured (`discovery.server`) |
+| A-14 | **NAT mapping lifecycle:** (1) the device's first outbound UDP datagram creates the mapping; (2) one device socket, so one mapping, carries the whole session; (3) any mapping type works, symmetric NAT included; (4) the mapping is refreshed by **outbound** traffic only, never by relying on inbound; (5) its lifetime is unknown and may change; (6) its external IP:port may change at any time and is never used as identity; (7) a device restart creates a **new** mapping; (8) it can be deleted without notice; (9) no port forwarding or static mapping is needed. Details: DESIGN T-12 | Each point has a matching design response (device-initiated keepalives, `session_id`-based sessions, authenticated resume, liveness detection). A NAT that refreshes only on inbound traffic, or that changes the mapping while it is in use, is still handled through rebinding, at some efficiency cost |
+| A-15 | **Path MTU:** the device-to-server path carries 1228-byte IP packets (any compliant IPv6 path, and most IPv4 paths), or at least the IPv4 minimum of 576 bytes, in which case the session falls back to 508-byte datagrams (DESIGN §5.8) | Below 576 (not compliant with IPv4) the design can't operate; this is documented |
 
 ### 10.4 Interpretation decisions on ambiguities in the PDF (details in [DESIGN §3](DESIGN.md#3-assumptions-and-ambiguity-resolutions))
-1. **"No stored credentials" versus HMAC.** A per-model factory secret is used to derive a per-device key. Documented as a limitation.
+1. **"No stored credentials" versus HMAC.** Factory secrets are used: a fleet bootstrap key, and a per-model key from which the per-device key is derived. The fleet key lets a device with a wrong model key reach REGISTER, so "Invalid HMAC" is a verified, recorded outcome. Documented as a limitation.
 2. **The seq/ACK diagram in the Appendix is illustrative.** The design uses an independent sequence space per direction, a cumulative ACK and a SACK bitmap.
 3. **Session resume keeps the session_id after a reboot.** The server holds a grace period and accepts an authenticated, counter-protected resume.
 4. **"Registration outcome"** means the outcome of authentication and registration (Success or Failed). Provisioning progress is tracked in a separate *stage* column.
@@ -313,21 +323,21 @@ See §3.2 for the non-goals. Also out of scope: real NAT hardware, real power-lo
 ## 11. Release plan, milestones and timeline
 
 ### 11.1 Effort and timeline (approximate)
-These estimates assume one senior C developer full-time, a QA engineer working in parallel from M2 onward, and a part-time architect for reviews. They include about 20% contingency.
+These estimates assume one senior C developer full-time, a QA engineer working in parallel from M1 onward (building the harness and fixtures in M1, then running each milestone's tests), and a part-time architect for reviews. They include about 20% contingency.
 
 | Phase | Scope | Effort | Indicative dates (start Mon 2026-11-16) | Exit criteria |
 |---|---|---|---|---|
-| **P0** Design and review | PRD, DESIGN and QA plan reviewed; open questions closed | 1.5–2 d | 16–17 Nov | All three documents signed off (§1) |
-| **M1** Foundations | Codec, SHA-256/HMAC with test vectors, logging, netsim, timer heap, Makefile; **GitHub Actions CI (Ubuntu + macOS) with a netem check on the runner**; **spike: multicast and broadcast on macOS** | 2 d | 18–19 Nov | TC-UNIT-01..06, 15, 16 pass |
-| **M2** Session and reliability | HELLO handshake, seq/ACK/SACK, RTO and backoff, reorder buffer, dedup, keepalive, timeout, NAT rebinding | 3 d | 20–24 Nov | TC-SESS-*, TC-REL-*, TC-NAT-* pass at 20% loss |
-| **M3** Auth and registration | Key hierarchy, REGISTER, NAK path, replay defences, policy, DB rows | 1.5–2 d | 25–26 Nov | TC-AUTH-* pass |
-| **M4** Provisioning | Manifest, pulling chunks, hash verify, persisted bitmap, resume | 2 d | 27–30 Nov | TC-PROV-* pass, including the kill -9 resume |
-| **M5** Upgrade and validation | A/B slots, execv restart, resume handshake, validation, OPERATIONAL, rollback | 1.5–2 d | 1–2 Dec | TC-UPG-*, TC-VAL-* pass |
-| **M6** Server hardening and demo | Rate limits, dump and summary, `run_demo.sh`, scale harness | 1–1.5 d | 3 Dec | TC-SRV-*, TC-E2E-01 pass |
-| **M7** QA cycle and documentation | Full regression, impairment matrix, perf/soak, fixes; README and logs finalised | 2–3 d | 4–7 Dec | Exit criteria in QA §11 met; DoD (§15) |
-| **Total** | | **≈ 15–16 working days (≈ 3 weeks)** | **Target: Mon 7 Dec 2026** | |
+| **P0** Design and review | PRD, DESIGN and QA plan reviewed; open questions closed | 2 d | 16–17 Nov | All three documents signed off (§1) |
+| **M1** Foundations | Codec, SHA-256/HMAC with test vectors, logging, netsim (TX-side impairments, MTU simulation), timer heap, Makefile; **JSON parser and configuration loader with profiles and validation (FR-34)**; **GitHub Actions CI (Ubuntu + macOS) with a netem check on the runner**; **spike: multicast and broadcast on macOS** | 3 d | 18–20 Nov | The QA §12.1 **M1 gate set** passes (unit, config, netsim) |
+| **M2** Session and reliability | HELLO handshake, seq/ACK/SACK, RTO and backoff, reorder buffer, dedup, keepalive, timeout, NAT rebinding (new-frame rule), **NAT emulator and diagnostics (FR-36)**, **small-MTU fallback (FR-20)** | 4 d | 23–26 Nov | The QA §12.1 **M2 gate set** passes (discovery, session, reliability, path probe), including at 20% loss |
+| **M3** Auth and registration | Fleet and model key hierarchy, REGISTER, NAK paths (BAD_MAC, REPLAY, NO_POLICY, UNKNOWN_MODEL), replay defences, policy (with NAT overrides, FR-35), DB rows, **resumable-session journal** | 2 d | 27–30 Nov | The QA §12.1 **M3 gate set** passes (every registration outcome, replay, policy) |
+| **M4** Provisioning | Manifest, pulling chunks, hash verify, persisted bitmap (durability order), resume | 2 d | 1–2 Dec | The QA §12.1 **M4 gate set** passes (transfers, many frames in flight, PROVISIONING-session cases) |
+| **M5** Upgrade and validation | A/B slots, execv restart, resume handshake (any live state), validation, OPERATIONAL, rollback | 2 d | 3–4 Dec | The QA §12.1 **M5 gate set** passes (upgrade, crash points, every resume case including kill -9 and server restart, MTU fallback, validation, Appendix A) |
+| **M6** Server hardening and demo | Rate limits, failed-record cap, dump and summary, `run_demo.sh`, scale harness | 1 d | 7 Dec | The QA §12.1 **M6 gate set** passes (server, dump, demo, scale) |
+| **M7** QA cycle and documentation | Full regression, impairment matrix, perf/soak, fixes; README and logs finalised | 2 d | 8–9 Dec | The M7 gate set and a full regression pass; exit criteria in QA §11 met; DoD (§15) |
+| **Total** | | **18 working days (≈ 3.5 weeks)**, including about 20% contingency. The configuration model, NAT emulation, fleet key, session journal and MTU fallback are included | **Target: Wed 9 Dec 2026** | |
 
-**Team variant:** with two developers (one on `device/`, one on `server/` after M1) plus one QA engineer, the build takes about **8–10 working days (≈ 2 weeks)**. The critical path is still M1 → M2.
+**Team variant:** with two developers (one on `device/`, one on `server/` after M1) plus one QA engineer, the build takes about **10–12 working days (≈ 2.5 weeks)**. The critical path is still M1 → M2.
 
 **Critical path:** M1 → M2 → M4 → M5. Upgrade and resume depend on both the session layer and the transfer layer. M3 and M6 can partly overlap M4 when two developers are available.
 
@@ -342,15 +352,15 @@ gantt
     P0 Design and review           :p0, 2026-11-16, 2d
     Design sign-off                :milestone, ms0, after p0, 0d
     section Build
-    M1 Foundations                 :m1, after p0, 2d
-    M2 Session and reliability     :m2, after m1, 3d
+    M1 Foundations and config      :m1, after p0, 3d
+    M2 Session and reliability     :m2, after m1, 4d
     M3 Auth and registration       :m3, after m2, 2d
     M4 Provisioning and resume     :m4, after m3, 2d
     M5 Upgrade and validation      :m5, after m4, 2d
     M6 Server hardening and demo   :m6, after m5, 1d
     section QA
-    Test harness and fixtures      :q1, after m1, 2d
-    Test execution per milestone   :q2, after q1, 7d
+    Test harness and fixtures      :q1, after p0, 3d
+    Test execution per milestone   :q2, after q1, 11d
     M7 Full regression and docs    :m7, after m6, 2d
     Submission ready               :milestone, ms1, after m7, 0d
 ```
@@ -370,11 +380,11 @@ Each milestone ends with a 30-minute review: a demo of the milestone's tests, re
 | D-02 | **No third-party libraries.** SHA-256 and HMAC are written in-house | Design | Depends on the FIPS 180-4 and RFC 4231 test vectors to prove correctness |
 | D-03 | `leaks`, ASan/UBSan and tcpdump on the Mac (all built in or part of the CLT); valgrind on CI only | QA tooling | Used for TC-PERF-04, TC-PROV-05 |
 | D-04 | Linux `tc netem` (on the CI runners) and macOS dummynet (`dnctl` + `pfctl`, built in) | QA tooling | Optional; the in-code netsim is the default |
-| D-09 | **GitHub Actions** with hosted `ubuntu-latest` and `macos-latest` runners: the **only Linux environment**, since there is no local Linux host and disk space on the Mac is limited | CI / platform | Repo: **https://github.com/heysunilvk/ztp-project** (created and empty as of 2026-11-10). Private repos get 2,000 free minutes/month; public repos are free. Each run takes about 5 min. No local disk cost |
 | D-05 | Internal ordering: PRD IDs → DESIGN traceability → QA cases; the protocol spec (DESIGN §5) frozen before QA finalises its cases | Process | Changes to the frozen spec go through change control |
 | D-06 | Reviewer availability for P0 and the milestone gates | People | A slip in P0 moves the whole plan |
 | D-07 | Platform behaviour of broadcast and multicast on loopback | Platform | Spiked in M1 (R-03) |
 | D-08 | Xcode Command Line Tools on the development Mac. **Verified installed on 2026-11-10:** Apple clang 16.0.0 (arm64), GNU Make 3.81 | Toolchain | Satisfied. Make 3.81 is old, so the Makefile must avoid GNU Make ≥ 4 features (`.ONESHELL`, `$(file …)`, grouped targets) |
+| D-09 | **GitHub Actions** with hosted `ubuntu-latest` and `macos-latest` runners: the **only Linux environment**, since there is no local Linux host and disk space on the Mac is limited | CI / platform | Repo: **https://github.com/heysunilvk/ztp-project** (created and empty as of 2026-11-10). Private repos get 2,000 free minutes/month; public repos are free. Each run takes about 5 min. No local disk cost |
 
 ### 12.2 Risk register
 | ID | Risk | Likelihood | Impact | Mitigation | Owner |
@@ -387,18 +397,22 @@ Each milestone ends with a 30-minute review: a demo of the milestone's tests, re
 | R-06 | Reviewers disagree with how a PDF ambiguity was read | M | M | Every interpretation is explicit, with its rationale (§10.4, DESIGN §3) | PM / Architect |
 | R-07 | Scope creep (DTLS, IPv6, a DB engine) threatens the timeline | M | M | Kept on the roadmap (§14); PM rejects in-sprint additions | PM |
 | R-08 | Platform differences in the DF bit (`IP_MTU_DISCOVER` on Linux, `IP_DONTFRAG` on macOS) | M | L | Best effort; the size cap (≤ 1200 B) is the actual guarantee | Dev |
-| R-09 | The estimate misses the 3-week target | M | M | 20% contingency built in; M6 scale work and the rollback feature can be descoped first | PM |
+| R-09 | The estimate misses the 3.5-week (18-day) target | M | M | 20% contingency built in; M6 scale work, the rollback feature and the optional real-NAT CI job can be descoped first | PM |
 | R-10 | Toolchain differences: macOS ships GNU Make 3.81 and Apple clang, while Linux has gcc and Make 4.x | L | L | Keep the Makefile Make-3.81-compatible; the CI matrix (D-09) builds on both platforms from M1 | Dev |
 | R-11 | No local Linux host, so Linux-only checks (netem, valgrind, the gcc build) run only on CI; feedback is slower, and the `sch_netem` kernel module may be unavailable on hosted runners | M | L | Set up CI in M1 and **verify netem on the runner first**. If it's missing, TC-SIM-03 is waived, because the in-code netsim (BON-06) and macOS dummynet (TC-SIM-04) cover the requirement. Daily work uses macOS substitutes (QA §3.1) | Dev / QA |
+| R-12 | A customer's firewall blocks outbound UDP 5555/5556, or a NAT drops UDP mappings faster than the keepalive interval | M | H for that site | The prerequisite is documented (A-09); a clear device diagnostic; per-site, tenant or serial keepalive override (FR-35); a server-side hint when the NAT timeout looks short (FR-36) | PM / Ops |
+| R-13 | Misconfiguration of the new runtime config (typos, unsafe values) | M | M | Unknown keys rejected; range checks; fixed protocol invariants; `--print-config` with sources; device-side clamp on advertised values (DESIGN §25.8) | Dev |
+| R-14 | Extraction of the fleet bootstrap key from a device image | L | M | It grants no identity (that needs K_mfg): at most rogue OFFERs or HELLO_ACKs, forged terminal ERRORs and Failed-row noise, all bounded (rate limits, failed-record cap, NONCE_REG echo, Success rows never overwritten). Per-device keys are on the roadmap (L-01) | Security |
 
 ### 12.3 Open questions (to close in P0)
 | ID | Question | Proposed answer | Decider |
 |---|---|---|---|
 | Q-01 | Should the config be encrypted, given that it can contain secrets? | No, for this exercise. Documented as a limitation; roadmap item N-01 | PM + Security |
-| Q-02 | Should the grace period be configurable per policy (model or tenant)? | Global CLI flag now; per policy later | Architect |
+| Q-02 | Should the grace period be configurable per policy (model or tenant)? | **Resolved:** yes, `nat.grace_s` per tenant, model or serial in `policy.json` (FR-35) | Architect |
 | Q-03 | Should we add a stateless HELLO cookie against DoS now? | Later; rate limiting plus a half-open cap for now | Architect |
 | Q-04 | Should the bad-key device keep retrying forever or stop? | Stop after 3 attempts and enter FAILED, so it doesn't hammer the server | PM |
-| Q-05 | Is the 3-week timeline acceptable, or should the team variant be used? | Decide at the P0 sign-off | PM |
+| Q-05 | Is the 3.5-week (18 working days) timeline acceptable, or should the team variant be used? | Decide at the P0 sign-off | PM |
+| Q-06 | Should configuration files be JSON or YAML? | JSON, with a small in-house parser and no dependencies (DESIGN §25.2) | Architect |
 
 ---
 
@@ -408,12 +422,15 @@ The technical detail is in [DESIGN §22](DESIGN.md#22-tradeoffs-limitations-and-
 | Limitation | Impact on users or the business | Acceptable for this release because… |
 |---|---|---|
 | No confidentiality: config and firmware are sent in clear text, with integrity only | Anyone on the path can read the config contents | The PDF asks for authenticity; the release is a lab prototype |
-| Per-model shared factory secret | Extracting it from one device lets an attacker impersonate any device of that model | No PKI exists in the scenario; the roadmap has per-device keys |
+| Shared factory secrets (one per model, one fleet-wide) | Extracting the model key from one device lets an attacker impersonate any device of that model. Extracting the fleet key allows only bootstrap-level denial of service | No PKI exists in the scenario; the roadmap has per-device keys |
 | No forward secrecy (no Diffie-Hellman) | A later key compromise exposes past session MACs (not contents, since nothing is encrypted) | Follows from the above |
 | Fixed window, no congestion control | Not suitable for very large firmware over constrained links | Mock firmware is 64 KiB; the window is deliberately small |
-| Fixed datagram size of 1200 B (no PMTUD) | About 10% overhead compared with a 1472 B payload on Ethernet | Safety comes before efficiency |
+| Datagrams fixed at 1200 B, with a single 508 B fallback (no upward PMTUD) | About 2% more bytes on the wire, but about 36% more packets, than 1472 B payloads on Ethernet | Safety comes before efficiency; PLPMTUD is on the roadmap |
 | Discovery limited to the local L2 segment or multicast scope | Remote sites need a static IP | The static fallback always works |
 | Single-threaded server with a file-backed DB | No HA; limited to roughly 1000 sessions per instance | Far above the needs of the demo |
+| Outbound UDP must be allowed by the customer's firewall; no non-UDP fallback | Sites that block UDP can't be provisioned until they open the port | The PDF requires UDP; the prerequisite is documented and diagnosed (A-09, FR-36) |
+| The NAT idle timeout is inferred, not auto-tuned | Keepalive intervals must be tuned per site by the operator | Per-site, tenant and serial overrides exist (FR-35); automatic tuning is on the roadmap |
+| Configuration changes need a restart | No hot reload of policy | A small operational cost for a prototype; SIGHUP reload is on the roadmap |
 | Loss is simulated in code, not on real networks | Real-world timing may differ | OS-level impairment also tested (netem on CI, dummynet on the Mac); the design follows RFC guidance |
 | No local Linux machine; Linux is tested only on CI | Linux-specific bugs are found later (on push, not on a local run) | CI runs on every push from M1 onward |
 | No real power-loss or flash-wear testing | The crash-consistency claims are tested only by simulation | Crash points are injected at every step |
@@ -430,9 +447,11 @@ Technical detail is in [DESIGN §22.3](DESIGN.md#223-enhancement-suggestions-fut
 | Next | N-02 | Ed25519-signed firmware, verified independently of the transport | Supply-chain integrity |
 | Next | N-03 | Stateless HELLO cookie | DoS resistance |
 | Next | N-04 | SQLite-backed DB and an admin CLI | Operations at scale |
+| Next | N-06 | Reload of policy and config on SIGHUP without a restart | Operations without downtime |
 | Next | N-05 | Codec fuzzing in CI (libFuzzer/AFL). *The Linux and macOS CI matrix moved to **Now**: it is required because there is no local Linux host (D-09)* | Quality |
 | **Later** | L-01 | Per-device keys in a secure element or TPM; IDevID and BRSKI vouchers | Removes the shared-secret risk |
 | Later | L-02 | PLPMTUD (RFC 8899), congestion control (AIMD), adaptive window | Efficiency on large transfers |
+| Later | L-07 | Adaptive keepalive: discover each NAT's idle timeout and tune the interval automatically | Fewer keepalives; resilience to strict NATs without manual tuning |
 | Later | L-03 | IPv6, DHCP option 43 or DNS-SD discovery | Multi-site rollouts |
 | Later | L-04 | Delta or compressed firmware, staged and canary rollouts, health-gated A/B commit | Safe fleet upgrades |
 | Later | L-05 | SO_REUSEPORT sharding or an HA pair; Prometheus metrics; JSON logs | Scale and observability |
@@ -454,7 +473,7 @@ The submission is done when **all** of the following hold:
 
 ## 16. Glossary
 The full glossary is in [DESIGN §0.3](DESIGN.md#03-glossary). The key terms are:
-**ZTP:** Zero Touch Provisioning. **Session:** a logical association between a device and the server, identified by `session_id`. **Epoch:** the counter of session re-keys (it increases on each resume). **RTO:** retransmission timeout. **SACK:** selective acknowledgement. **K_mfg / K_dev / K_s:** the manufacturing, device and session keys. **Grace period:** how long the server keeps a session that can still be resumed. **OPERATIONAL:** the final, validated device state.
+**ZTP:** Zero Touch Provisioning. **Session:** a logical association between a device and the server, identified by `session_id`. **Epoch:** the counter of session re-keys (it increases on each resume). **RTO:** retransmission timeout. **SACK:** selective acknowledgement. **K_fleet / K_boot:** the fleet bootstrap secret and the bootstrap key derived from it (discovery, handshake and rejections only; no identity). **K_mfg / K_dev / K_s:** the per-model manufacturing secret, the per-device key and the per-session key (identity). **Grace period:** how long the server keeps a session that can still be resumed. **OPERATIONAL:** the final, validated device state.
 
 ---
 
@@ -478,6 +497,7 @@ Every clause of the PDF maps to at least one requirement ID. QA keeps the same l
 | §3 Reliable Messaging | Acknowledgements; duplicate detection; retransmission on timeout | FR-07, FR-08, FR-06 |
 | §3 | Handle simulated packet loss of 10–20% | FR-09, NFR-03, BON-06 |
 | §4 NAT & Keepalives | Assume NAT or firewall; periodic keepalives; session timeout detection | FR-10, FR-11 |
+| §4 | NAT owned by the customer or ISP and may change; NAT parameters configurable, not hardcoded | FR-34, FR-35, FR-36, A-09, A-10 |
 | §4 | Explain in the README why this matters for real deployments | DEL-12 |
 | §5 Secure Registration | Device sends soft serial, device metadata, nonce | FR-12 |
 | §5 | Server verifies with HMAC; replay protection | FR-13, FR-14 |
