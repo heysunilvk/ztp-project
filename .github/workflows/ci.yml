@@ -78,7 +78,7 @@ jobs:
         id: bcast
         continue-on-error: true
         run: |
-          B=$(ip -4 -o addr show scope global | awk '/brd/{print $6; exit}')
+          B=$(ip -4 -o addr show scope global | awk '{for (i = 1; i < NF; i++) if ($i == "brd") { print $(i + 1); exit }}')
           build/netspike bcast "$B" && echo "::notice::bcast to $B: ok" || { echo "::warning::bcast to $B: FAILED"; exit 1; }
       - name: netem availability (R-11; failure waives TC-SIM-03)
         id: netem
@@ -106,9 +106,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Multicast on lo0
-        run: make spike
+        run: |
+          make build/netspike
+          if build/netspike mcast 239.255.90.90 127.0.0.1; then echo "::notice::macOS mcast via lo0: ok"; else echo "::error::macOS mcast via lo0: FAILED"; exit 1; fi
       - name: Broadcast on the primary interface (informational)
         continue-on-error: true
         run: |
           IF=$(route -n get default | awk '/interface:/{print $2}')
-          make spike BCAST="$(ifconfig "$IF" | awk '/broadcast/{print $NF; exit}')"
+          B=$(ifconfig "$IF" | awk '/broadcast/{print $NF; exit}')
+          make build/netspike
+          if build/netspike bcast "$B"; then echo "::notice::macOS bcast to $B via $IF: ok"; else echo "::warning::macOS bcast to $B via $IF: FAILED"; exit 1; fi
