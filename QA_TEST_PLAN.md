@@ -82,6 +82,15 @@ Real NAT hardware, real flash or power-loss rigs, IPv6, Windows, and production 
 | Fuzzing | `tests/fuzz_decode` (a random and mutation-based datagram generator); libFuzzer if available (§14) |
 | Prerequisite | Xcode Command Line Tools on the macOS host: **verified on 2026-11-10** (Apple clang 16.0.0, GNU Make 3.81; PRD D-08) |
 
+**QA tools and their options.** These options belong to test tooling, not to the ZTP binaries; the binaries' flags are in DESIGN §19.2.
+| Tool | Options used by the tests | Purpose |
+|---|---|---|
+| `tests/peer_sim` | `--rogue-offer`, `--rogue-server`, `--fake-server` (advertises arbitrary KEEPALIVE_S and DEAD_INTERVALS), `--bad-fleet-key`, `--flood N/s`, `--replay file.pcap` | A scripted protocol peer for negative, security and component tests (TC-REL-03, TC-AUTH-*, TC-NAT-06/12, TC-CFG-08) |
+| `scripts/pcapcheck.sh` | `--dump-hdr` (decode ZTP headers), maximum-size and fragment filters | Wire-level checks (TC-REL-01, TC-PROV-04/05, TC-APX-03) |
+| `tools/mkartifacts` | `--test-set` (the boundary-size firmware and config fixtures in §4.2) | Deterministic artifacts |
+| `tests/check_logs.sh`, `check_appendix_a.sh`, `check_invariants.sh` | `--server` (the server matching rule, DESIGN §17.4) | Log, Appendix A and invariant assertions |
+| valgrind / `leaks` | `--leak-check=full` / `--atExit` | Leak checks (TC-PERF-04) |
+
 ---
 
 ## 4. Test data and fixtures
@@ -368,8 +377,9 @@ flowchart LR
 | TC-CFG-07 | Profiles | FR-34 | P2 | Each of `demo`, `strict-nat`, `cgnat`, `lan`, `metered`: `--profile <name> --print-config` on the server (loads `conf/profiles/server/<name>.json`) and on the device (`conf/profiles/device/<name>.json`) | Each side's file passes strict validation (exit 0, no unknown keys); values match DESIGN §25.7; `--demo-timers` is the same as `--profile demo` |
 | TC-CFG-08 | Device clamp on advertised values | FR-35, NFR-06 | P1 | `peer_sim --fake-server` (the real server would reject these values, §25.8) advertises KEEPALIVE_S = 1 to a device with `keepalive_min_s = 5`, then KEEPALIVE_S = 900 against `keepalive_max_s = 300`, then DEAD_INTERVALS = 50 | The device uses 5 s, then 300 s, then 10 intervals, and logs `[NAT] Advertised keepalive 1 s clamped to 5 s` (and so on); no flooding and no silence |
 | TC-CFG-09 | Key-file permissions, and policy/artifact checks | FR-34, NFR-06 | P1 | `keys.json` mode 0644; a policy referencing a missing `firmware_file`; a model without a key | Each refuses to start (exit 78) with a specific message |
+| TC-CFG-10 | Settings from the resolved decisions take effect (DESIGN §23) | FR-34, FR-35 | P2 | One run per setting: (a) `run.exit_when_operational` false, then true; (b) `rel.rto_initial_ms=1000 rel.rto_min_ms=1000 rel.rto_max_ms=60000` (the RFC 6298 values); (c) `discovery.mode` static, then bcast; (d) `log.dump_verbose` true; (e) `auth.register_attempts=1` with `--bad-key`; (f) `nat.allow_ip_change=false`; (g) `net.mtu_fallback=false` with `--sim-mtu 1000:emsgsize` | (a) false: the device stays OPERATIONAL and keeps sending keepalives; true: it logs `[STATE] Exiting after operational hold (run.exit_when_operational, <h> s)` and exits 0 after `run.operational_hold_s`. (b) Accepted by validation; `--print-config` shows it; the first retransmission waits ≥ 1 s. (c) The chosen discovery path is logged. (d) `db_dump_verbose.txt` written, default dump unchanged. (e) FAILED after one NAK. (f) Behaves as TC-NAT-10 false. (g) No step-down: the transfer fails visibly with `-E2BIG`/EMSGSIZE logged, so the switch really disables the fallback. Each is also visible in `--print-config` |
 
-**Total: 164 catalogued test cases** (P1: 139, P2: 23, P3: 2), plus the exploratory TC-PERF-01b (§8).
+**Total: 165 catalogued test cases** (P1: 139, P2: 24, P3: 2), plus the exploratory TC-PERF-01b (§8).
 
 ### 5.20 Where each test runs
 | Environment | What runs there |
@@ -495,8 +505,8 @@ Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row is �
 | ZTP-FR-31 | §14.5 | TC-E2E-02, TC-PDF-02, TC-SRV-04 | ☐ |
 | ZTP-FR-32 | §14.5 | TC-E2E-02, TC-PDF-02, TC-SRV-05 | ☐ |
 | ZTP-FR-33 | §17, §17.4, §4.5 | TC-APX-01/02/03/04/05/06/07/08/09/10, TC-E2E-01, TC-LOG-01, TC-PDF-01 | ☐ |
-| ZTP-FR-34 | §25 | TC-CFG-01/02/03/04/05/07/09, TC-UNIT-18/20 | ☐ |
-| ZTP-FR-35 | §9.7, §25.3, §25.6 | TC-CFG-06/08, TC-NAT-08, TC-UNIT-20 | ☐ |
+| ZTP-FR-34 | §25 | TC-CFG-01/02/03/04/05/07/09/10, TC-UNIT-18/20 | ☐ |
+| ZTP-FR-35 | §9.7, §25.3, §25.6 | TC-CFG-06/08/10, TC-NAT-08, TC-UNIT-20 | ☐ |
 | ZTP-FR-36 | §9.7, §9.8 | TC-AUTH-13, TC-NAT-08/09/10/11 | ☐ |
 
 ### 10.2 Bonus
@@ -601,7 +611,7 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 | **M2** | TC-DISC-01..08, TC-SESS-01..04/06/08, TC-REL-01/02/03/08/11, TC-NAT-06/11, TC-SIM-01/02, TC-CFG-08 (discovery, handshake, reliability, path probe; driven by HELLO, keepalive or `peer_sim` traffic) |
 | **M3** | TC-AUTH-01..06/08/09/11..14, TC-REL-04, TC-CFG-09, TC-SRV-03/08/11 (registration, keys, policy, DB) |
 | **M4** | TC-PROV-01..07/10/11, TC-REL-06/07, TC-SESS-09, TC-NAT-05/12 (transfer into the inactive slot, a PROVISIONING session, many frames in flight) |
-| **M5** | TC-UPG-01..11, TC-VAL-01..05, TC-SESS-05/07, TC-AUTH-07/10/15, TC-REL-05/09/10, TC-PROV-08/09/12/13, TC-NAT-01..04/07..10/13, TC-CFG-06, TC-APX-01..10, TC-PDF-01/03/04 (anything that completes the full flow or needs the resume handshake) |
+| **M5** | TC-UPG-01..11, TC-VAL-01..05, TC-SESS-05/07, TC-AUTH-07/10/15, TC-REL-05/09/10, TC-PROV-08/09/12/13, TC-NAT-01..04/07..10/13, TC-CFG-06/10, TC-APX-01..10, TC-PDF-01/03/04 (anything that completes the full flow or needs the resume handshake) |
 | **M6** | TC-SRV-01/02/04..07/09/10, TC-PERF-01..04, TC-E2E-01/02, TC-PDF-02/05, TC-LOG-01..04 (server hardening, dump, demo, scale) |
 | **M7** | TC-DEL-01..10, TC-SIM-03/04, the full impairment matrix (§6), and a full regression of every gate |
 

@@ -44,7 +44,7 @@
 20. [Test and verification strategy](#20-test-and-verification-strategy)
 21. [README mapping and draft answers](#21-readme-mapping-and-draft-answers)
 22. [Tradeoffs, limitations and future work](#22-tradeoffs-limitations-and-future-work)
-23. [Open questions for reviewers](#23-open-questions-for-reviewers)
+23. [Resolved design decisions](#23-resolved-design-decisions)
 24. [Project timeline, dependencies and assumptions (summary)](#24-project-timeline-dependencies-and-assumptions-summary)
 25. [Configuration model](#25-configuration-model-ztp-fr-34-fr-35)
 - [Appendix A: Annotated end-to-end log transcript](#appendix-a-annotated-end-to-end-log-transcript)
@@ -117,7 +117,7 @@ Senior architects, who judge the protocol and trust model; senior developers, wh
 | "Language: C or Python" | **C11**. Rationale: (1) C is what real device control planes are written in, so the exercise is realistic; (2) it gives explicit control of byte order, struct layout, socket options (DF bit, `SO_BROADCAST`, multicast loop) and memory bounds, all of which this assignment is about; (3) a static binary with no runtime dependencies suits a constrained device. Tradeoff: more code and memory-safety risk than Python, mitigated by fixed-offset parsing, ASan/UBSan, fuzzing and `-Werror` (§5.6, §19.1) |
 | "Deliverables: working code and a README explaining your design choices" | Code: §4.2, §19. README: built from §21 (ZTP-DEL-05..08, DEL-12) |
 | "Focus on correctness and networking fundamentals rather than UI or packaging" | There is no UI: a CLI, tagged logs and a text DB dump only. Packaging is a Makefile only. Effort goes into the protocol, testing and documentation |
-| "There is no single correct solution … reasoning and tradeoffs more than feature completeness" | §3 (explicit ambiguity decisions), §22 (tradeoffs and limitations), §23 (open questions) |
+| "There is no single correct solution … reasoning and tradeoffs more than feature completeness" | §3 (explicit ambiguity decisions), §22 (tradeoffs and limitations), §23 (resolved design decisions, each with its assumption and configurability) |
 
 ---
 
@@ -160,8 +160,8 @@ This is the completeness checklist for reviewers. Each PRD requirement maps to t
 | ZTP-FR-31 | DB dump in the PDF's example format | §14.5 | server/db.c | TC-E2E-02, TC-PDF-02, TC-SRV-04 |
 | ZTP-FR-32 | Summary | §14.5 | server/db.c | TC-E2E-02, TC-PDF-02, TC-SRV-05 |
 | ZTP-FR-33 | Tagged logs following Appendix A and the §1 example output | §17, §4.5, App. A | common/log.c | TC-APX-01/02/03/04/05/06/07/08/09/10, TC-E2E-01, TC-LOG-01, TC-PDF-01 |
-| ZTP-FR-34 | Runtime configuration through JSON files (defaults, profiles, files, CLI), validated, with effective config printable | §25 | common/json.c, common/config.c | TC-CFG-01/02/03/04/05/07/09, TC-UNIT-18/20 |
-| ZTP-FR-35 | NAT and session parameters configurable per deployment and per tenant, model or serial, and advertised to the device | §9.7, §25.3, §25.6 | server/policy.c, device/session.c | TC-CFG-06/08, TC-NAT-08, TC-UNIT-20 |
+| ZTP-FR-34 | Runtime configuration through JSON files (defaults, profiles, files, CLI), validated, with effective config printable | §25 | common/json.c, common/config.c | TC-CFG-01/02/03/04/05/07/09/10, TC-UNIT-18/20 |
+| ZTP-FR-35 | NAT and session parameters configurable per deployment and per tenant, model or serial, and advertised to the device | §9.7, §25.3, §25.6 | server/policy.c, device/session.c | TC-CFG-06/08/10, TC-NAT-08, TC-UNIT-20 |
 | ZTP-FR-36 | Handling of, and diagnostics for, NAT changes outside our control (timeout, reboot, IP change, blocked UDP) | §9.7, §9.8 | device/session.c, server/session.c, common/netsim.c | TC-AUTH-13, TC-NAT-08/09/10/11 |
 
 ### 2.2 Bonus requirements
@@ -285,6 +285,23 @@ A freshly powered device has no trustworthy time, so timestamp-based replay wind
   | Multiple layers (double NAT, CGNAT) | Each layer behaves as above; the outermost mapping is the one the server sees | Nothing extra needed | T-09 |
 
   (PRD A-14; tested via the NAT emulator in §9.8 and QA TC-NAT-05, TC-NAT-08..10, TC-UPG-03.)
+
+
+### 3.8 Assumptions from resolved decisions (§23; PRD §12.3)
+The proposed answers to the review questions were adopted on 2026-11-10. These assumptions follow from them. "Config" names the key that lets a customer or operator change the behaviour later (§25); "fixed" means it is part of the protocol or a security invariant.
+- T-13 (OQ-1): The retransmission timer uses 500 ms initial, 200 ms minimum and 4 s maximum RTO. This suits a control plane on LAN and WAN paths, and is a documented deviation from RFC 6298. *Config:* `rel.rto_initial_ms`, `rel.rto_min_ms`, `rel.rto_max_ms`.
+- T-14 (OQ-2, PRD Q-01): Payloads are integrity-protected but **not encrypted**. Configs must not carry secrets that need confidentiality in this release. *Fixed* (roadmap N-01, a new protocol version).
+- T-15 (OQ-3, PRD Q-02): The resume grace period is a deployment choice. *Config:* `nat.grace_s`, per tenant, model or serial.
+- T-16 (OQ-4, PRD Q-03): HELLO floods are contained by per-IP rate limits and table caps, with no stateless cookie. *Config:* `limits.hello_rate_per_ip`, `limits.hello_burst`, `limits.max_half_open`, `limits.max_sessions`, `limits.max_failed_records`, `nat.half_open_ttl_s`.
+- T-17 (OQ-5): A failure never overwrites an existing Success row. *Fixed* (a security invariant).
+- T-18 (OQ-6): Discovery defaults to multicast, falling back to static. *Config:* `discovery.mode` and the related `discovery.*` and `net.mcast_*` keys.
+- T-19 (OQ-7): The default dump always has the PDF's six columns; stage and provisioning notes appear only in the verbose dump. *Config:* `log.dump_verbose`; the default format is *fixed*.
+- T-20 (OQ-8): A production device keeps running after OPERATIONAL and keeps sending keepalives; the demo exits. *Config:* `run.exit_when_operational`, `run.operational_hold_s`.
+- T-21 (OQ-9, PRD Q-06): All configuration is JSON. *Fixed*.
+- T-22 (OQ-10): A change of the device's source IP is accepted by default. *Config:* `nat.allow_ip_change`, per tenant, model or serial.
+- T-23 (OQ-11): Every firmware image carries the fleet bootstrap key as well as its model key. *Config:* the key material in `keys.json`; the scheme is *fixed*.
+- T-24 (OQ-12): One MTU fallback level (508 B) is enough for the paths in scope. *Config:* `net.mtu_fallback`, `net.pmtu_blackhole_s`, `net.max_datagram`; the levels are *fixed*.
+- T-25 (PRD Q-04): A device whose registration is rejected for BAD_MAC stops after a bounded number of attempts instead of retrying forever. *Config:* `auth.register_attempts` (default 3).
 
 ---
 
@@ -1430,7 +1447,7 @@ stateDiagram-v2
 | Firmware version | The active slot's header version equals `fw_target`, and its hash equals the stored hash | `[VALIDATION] Firmware v1.1 verified` |
 | Session health | (a) a **fresh** KEEPALIVE(HEALTH_PROBE) round trip within 2 × RTO; (b) last authenticated RX < 1 keepalive interval ago; (c) SRTT < `val.srtt_max_ms` (1000 ms). The probe is retransmitted on the RTO schedule until `val.deadline_s` (§13.1) | `[VALIDATION] Session healthy (rtt=2 ms)` |
 
-If all three pass → STATUS_REPORT(OPERATIONAL), and wait for STATUS_ACK → `[STATE] Device is OPERATIONAL`. Persist `stage=OPERATIONAL`. The device stays in operational mode, sending keepalives; with `--exit-when-operational` (demo) it exits 0 after a short hold.
+If all three pass → STATUS_REPORT(OPERATIONAL), and wait for STATUS_ACK → `[STATE] Device is OPERATIONAL`. Persist `stage=OPERATIONAL`. The device stays in operational mode, sending keepalives. With `run.exit_when_operational = true` (the `demo` profile, or `--exit-when-operational`) it exits 0 after `run.operational_hold_s` (2 s by default; 5 s in the `demo` profile, so at least one periodic keepalive is logged) (§23 OQ-8).
 
 If a check fails: a firmware mismatch after an upgrade triggers the rollback (§12.5), while a mismatch with no upgrade in this run reports FAILED directly. A missing or corrupt config triggers one re-fetch of the config, then FAILED. An unhealthy session waits for recovery (resume) until `val.deadline_s` (180 s; demo 30 s), then FAILED.
 
@@ -1961,6 +1978,7 @@ These are the non-PDF lines that tests assert on. Each one is a `logmsg.h` const
 | `[UPGRADE] Firmware <v> is current, no upgrade required` / `[UPGRADE] Validation failed on <v>, rolled back to <old>` | device | §12.1 / §12.5 | §12 |
 | `[VALIDATION] Session healthy (rtt=<n> ms)` | device | §13 | §13 |
 | `[STATE] Device is FAILED (reason: <reason>)` | device | FAILED entered | §15.2 |
+| `[STATE] Exiting after operational hold (run.exit_when_operational, <h> s)` | device | Demo or test exit after OPERATIONAL (§13, §23 OQ-8) | §13 |
 | `[CONFIG] profile=<p> file=<f> sha256=<h> keepalive=<k>s grace=<g>s window=<w> max_dgram=<d>` | both | Startup | §25.9 |
 | `[PROVISION] Config manifest: <v>, <n> bytes, <c> chunks, sha256=<h>` / `[PROVISION] Firmware manifest: <v>, <n> bytes, <c> chunks` | device | MANIFEST received | §11.2 |
 | `[PROVISION] Firmware <i>/<n> (<p>%)` / `[PROVISION] Firmware checksum verified` | device | Progress every 8 chunks / firmware verified | §11.2, §11.3 |
@@ -1969,6 +1987,13 @@ These are the non-PDF lines that tests assert on. Each one is a `logmsg.h` const
 | `[NAT] [sid=<s> <serial>] Peer IP changed <old> -> <new> (allowed)` / `[NAT] [sid=<s> <serial>] Peer IP changed <old> -> <new>: RESUME_REQUIRED sent` | server | A new frame from a new IP, with `allow_ip_change` true / false | §9.4 |
 | `[UDP] Resume required by server (IP change)` | device | ERROR RESUME_REQUIRED (E25) | §9.4 |
 | `[PROVISION] [sid=<s> <serial>] Policy: <model> -> fw <v>, cfg <c>, keepalive <k> s, grace <g> s (source: <label>)` | server | Per registration; labels as in §25.9 | §25.6 |
+| `[UDP] [sid=<s> <serial>] HELLO seq=1 received (serial <serial>, <model>, <v>), HELLO_ACK seq=1 sent` / `[UDP] [sid=<s> <serial>] Session established` | server | Handshake | §7.1 |
+| `[NAT] [sid=<s> <serial>] Keepalive (path probe) acknowledged` | server | Path probe | §9.2 |
+| `[AUTH] [sid=<s> <serial>] Assigned tenant: <tenant>, fw <v>, config <c>` | server | REGISTER_ACK sent (the PDF line, with the server's session tag) | §17.4 |
+| `[DB]   <serial> <Success\|Failed> fw=<v> cfg=<c>` | server | DB row written | §14.4 |
+| `[PROVISION] [sid=<s> <serial>] Sending config <v> (<n> chunks)` / `… Sending firmware <v> (<n> chunks)` | server | MANIFEST sent | §11.2 |
+| `[UPGRADE] [sid=<s> <serial>] Device installing <v>, awaiting resume (grace <g> s)` | server | UPGRADE_STATUS INSTALLING received | §12.1 |
+| `[STATE] [sid=<s> <serial>] OPERATIONAL` | server | STATUS_REPORT OPERATIONAL received | §13 |
 
 ---
 
@@ -2040,7 +2065,7 @@ ztp-device --state-dir DIR [--model MODEL] [--fw VERSION] [--serial ZTP-XXXXXX]
            [--nat-sim idle_timeout_s=S,reboot_at_s=T,change_ip_at_s=T,block_server_port]   # §9.8
            [--demo-timers]          # alias of --profile demo
 ```
-`--model`, `--fw` and `--serial` set `identity.model`, `identity.factory_fw` and `identity.serial`. `--reset-state` is an operator action, not a test hook: it deletes the state directory before boot, to recover a FAILED device.
+`--model`, `--fw` and `--serial` set `identity.model`, `identity.factory_fw` and `identity.serial`; `--exit-when-operational` sets `run.exit_when_operational = true`. `--reset-state` is an operator action, not a test hook: it deletes the state directory before boot, to recover a FAILED device.
 
 **Test hooks.** They are compiled into both binaries but **refused (exit 64) unless `--test-hooks` is also given**, on both sides, so a production invocation can't enable one by accident. **Every one-shot hook fires at most once per state directory.** These are the crash hooks, `--replay-test`, `--hook-delete-config`, `--hook-bad-fw-version`, `--fail-validate`, `--rebind-after` and `--drop-seq`/`--dup-seq`. When one fires, it writes its name to the marker file before acting (an atomic write): `<state-dir>/hooks.fired` for the device, and `state/server.hooks.fired` (next to `db.jsonl`) for the server. The same argv is re-executed after `execv` or a supervisor relaunch, and the marker stops the hook from firing again, so `--crash-at post-exec` crashes exactly once. Every hook logs `[ERROR] TEST HOOK ACTIVE: <name>` at startup.
 | Hook | Binary | Effect | Used by |
@@ -2064,7 +2089,7 @@ ztp-device --state-dir DIR [--model MODEL] [--fw VERSION] [--serial ZTP-XXXXXX]
 
 ### 19.3 Demo scenario (`scripts/run_demo.sh`; the PRD §5.2 scenarios S1–S5)
 1. Clean `state/` and `logs/`; run `mkartifacts`.
-2. Start `ztp-server --profile demo --test-hooks --loss 0.15 --reorder 0.10 --dup 0.05 --delay 2 --jitter 1 --seed 42`. This is QA impairment row M3. Loss is applied at the sender only, so each direction loses 15% (§16.1).
+2. Start `ztp-server --profile demo --test-hooks --dump-verbose --loss 0.15 --reorder 0.10 --dup 0.05 --delay 2 --jitter 1 --seed 42`. This is QA impairment row M3. Loss is applied at the sender only, so each direction loses 15% (§16.1).
 3. Launch these at the same time, each with `--profile demo`, the same impairments, a different seed, and `--test-hooks` where a hook is used:
    | Device | Flags | Expected |
    |---|---|---|
@@ -2240,21 +2265,23 @@ Specifically: a lost HELLO or REGISTER is retransmitted with identical bytes and
 
 ---
 
-## 23. Open questions for reviewers
-| # | Question | Current proposal |
-|---|---|---|
-| OQ-1 | Should we accept the 500 ms initial, 200 ms minimum and 4 s maximum RTO (RFC 6298: 1 s, 1 s, and a maximum of at least 60 s), or use the RFC values? | 500 ms / 200 ms / 4 s; all are config values (`rel.rto_initial_ms`, `rel.rto_min_ms`, `rel.rto_max_ms`) |
-| OQ-2 | Should the config be encrypted even in this prototype? | No. "Secure" is interpreted as authenticity, integrity and replay protection (§18.1; PRD Q-01) |
-| OQ-3 | Should the grace period be configurable per policy or tenant? | **Resolved:** `nat.grace_s` can be overridden per tenant, model or serial (§25.6) |
-| OQ-4 | Should we add a stateless HELLO cookie now, or rely on rate limits? | Rate limits now (PRD Q-03) |
-| OQ-5 | Should a failed attempt be allowed to mark a previously *successful* serial as Failed? | No: increase failed_attempts only (§10.3) |
-| OQ-6 | Is the multicast default (rather than broadcast) acceptable for the bonus? | Yes; both are implemented (§6.2) |
-| OQ-7 | Is the "registration status" vs "stage" split acceptable for the DB dump? | Yes (§3.6) |
-| OQ-8 | Should the device exit or stay running once OPERATIONAL? | Stay running, sending keepalives; the demo uses `--exit-when-operational` |
-| OQ-9 | Should configuration be JSON or YAML? | JSON, with a small in-house parser and no dependencies (§25.2) |
-| OQ-10 | Should the server accept `nat.allow_ip_change=true` (the default), or require a resume when the source IP changes? | Allow by default (mobile and LTE failover); hijacking is already prevented by the new-frame rule (§9.4) |
-| OQ-11 | Is the fleet bootstrap key (bootstrap only, no identity) an acceptable addition to the per-model key? | Yes. It makes "Invalid HMAC" a verified, recorded outcome; a K_fleet leak allows denial of service only (§10.1, §18.3) |
-| OQ-12 | Is a single 508 B MTU fallback enough, or is full PLPMTUD needed? | One fallback level now; PLPMTUD on the roadmap (§5.8, §22.3) |
+## 23. Resolved design decisions
+These were the open questions for reviewers. On 2026-11-10 the owner **adopted the proposed answer for every one**. Each decision is recorded as an assumption (§3.8 T-13..T-25, and PRD A-16..A-22) and, where it is an operational choice rather than a wire-protocol invariant, it is a **configuration key**: a customer or operator can change it later without rebuilding (§25). The "Fixed" entries are fixed on purpose; the reason is given.
+
+| # | Question | Decision (adopted) | Assumption | Configurable? |
+|---|---|---|---|---|
+| OQ-1 | RTO values: 500 ms initial, 200 ms minimum, 4 s maximum, or RFC 6298's 1 s, 1 s and ≥ 60 s? | Keep 500 ms / 200 ms / 4 s; documented deviations (§8.3) | T-13 | **Yes**: `rel.rto_initial_ms`, `rel.rto_min_ms`, `rel.rto_max_ms` (server and device). Setting 1000 / 1000 / 60000 restores RFC 6298 behaviour, and validation allows it (§25.8) |
+| OQ-2 | Encrypt config and firmware in this prototype? | No; "secure" = authenticity, integrity and anti-replay (§18.1) | T-14 | **Fixed**: confidentiality would change the wire format and key schedule. It is roadmap item N-01 and would arrive as a new protocol version, not a setting |
+| OQ-3 | Grace period configurable per policy or tenant? | Yes | T-15 | **Yes**: `nat.grace_s` in `server.json`, overridable per tenant, model or serial in `policy.json` (§25.6) |
+| OQ-4 | Stateless HELLO cookie now, or rate limits? | Rate limits and half-open caps now; cookie later (roadmap) | T-16 | **Yes** (the limits): `limits.hello_rate_per_ip`, `limits.hello_burst`, `limits.max_half_open`, `limits.max_sessions`, `limits.max_failed_records`, `nat.half_open_ttl_s`. The cookie mechanism itself isn't implemented |
+| OQ-5 | May a failed attempt mark a previously *successful* serial as Failed? | No: it only increases `failed_attempts` and sets `last_failure` (§10.3) | T-17 | **Fixed**: a security invariant. Making it configurable would let anyone with the fleet key falsify the audit record of real devices |
+| OQ-6 | Multicast as the default discovery mode (rather than broadcast)? | Yes; multicast, broadcast and static are all implemented (§6.2) | T-18 | **Yes**: `discovery.mode` (`mcast` \| `bcast` \| `static`), `discovery.server`, `discovery.bcast_addr`, `discovery.mcast_iface_addr`, `net.mcast_group` |
+| OQ-7 | Split "registration status" from "stage" in the DB dump? | Yes: the default dump matches the PDF example exactly; stage and provisioning notes appear only in the verbose dump (§3.6, §14.5) | T-19 | **Partly**: `log.dump_verbose` (server) chooses whether the verbose dump is also written. The default dump's format is **fixed** to match the PDF |
+| OQ-8 | Device behaviour once OPERATIONAL: exit or keep running? | Keep running and keep sending keepalives (production). The demo exits after a short hold | T-20 | **Yes** (new): `run.exit_when_operational` (device; default `false`, `demo` profile `true`) and `run.operational_hold_s` (2 s; demo 5 s). `--exit-when-operational` is its CLI shorthand |
+| OQ-9 | Configuration format: JSON or YAML? | JSON, with a small strict in-house parser (§25.2) | T-21 | **Fixed**: the parser is part of the build. YAML could be added later as an input converter |
+| OQ-10 | Accept a source-IP change by default, or require a resume? | Accept by default (mobile and LTE failover); hijacking is already prevented by the new-frame rule (§9.4) | T-22 | **Yes**: `nat.allow_ip_change` in `server.json`, overridable per tenant, model or serial |
+| OQ-11 | Add the fleet bootstrap key alongside the per-model key? | Yes: it makes "Invalid HMAC" a verified, recorded outcome; a K_fleet leak allows denial of service only (§10.1, §18.3) | T-23 | **Yes (key material only)**: `fleet` and `models` in `keys.json` (mode 0600), and `paths.keys`. The two-root *scheme* is fixed protocol; key rotation is a roadmap item |
+| OQ-12 | Is a single 508 B MTU fallback enough, or is full PLPMTUD needed? | One fallback level now; PLPMTUD on the roadmap (§5.8, §22.3) | T-24 | **Partly**: `net.mtu_fallback` (on/off), `net.pmtu_blackhole_s` (detection time), and `net.max_datagram` (can be lowered to 508 up front for known small-MTU sites). The two levels (1200 and 508) are fixed wire invariants |
 
 ---
 
@@ -2364,6 +2391,7 @@ flowchart TB
                  "max_retries": 8, "fast_retx_threshold": 3, "delayed_ack_ms": 20 },
   "xfer":      { "chunk_req_max": 32, "persist_every_chunks": 16, "hash_attempts": 2 },
   "auth":      { "register_attempts": 3 },
+  "run":       { "exit_when_operational": false, "operational_hold_s": 2 },
   "val":       { "srtt_max_ms": 1000, "deadline_s": 180 },
   "paths":     { "state_dir": "state/device", "log": "logs/device_%s.log" },
   "log":       { "level": "info" },
@@ -2413,7 +2441,7 @@ Every profile below satisfies the §25.8 rules (checked by TC-CFG-07). Each prof
 | Profile | Intended for | Settings that differ from the defaults |
 |---|---|---|
 | `default` | Production | — (as §25.4–25.5: keepalive 20 s, dead and server idle 3 intervals, grace 120 s) |
-| `demo` | Demo and CI (`--demo-timers` is kept as an alias) | `nat.keepalive_interval_s` 2, `nat.keepalive_min_s` 1, grace 30 s, `net.reconnect_min_s` 0.5 → `reconnect_max_s` 5, `net.resume_cycles` 3, `net.pmtu_blackhole_s` 3, `discovery.interval_ms` 500, `val.deadline_s` 30 |
+| `demo` | Demo and CI (`--demo-timers` is kept as an alias) | `nat.keepalive_interval_s` 2, `nat.keepalive_min_s` 1, grace 30 s, `net.reconnect_min_s` 0.5 → `reconnect_max_s` 5, `net.resume_cycles` 3, `net.pmtu_blackhole_s` 3, `discovery.interval_ms` 500, `val.deadline_s` 30, `run.exit_when_operational` true, `run.operational_hold_s` 5 |
 | `strict-nat` | Sites with aggressive UDP timers (≤ 20 s) | keepalive 10 s (grace 120 ≥ 2 × 10 × 3) |
 | `cgnat` | Many devices behind one public IP | keepalive 15 s, `limits.hello_rate_per_ip` 100, `hello_burst` 200 |
 | `lan` | No NAT (same L2 network) | keepalive 60 s, grace 360 s (= 2 × 60 × 3); `path_probe` stays on |
@@ -2433,6 +2461,8 @@ Every profile below satisfies the §25.8 rules (checked by TC-CFG-07). Each prof
 | `rel.max_retries` | 1..16 |
 | `net.pmtu_blackhole_s` (device) | 2..60 |
 | `net.resume_cycles` (device) | 1..100 |
+| `auth.register_attempts` (device) | 1..10 |
+| `run.operational_hold_s` (device) | 0..3600 |
 | `nat.keepalive_interval_s` | 1..300; values < 5 log the warning "demo/test value" |
 | `nat.keepalive_min_s` ≤ `keepalive_interval_s` ≤ `keepalive_max_s` (device) | 1 ≤ min; max ≤ 3600 |
 | `nat.dead_intervals`, `server_idle_intervals` | 2..10, and `server_idle_intervals ≥ dead_intervals` |
@@ -2514,6 +2544,7 @@ ztp-device --state-dir state/93AF21 --serial ZTP-93AF21 --model EDGE-GW-100 --fw
 11.656 [STATE] Device is OPERATIONAL                                     # Step 9
 13.656 [NAT] Keepalive sent                                              # periodic (Step 4 continues)
 13.658 [NAT] Keepalive acknowledged
+16.656 [STATE] Exiting after operational hold (run.exit_when_operational, 5 s)   # demo profile only; production keeps running
 ```
 **Server (`logs/server.log`, excerpt for sid 7421)**
 ```
@@ -2590,6 +2621,7 @@ ztp-device --state-dir state/93AF21 --serial ZTP-93AF21 --model EDGE-GW-100 --fw
 | `net.resume_cycles` (resume attempts before a fresh registration) | D | 10 | 3 | §12.3 |
 | `discovery.mode` / `discovery.attempts` / `discovery.interval_ms` | D | mcast / 3 / 1000 ms | mcast / 3 / 500 ms | §6.2 |
 | `auth.register_attempts` | D | 3 | 3 | §10.3 |
+| `run.exit_when_operational` / `run.operational_hold_s` | D | false / 2 s | true / 5 s (long enough for at least one periodic keepalive at 2 s to appear in the log, as in Appendix A) | §13, §23 OQ-8 |
 | `limits.nonce_cache_per_serial` / `nonce_cache_total` / `nonce_ttl_s` | S | 64 / 4096 / 600 s | same | §10.4 |
 | `limits.hello_rate_per_ip` / `hello_burst` | S | 10/s / 20 | same | §10.5 |
 | `limits.max_sessions` / `max_half_open` / `max_failed_records` | S | 1024 / 256 / 10 000 | same | §10.3, §10.5 |
@@ -2598,6 +2630,14 @@ ztp-device --state-dir state/93AF21 --serial ZTP-93AF21 --model EDGE-GW-100 --fw
 | `val.srtt_max_ms` / `val.deadline_s` | D | 1000 ms / 180 s | 1000 ms / 30 s | §13 |
 | `sim.loss` / `reorder` / `reorder_delay_ms` / `dup` / `delay_ms` / `jitter_ms` / `mtu` / `mtu_mode` / `seed` | S, D | 0 / 0 / 30 / 0 / 0 / 0 / 0 (off) / emsgsize / 0 | set by the demo script (§19.3) | §16 |
 | `sim.nat.idle_timeout_s` / `reboot_at_s` / `change_ip_at_s` / `block_server_port` | D | 0 / 0 / 0 / false (off) | off | §9.8 |
+| `net.bind` | S | 0.0.0.0 (the Appendix A run uses 10.10.10.5) | same | §9.1 |
+| `discovery.server` / `discovery.bcast_addr` | D | 10.10.10.5:5555 / 255.255.255.255 | same (the demo passes `--server 127.0.0.1:5555`) | §6.2, §6.3 |
+| `nat.accept_server_keepalive` | D | true (false = ignore KEEPALIVE_S and use the device's own value) | true | §25.3 |
+| `identity.model` / `identity.hw_rev` / `identity.factory_fw` / `identity.serial` | D | EDGE-GW-100 / A1 / v1.0 / null (generate) | set per device by the demo script | §6.1, §25.5 |
+| `log.level` | S, D | info | info | §17.1 |
+| `log.dump_verbose` | S | false | false (the demo writes the verbose dump through `--dump-verbose`) | §14.5, §23 OQ-7 |
+| `paths.policy` / `paths.keys` / `paths.artifacts` / `paths.db` / `paths.log` / `paths.dump` | S | conf/policy.json / conf/keys.json / artifacts/ / state/db.jsonl / logs/server.log / logs/db_dump.txt | same | §25.4 |
+| `paths.state_dir` / `paths.log` | D | state/device / logs/device_%s.log | per device | §25.5 |
 
 ## Appendix C: Reason/error codes
 Codes are carried in the REASON/RESULT TLV (0x19) or the INFO TLV (0x24). A *terminal* frame is sent under K_boot and is never ACKed (§5.3).

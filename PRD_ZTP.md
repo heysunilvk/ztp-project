@@ -26,7 +26,7 @@
 9. [Deliverables (Expected Submission)](#9-deliverables-expected-submission)
 10. [Scope, assumptions and interpretation decisions](#10-scope-assumptions-and-interpretation-decisions)
 11. [Release plan, milestones and timeline](#11-release-plan-milestones-and-timeline)
-12. [Dependencies, risks and open questions](#12-dependencies-risks-and-open-questions)
+12. [Dependencies, risks and resolved questions](#12-dependencies-risks-and-resolved-questions)
 13. [Caveats and limitations (product impact)](#13-caveats-and-limitations-product-impact)
 14. [Enhancement roadmap (Now / Next / Later)](#14-enhancement-roadmap-now--next--later)
 15. [Definition of Done](#15-definition-of-done)
@@ -311,6 +311,13 @@ See §3.2 for the non-goals. Also out of scope: real NAT hardware, real power-lo
 | A-13 | **Discovery scope:** multicast and broadcast discovery work only inside the device's own L2 or multicast scope and don't cross NAT. Devices behind NAT at remote sites use the static server address (as in PDF Appendix A) | Remote sites need the static address configured (`discovery.server`) |
 | A-14 | **NAT mapping lifecycle:** (1) the device's first outbound UDP datagram creates the mapping; (2) one device socket, so one mapping, carries the whole session; (3) any mapping type works, symmetric NAT included; (4) the mapping is refreshed by **outbound** traffic only, never by relying on inbound; (5) its lifetime is unknown and may change; (6) its external IP:port may change at any time and is never used as identity; (7) a device restart creates a **new** mapping; (8) it can be deleted without notice; (9) no port forwarding or static mapping is needed. Details: DESIGN T-12 | Each point has a matching design response (device-initiated keepalives, `session_id`-based sessions, authenticated resume, liveness detection). A NAT that refreshes only on inbound traffic, or that changes the mapping while it is in use, is still handled through rebinding, at some efficiency cost |
 | A-15 | **Path MTU:** the device-to-server path carries 1228-byte IP packets (any compliant IPv6 path, and most IPv4 paths), or at least the IPv4 minimum of 576 bytes, in which case the session falls back to 508-byte datagrams (DESIGN §5.8) | Below 576 (not compliant with IPv4) the design can't operate; this is documented |
+| A-16 | (Q-01, DESIGN OQ-2) Provisioning payloads are **integrity-protected, not encrypted**. Configs in this release must not carry secrets that need confidentiality. *Fixed* | If secrets must be provisioned, encryption (N-01) must come first |
+| A-17 | (Q-02, OQ-3) The resume grace period is a deployment setting. *Configurable:* `nat.grace_s` per tenant, model or serial | — |
+| A-18 | (Q-03, OQ-4) Rate limits and table caps, without a stateless cookie, are enough against HELLO floods for this release. *Configurable:* `limits.*`, `nat.half_open_ttl_s` | A large distributed flood could exhaust half-open capacity; cookies are on the roadmap (N-03) |
+| A-19 | (Q-04) A device whose model key is rejected (BAD_MAC) stops after a bounded number of attempts and stays FAILED until an operator resets it (`--reset-state`). *Configurable:* `auth.register_attempts` (1..10, default 3) | A transiently mis-keyed device needs operator action |
+| A-20 | (Q-05) The 18-working-day single-developer plan (target Wed 9 Dec 2026) is the baseline; the team variant is the contingency | If dates slip, the plan switches to the team variant (R-09) |
+| A-21 | (Q-06, OQ-9) All configuration files are JSON, read by the in-house strict parser. *Fixed* format; all values configurable | Operators who want YAML need a converter (roadmap) |
+| A-22 | (DESIGN OQ-1, OQ-5..OQ-8, OQ-10..OQ-12) The other design decisions are adopted as stated in DESIGN §23, with their assumptions in DESIGN §3.8 (T-13..T-25). Configurable ones: RTO values (`rel.rto_*`), discovery mode (`discovery.mode`), verbose dump (`log.dump_verbose`), behaviour after OPERATIONAL (`run.exit_when_operational`), IP-change policy (`nat.allow_ip_change`), key material (`keys.json`), MTU fallback (`net.mtu_fallback`, `net.pmtu_blackhole_s`, `net.max_datagram`). Fixed: never overwrite a Success row with a failure, the dump format, the two-root key scheme, the two datagram levels | — |
 
 ### 10.4 Interpretation decisions on ambiguities in the PDF (details in [DESIGN §3](DESIGN.md#3-assumptions-and-ambiguity-resolutions))
 1. **"No stored credentials" versus HMAC.** Factory secrets are used: a fleet bootstrap key, and a per-model key from which the per-device key is derived. The fleet key lets a device with a wrong model key reach REGISTER, so "Invalid HMAC" is a verified, recorded outcome. Documented as a limitation.
@@ -371,7 +378,7 @@ Each milestone ends with a 30-minute review: a demo of the milestone's tests, re
 
 ---
 
-## 12. Dependencies, risks and open questions
+## 12. Dependencies, risks and resolved questions
 
 ### 12.1 Dependencies (owner: this section)
 | ID | Dependency | Type | Notes |
@@ -404,15 +411,17 @@ Each milestone ends with a 30-minute review: a demo of the milestone's tests, re
 | R-13 | Misconfiguration of the new runtime config (typos, unsafe values) | M | M | Unknown keys rejected; range checks; fixed protocol invariants; `--print-config` with sources; device-side clamp on advertised values (DESIGN §25.8) | Dev |
 | R-14 | Extraction of the fleet bootstrap key from a device image | L | M | It grants no identity (that needs K_mfg): at most rogue OFFERs or HELLO_ACKs, forged terminal ERRORs and Failed-row noise, all bounded (rate limits, failed-record cap, NONCE_REG echo, Success rows never overwritten). Per-device keys are on the roadmap (L-01) | Security |
 
-### 12.3 Open questions (to close in P0)
-| ID | Question | Proposed answer | Decider |
-|---|---|---|---|
-| Q-01 | Should the config be encrypted, given that it can contain secrets? | No, for this exercise. Documented as a limitation; roadmap item N-01 | PM + Security |
-| Q-02 | Should the grace period be configurable per policy (model or tenant)? | **Resolved:** yes, `nat.grace_s` per tenant, model or serial in `policy.json` (FR-35) | Architect |
-| Q-03 | Should we add a stateless HELLO cookie against DoS now? | Later; rate limiting plus a half-open cap for now | Architect |
-| Q-04 | Should the bad-key device keep retrying forever or stop? | Stop after 3 attempts and enter FAILED, so it doesn't hammer the server | PM |
-| Q-05 | Is the 3.5-week (18 working days) timeline acceptable, or should the team variant be used? | Decide at the P0 sign-off | PM |
-| Q-06 | Should configuration files be JSON or YAML? | JSON, with a small in-house parser and no dependencies (DESIGN §25.2) | Architect |
+### 12.3 Resolved questions (decided 2026-11-10)
+These were open for P0. The owner **adopted the proposed answer for each one**. Each decision is recorded as an assumption (§10.3, A-16..A-22) and, where it is an operational choice, it is exposed as configuration that a customer or operator can change later without a rebuild (DESIGN §25). The design-level questions are in DESIGN §23 (OQ-1..OQ-12).
+
+| ID | Question | Decision (adopted) | Assumption | Configurable? | Decider |
+|---|---|---|---|---|---|
+| Q-01 | Should the config be encrypted, given that it can contain secrets? | No, for this release. Integrity, authenticity and anti-replay only; encryption is roadmap item N-01 | A-16 | **Fixed** (it would change the wire protocol) | PM + Security |
+| Q-02 | Should the grace period be configurable per policy (model or tenant)? | Yes | A-17 | **Yes**: `nat.grace_s` in `server.json`, overridable per tenant, model or serial in `policy.json` | Architect |
+| Q-03 | Should we add a stateless HELLO cookie against DoS now? | Not now; per-IP rate limiting plus caps on half-open sessions, sessions and failed records | A-18 | **Yes** (the limits): `limits.hello_rate_per_ip`, `limits.hello_burst`, `limits.max_half_open`, `limits.max_sessions`, `limits.max_failed_records`, `nat.half_open_ttl_s` | Architect |
+| Q-04 | Should the bad-key device keep retrying forever or stop? | Stop after 3 verified BAD_MAC rejections and enter FAILED, so it doesn't hammer the server | A-19 | **Yes**: `auth.register_attempts` (device; 1..10, default 3) | PM |
+| Q-05 | Is the 3.5-week (18 working days) timeline acceptable, or should the team variant be used? | The single-developer plan (18 working days, target Wed 9 Dec 2026) is the baseline. The team variant (10–12 days) is the contingency if R-09 materialises | A-20 | n/a (a plan, not software) | PM |
+| Q-06 | Should configuration files be JSON or YAML? | JSON, with a small in-house parser and no dependencies (DESIGN §25.2) | A-21 | **Fixed** (the format); every *value* is configurable | Architect |
 
 ---
 
@@ -447,15 +456,15 @@ Technical detail is in [DESIGN §22.3](DESIGN.md#223-enhancement-suggestions-fut
 | Next | N-02 | Ed25519-signed firmware, verified independently of the transport | Supply-chain integrity |
 | Next | N-03 | Stateless HELLO cookie | DoS resistance |
 | Next | N-04 | SQLite-backed DB and an admin CLI | Operations at scale |
-| Next | N-06 | Reload of policy and config on SIGHUP without a restart | Operations without downtime |
 | Next | N-05 | Codec fuzzing in CI (libFuzzer/AFL). *The Linux and macOS CI matrix moved to **Now**: it is required because there is no local Linux host (D-09)* | Quality |
+| Next | N-06 | Reload of policy and config on SIGHUP without a restart | Operations without downtime |
 | **Later** | L-01 | Per-device keys in a secure element or TPM; IDevID and BRSKI vouchers | Removes the shared-secret risk |
 | Later | L-02 | PLPMTUD (RFC 8899), congestion control (AIMD), adaptive window | Efficiency on large transfers |
-| Later | L-07 | Adaptive keepalive: discover each NAT's idle timeout and tune the interval automatically | Fewer keepalives; resilience to strict NATs without manual tuning |
 | Later | L-03 | IPv6, DHCP option 43 or DNS-SD discovery | Multi-site rollouts |
 | Later | L-04 | Delta or compressed firmware, staged and canary rollouts, health-gated A/B commit | Safe fleet upgrades |
 | Later | L-05 | SO_REUSEPORT sharding or an HA pair; Prometheus metrics; JSON logs | Scale and observability |
 | Later | L-06 | QUIC as the transport | Standardised reliability and security |
+| Later | L-07 | Adaptive keepalive: discover each NAT's idle timeout and tune the interval automatically | Fewer keepalives; resilience to strict NATs without manual tuning |
 
 ---
 
