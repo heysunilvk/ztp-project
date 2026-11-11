@@ -35,7 +35,16 @@ SERVER_BIN := $(BUILD)/ztp-server
 DEVICE_BIN := $(BUILD)/ztp-device
 TEST_BIN   := $(BUILD)/unit-tests
 
-.PHONY: all server device test asan debug clean clean-logs check-separation spike
+.PHONY: all server device test asan debug clean clean-logs check-separation spike artifacts
+
+# Deterministic mock artifacts and demo keys (tools/mkartifacts; links the device library for the
+# demo key derivation). `make artifacts` writes artifacts/ for conf/policy.json.
+MKARTIFACTS := $(BUILD)/mkartifacts
+$(MKARTIFACTS): tools/mkartifacts.c $(DEV_LIB) $(LIB)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Idevice -o $@ $< $(DEV_LIB) $(LIB) $(LDFLAGS) $(LDLIBS)
+artifacts: $(MKARTIFACTS)
+	$(MKARTIFACTS) --out artifacts
 
 # QA protocol peer (tests/peer_sim): links the server library for keys.json loading.
 PEER_SIM := $(BUILD)/peer_sim
@@ -43,7 +52,7 @@ $(PEER_SIM): tests/peer_sim/peer_sim.c $(SRV_LIB) $(LIB)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Iserver -o $@ $< $(SRV_LIB) $(LIB) $(LDFLAGS) $(LDLIBS)
 
-all: server device
+all: server device $(MKARTIFACTS)
 	@chmod 600 conf/keys.json   # git does not keep file modes; the server refuses anything looser
 	@ln -sf $(SERVER_BIN) ztp-server
 	@ln -sf $(DEVICE_BIN) ztp-device
@@ -85,7 +94,7 @@ $(PCAPCHECK): tests/pcapcheck/pcapcheck.c $(LIB)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB) $(LDFLAGS) $(LDLIBS)
 
-test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK)
+test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK) artifacts
 	@chmod 600 conf/keys.json
 	$(TEST_BIN)
 	@mkdir -p $(BUILD)/selftest && $(PCAPCHECK) --selftest $(BUILD)/selftest

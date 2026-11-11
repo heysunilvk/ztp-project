@@ -53,5 +53,6 @@ void suite_timer(void);
 void suite_policy(void);
 void suite_transfer(void);
 void suite_reliable(void);
+void suite_db(void);
 
 #endif
