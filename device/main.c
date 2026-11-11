@@ -133,11 +133,20 @@ int main(int argc, char **argv)
 
     /* log file: paths.log with %s = serial; appended across restarts (§17.3) */
     char logpath[2 * CFG_PATH + 32];
-    const char *pct = strstr(c->paths.log, "%s");   /* validated: at most one "%s" and no other '%' */
-    if (pct)
-        snprintf(logpath, sizeof logpath, "%.*s%s%s", (int)(pct - c->paths.log), c->paths.log, d->st.serial, pct + 2);
-    else
-        snprintf(logpath, sizeof logpath, "%s", c->paths.log);
+    {
+        /* replace the single "%s" (validated: at most one, no other '%') with the serial */
+        const char *pl = c->paths.log, *pct = strstr(pl, "%s");
+        size_t pre = pct ? (size_t)(pct - pl) : strlen(pl), sl = pct ? strlen(d->st.serial) : 0;
+        const char *rest = pct ? pct + 2 : "";
+        size_t rl = strlen(rest);
+        if (pre + sl + rl + 1 > sizeof logpath) {
+            fprintf(stderr, "ztp-device: log path too long\n");
+            return EX_CONFIG_CODE;
+        }
+        memcpy(logpath, pl, pre);
+        memcpy(logpath + pre, d->st.serial, sl);
+        memcpy(logpath + pre + sl, rest, rl + 1);
+    }
     char dir[2 * CFG_PATH + 32];
     snprintf(dir, sizeof dir, "%s", logpath);
     char *slash = strrchr(dir, '/');
