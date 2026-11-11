@@ -49,6 +49,27 @@ static int send_terminal(srv_t *s, int fd, uint8_t type, uint32_t sid, uint16_t 
     return srv_send(s, fd, frame, (size_t)n, dst);
 }
 
+/* §9.7 strict mode: ERROR RESUME_REQUIRED, K_s, unsequenced (carries the next seq without consuming it),
+ * to the new source, echoing the seq of the frame that arrived from it. */
+static void send_resume_required(srv_t *s, srv_session_t *ss, uint32_t echo_seq, const struct sockaddr_in *dst)
+{
+    uint8_t pl[64];
+    tlv_writer_t w;
+    tlv_writer_init(&w, pl, sizeof pl);
+    tlv_put_u16(&w, TAG_REASON, RC_RESUME_REQUIRED);
+    tlv_put_str(&w, TAG_DETAIL, "source IP changed");
+    tlv_put_u32(&w, TAG_ECHO_SEQ, echo_seq);
+    ztp_hdr_t h = {0};
+    h.type = ZT_ERROR;
+    h.session_id = ss->session_id;
+    h.epoch = ss->epoch;
+    h.seq = rel_next_seq(ss->rel);
+    h.key_id = ZK_SESSION;
+    uint8_t frame[ZTP_MAX_DGRAM_CAP];
+    int n = ztp_frame_build(frame, sizeof frame, ZTP_MAX_DGRAM_CAP, &h, pl, (uint16_t)w.len, ss->k_s);
+    if (n > 0) srv_send(s, s->ctl_fd, frame, (size_t)n, dst);
+}
+
 /* ---- rate limiting (§10.5): token bucket per source IP ---- */
 
 bool srv_rate_ok(srv_t *s, const struct sockaddr_in *src)
@@ -238,6 +259,26 @@ static void on_fresh_hello(srv_t *s, const uint8_t *buf, size_t len, const ztp_h
     ss->cur_key = s->keys.k_boot;
     ss->cur_key_id = ZK_BOOT;
     rel_on_rx(ss->rel, h, buf + ZTP_HDR_LEN, s->now);   /* delivered as seq 1 -> HELLO_ACK */
+}
+
+/* §12.3: the HELLO_ACK for an accepted resume, under K_dev, echoing Nd'. */
+static void send_resume_ack(srv_session_t *ss)
+{
+    srv_t *s = ss->srv;
+    uint8_t pl[160];
+    tlv_writer_t w;
+    tlv_writer_init(&w, pl, sizeof pl);
+    tlv_put_u64(&w, TAG_NONCE_DEV, ss->nd_resume);
+    tlv_put_u64(&w, TAG_NONCE_SRV, ss->ns_resume);
+    tlv_put_u16(&w, TAG_KEEPALIVE_S, (uint16_t)ss->assign.nat.keepalive_interval_s);
+    tlv_put_u8(&w, TAG_DEAD_INTERVALS, (uint8_t)ss->assign.nat.dead_intervals);
+    tlv_put_u16(&w, TAG_GRACE_S, (uint16_t)ss->assign.nat.grace_s);
+    tlv_put_u8(&w, TAG_RESUMED, 1);
+    tlv_put_u8(&w, TAG_SRV_STAGE, ss->db_stage);
+    tlv_put_str(&w, TAG_FW_TARGET, ss->assign.firmware);
+    tlv_put_u16(&w, TAG_CFG_VER, (uint16_t)ss->assign.config_version);
+    rel_msg_t m = {ZT_HELLO_ACK, ZF_RESUME, false, ss->k_dev, ZK_DEV};
+    rel_send(ss->rel, &m, pl, (uint16_t)w.len, s->now);
 }
 
 static void send_hello_ack(srv_session_t *ss)
@@ -451,6 +492,34 @@ static void on_transfer_done(srv_session_t *ss, const tlv_set_t *t)
     }
 }
 
+/* §12.1 step 4, §12.3: UPGRADE_STATUS INSTALLING -> AWAIT_RESUME / UPGRADING; INSTALLED -> UPGRADED. */
+static void on_upgrade_status(srv_session_t *ss, const tlv_set_t *t)
+{
+    srv_t *s = ss->srv;
+    uint8_t st = 0;
+    char fw[9] = "", target[9] = "";
+    tlv_get_u8(t, TAG_UPG_STATE, &st);
+    tlv_get_str(t, TAG_FW_VER, fw, sizeof fw);
+    tlv_get_str(t, TAG_FW_TARGET, target, sizeof target);
+    if (st == UPG_INSTALLING) {
+        db_stage(&s->db, ss->serial, SST_UPGRADING, wall_ms());
+        ss->db_stage = SST_UPGRADING;
+        srv_sess_set_state(s, ss, SS_AWAIT_RESUME);
+        ss->grace_deadline = s->now + (uint64_t)ss->assign.nat.grace_s * 1000u;
+        srv_sess_journal(s, ss);
+        log_sess(LOG_INFO, T_UPGRADE, ss->session_id, ss->serial, LM_UPG_SRV_INSTALLING, *target ? target : ss->assign.firmware,
+                 (unsigned)ss->assign.nat.grace_s);
+    } else if (st == UPG_INSTALLED) {
+        db_stage(&s->db, ss->serial, SST_UPGRADED, wall_ms());
+        ss->db_stage = SST_UPGRADED;
+        db_prov_note(&s->db, ss->serial, "Resumed after upgrade", wall_ms());
+        log_sess(LOG_INFO, T_UPGRADE, ss->session_id, ss->serial, "Device running %s after the upgrade", fw);
+    } else if (st == UPG_ROLLED_BACK) {
+        db_prov_note(&s->db, ss->serial, "Rolled back after failed validation", wall_ms());
+        log_sess(LOG_INFO, T_UPGRADE, ss->session_id, ss->serial, "Device rolled back to %s", fw);
+    }
+}
+
 static void on_status_report(srv_session_t *ss, const tlv_set_t *t)
 {
     srv_t *s = ss->srv;
@@ -556,7 +625,9 @@ void srv_sess_deliver(void *ctx, uint8_t type, uint8_t flags, uint32_t seq, cons
     srv_t *s = ss->srv;
     tlv_set_t t;
     if (type == ZT_HELLO) {
-        send_hello_ack(ss);
+        if (ss->resuming) send_resume_ack(ss);
+        else send_hello_ack(ss);
+        ss->resuming = false;
         return;
     }
     if (tlv_parse(p, n, &t) != ZTP_OK) {
@@ -579,6 +650,9 @@ void srv_sess_deliver(void *ctx, uint8_t type, uint8_t flags, uint32_t seq, cons
     case ZT_STATUS_REPORT:
         if (ss->st != SS_HALF_OPEN) on_status_report(ss, &t);
         break;
+    case ZT_UPGRADE_STATUS:
+        if (ss->st != SS_HALF_OPEN) on_upgrade_status(ss, &t);
+        break;
     case ZT_KEEPALIVE: {
         uint8_t pl[8];
         tlv_writer_t w;
@@ -596,6 +670,85 @@ void srv_sess_deliver(void *ctx, uint8_t type, uint8_t flags, uint32_t seq, cons
                  (unsigned)seq);
         break;
     }
+}
+
+/* ---- RESUME HELLO for a live session (§12.3 server rules 1-3) ---- */
+
+static void resume_accept(srv_t *s, srv_session_t *ss, const ztp_hdr_t *h, const uint8_t *payload, uint32_t ctr,
+                          uint64_t nd2, uint64_t ns2, bool fresh)
+{
+    srv_sess_state_t was = ss->st;
+    ss->last_resume_ctr = ctr;
+    ss->nd_resume = nd2;
+    ss->ns_resume = ns2;
+    ss->epoch = h->epoch;
+    ztp_derive_ks(ss->k_dev, nd2, ns2, ss->session_id, ss->epoch, ss->k_s);
+    ss->ks_verified = true;
+    if (!addr_eq(&ss->peer, &s->cur_src)) {   /* a restarted device has a new socket, so a new NAT mapping */
+        char from[ADDR_STR], to[ADDR_STR];
+        addr_fmt(&ss->peer, from);
+        addr_fmt(&s->cur_src, to);
+        log_sess(LOG_INFO, T_NAT, ss->session_id, ss->serial, LM_NAT_PEER_CHANGED, from, to);
+    }
+    ss->peer = s->cur_src;
+    ss->last_rx_ms = s->now;
+    if (was == SS_AWAIT_RESUME || was == SS_IDLE_GRACE || was == SS_HALF_OPEN) {
+        srv_sess_state_t to = ss->db_stage == SST_OPERATIONAL ? SS_OPERATIONAL
+                            : ss->db_stage == SST_FAILED      ? SS_FAILED
+                            : ss->db_stage <= SST_REGISTERED  ? SS_REGISTERED
+                                                              : SS_PROVISIONING;
+        srv_sess_set_state(s, ss, to);
+    }
+    if (fresh) srv_sess_journal(s, ss);   /* fsynced before the HELLO_ACK can leave (§12.3 rule 2) */
+    /* the new epoch: a fresh reliability state; the old epoch's TX state is discarded */
+    rel_reset(ss->rel, ss->epoch);
+    rel_set_session(ss->rel, ss->session_id, ss->epoch);
+    rel_set_ack_key(ss->rel, ss->k_s, ZK_SESSION);
+    ss->nreq = 0;
+    ss->cached_hello_ack_len = 0;
+    ss->resuming = true;
+    rel_on_rx(ss->rel, h, payload, s->now);   /* delivered as seq 1 of the epoch -> resume HELLO_ACK */
+    if (fresh)
+        log_sess(LOG_INFO, T_AUTH, ss->session_id, ss->serial, LM_AUTH_RESUME_ACCEPTED, (unsigned)ctr, (unsigned)ss->epoch);
+    else
+        log_sess(LOG_INFO, T_AUTH, ss->session_id, ss->serial, "Resume (ctr=%u, epoch=%u) repeated after a server restart: HELLO_ACK rebuilt",
+                 (unsigned)ctr, (unsigned)ss->epoch);
+    db_seen(&s->db, ss->serial, NULL, wall_ms());
+}
+
+static void on_resume(srv_t *s, srv_session_t *ss, const uint8_t *buf, size_t len, const ztp_hdr_t *h)
+{
+    const uint8_t *k_mfg = srv_keys_model(&s->keys, ss->model);
+    if (!k_mfg) { s->c.rx_unknown++; return; }
+    ztp_derive_kdev(k_mfg, ss->serial, ss->k_dev);
+    ss->has_k_dev = true;
+    if (!ztp_mac_verify(buf, len, ss->k_dev)) {   /* a bad K_dev resume is dropped silently: no reflection */
+        s->c.mac_fail++;
+        return;
+    }
+    tlv_set_t t;
+    uint32_t ctr = 0;
+    uint64_t nd2 = 0;
+    if (tlv_parse(buf + ZTP_HDR_LEN, h->payload_len, &t) != ZTP_OK || !tlv_get_u32(&t, TAG_RESUME_CTR, &ctr) ||
+        !tlv_get_u64(&t, TAG_NONCE_DEV, &nd2)) {
+        s->c.rx_malformed++;
+        return;
+    }
+    /* rule 1: the accepted resume, retransmitted: the same reply, to the datagram's source */
+    if (ss->last_resume_ctr && ctr == ss->last_resume_ctr && nd2 == ss->nd_resume) {
+        if (ss->cached_hello_ack_len) srv_send(s, s->ctl_fd, ss->cached_hello_ack, ss->cached_hello_ack_len, &s->cur_src);
+        else if (h->epoch == ss->epoch) resume_accept(s, ss, h, buf + ZTP_HDR_LEN, ctr, nd2, ss->ns_resume, false);
+        return;
+    }
+    /* rule 2: a newer ctr and a higher proposed epoch: accept, in every live state */
+    if (ctr > ss->last_resume_ctr && h->epoch > ss->epoch) {
+        resume_accept(s, ss, h, buf + ZTP_HDR_LEN, ctr, nd2, rand_u64(), true);
+        return;
+    }
+    /* rule 3 */
+    log_sess(LOG_INFO, T_AUTH, ss->session_id, ss->serial, "Resume rejected (ctr=%u, epoch=%u; last ctr=%u, epoch=%u)",
+             (unsigned)ctr, (unsigned)h->epoch, (unsigned)ss->last_resume_ctr, (unsigned)ss->epoch);
+    terminal_error(s, ss->session_id, h->epoch, ss->serial, nd2, RC_RESUME_REJECTED, "resume counter not newer", &s->cur_src);
 }
 
 /* ---- RESUME HELLO for an unknown session (§5.6 step 5) ---- */
@@ -673,8 +826,9 @@ void srv_on_ctl_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct 
         s->c.rx_unknown++;
         return;
     }
-    if (h.type == ZT_HELLO && (h.flags & ZF_RESUME)) {
-        log_sess(LOG_DEBUG, T_UDP, ss->session_id, ss->serial, "resume HELLO: handled from M5");
+    if (h.type == ZT_HELLO && (h.flags & ZF_RESUME)) {   /* every RESUME HELLO goes to the resume path, any epoch */
+        if (ss->st == SS_HALF_OPEN) s->c.rx_unknown++;
+        else on_resume(s, ss, buf, len, &h);
         return;
     }
     if (h.epoch != ss->epoch) {
@@ -730,6 +884,13 @@ void srv_on_ctl_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct 
             char from[ADDR_STR], to[ADDR_STR];
             addr_fmt(&ss->peer, from);
             addr_fmt(src, to);
+            if (src->sin_addr.s_addr != ss->peer.sin_addr.s_addr && !ss->assign.nat.allow_ip_change && ss->ks_verified) {
+                /* §9.7 strict: don't process the frame, keep the old peer; repeated for every new frame */
+                ss->last_rx_ms = prev_rx;
+                log_sess(LOG_INFO, T_NAT, ss->session_id, ss->serial, LM_NAT_IP_CHANGED_REQ, from, to);
+                send_resume_required(s, ss, h.seq, src);
+                return;
+            }
             if (src->sin_addr.s_addr == ss->peer.sin_addr.s_addr)
                 log_sess(LOG_INFO, T_NAT, ss->session_id, ss->serial, LM_NAT_PEER_CHANGED, from, to);
             else

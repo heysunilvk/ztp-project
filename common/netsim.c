@@ -95,6 +95,7 @@ static int hold(netsim_t *ns, int fd, const void *buf, size_t len, const struct 
         return -1;
     netsim_held_t *h = &ns->q[ns->qlen++];
     h->due_ms = due;
+    h->order = ns->next_order++;
     h->fd = fd;
     h->alen = tolen;
     memset(&h->addr, 0, sizeof h->addr);
@@ -160,7 +161,9 @@ size_t netsim_flush(netsim_t *ns, uint64_t now)
     for (;;) {
         size_t best = ns->qlen;
         for (size_t i = 0; i < ns->qlen; i++)
-            if (ns->q[i].due_ms <= now && (best == ns->qlen || ns->q[i].due_ms < ns->q[best].due_ms))
+            if (ns->q[i].due_ms <= now &&
+                (best == ns->qlen || ns->q[i].due_ms < ns->q[best].due_ms ||
+                 (ns->q[i].due_ms == ns->q[best].due_ms && ns->q[i].order < ns->q[best].order)))
                 best = i;
         if (best == ns->qlen) break;
         netsim_held_t *h = &ns->q[best];

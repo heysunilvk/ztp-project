@@ -13,12 +13,18 @@
 
 typedef struct {
     bool     enabled;                 /* --test-hooks given */
+    char     marker[512];             /* hooks.fired: one-shot hooks fire at most once per state (§19.2) */
     uint32_t drop_seq[HOOK_MAX_SEQ];
     int      ndrop;
     uint32_t dup_seq;                 /* 0 = none */
     bool     dup_done;
     uint32_t dropped_mask;            /* bit i: drop_seq[i] already dropped */
 } hooks_t;
+
+/* Set the marker file and load what already fired (a restarted process re-runs the same argv). */
+void hooks_set_marker(hooks_t *h, const char *path);
+/* True if the named one-shot hook already fired; otherwise records it (atomically, before acting). */
+bool hooks_fire_once(hooks_t *h, const char *name);
 
 /* Parse "tx:N[,N...]" into the list. Returns 0 or -1. */
 int  hooks_parse_seq_list(const char *arg, uint32_t *out, int max, int *n);

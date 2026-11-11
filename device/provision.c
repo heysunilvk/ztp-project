@@ -64,14 +64,8 @@ static void request_manifest(device_t *d, uint8_t kind)
     LOGD(T_PROVISION, "MANIFEST_REQ %s (MAX_DGRAM %u)", kind_name(kind), (unsigned)d->st.max_dgram);
 }
 
-static void provisioned(device_t *d, const char *what)
-{
-    d->fsm = DS_PROVISIONED;
-    LOGI(T_STATE, "Provisioned (%s); upgrade and validation arrive in milestone M5", what);
-    if (d->cfg.c.run.exit_when_operational)
-        d->hold_until = d->now + (uint64_t)d->cfg.c.run.operational_hold_s * 1000u;
-}
-
+/* Continue from the persisted stage (§15.1): config, then the firmware decision (§12.1), then the
+ * upgrade (FW_STAGED) or validation (FW_INSTALLED, or firmware already current). */
 void dev_provision_next(device_t *d)
 {
     if (d->st.stage < ST_CONFIG_OK) {
@@ -79,18 +73,28 @@ void dev_provision_next(device_t *d)
         return;
     }
     if (d->st.stage == ST_CONFIG_OK) {
+        char running[9];
         int cmp = 0;
-        /* M5 reads the running version from the active slot's header; until then, the factory version */
-        if (version_cmp(d->cfg.c.identity.factory_fw, d->st.fw_target, &cmp) == 0 && cmp >= 0) {
-            LOGI(T_UPGRADE, LM_UPG_CURRENT, d->cfg.c.identity.factory_fw);
-            provisioned(d, "config verified, firmware current");
+        dev_running_fw(d, running);
+        if (version_cmp(running, d->st.fw_target, &cmp) == 0 && cmp >= 0) {
+            LOGI(T_UPGRADE, LM_UPG_CURRENT, running);
+            snprintf(d->fw_approved, sizeof d->fw_approved, "%s", running);
+            dev_validate_begin(d);
             return;
         }
-        LOGI(T_UPGRADE, LM_UPG_CURRENT_TARGET, d->cfg.c.identity.factory_fw, d->st.fw_target);
+        LOGI(T_UPGRADE, LM_UPG_CURRENT_TARGET, running, d->st.fw_target);
         request_manifest(d, FK_FIRMWARE);
         return;
     }
-    provisioned(d, "config verified, firmware staged");
+    if (d->st.stage == ST_FW_STAGED) {
+        dev_upgrade_begin(d);
+        return;
+    }
+    if (d->st.stage == ST_FW_INSTALLED) {
+        dev_upgrade_installed(d);
+        return;
+    }
+    dev_validate_begin(d);
 }
 
 static void request_next(device_t *d)
@@ -228,14 +232,16 @@ static void transfer_done(device_t *d, uint16_t result)
 }
 
 /* Report FAILED and go FAILED once the server has acknowledged it (or after 3 s). */
-static void report_failed(device_t *d, uint16_t reason, const char *why)
+void dev_report_failed(device_t *d, uint16_t reason, const char *why)
 {
     uint8_t pl[48];
     tlv_writer_t w;
     tlv_writer_init(&w, pl, sizeof pl);
     tlv_put_u8(&w, TAG_REPORT_STATE, RPT_FAILED);
     tlv_put_u16(&w, TAG_REASON, reason);
-    tlv_put_str(&w, TAG_FW_VER, d->cfg.c.identity.factory_fw);
+    char fw[9];
+    dev_running_fw(d, fw);
+    tlv_put_str(&w, TAG_FW_VER, fw);
     tlv_put_u16(&w, TAG_CFG_VER, (uint16_t)d->st.cfg_version);
     send_rel(d, ZT_STATUS_REPORT, pl, (uint16_t)w.len);
     snprintf(d->fail_reason, sizeof d->fail_reason, "%s", why);
@@ -257,12 +263,16 @@ static void verify(device_t *d)
     int n = d->cfg.c.xfer.hash_attempts;
     LOGI(T_PROVISION, "%s: %u chunks written, %u duplicates ignored", x->kind == FK_CONFIG ? "Config" : "Firmware",
          (unsigned)x->writes, (unsigned)x->dups);
+    if (x->kind == FK_FIRMWARE) {
+        persist_map(d);
+        dev_crash_point(d, "downloaded");   /* complete .part, stage still CONFIG_OK (§12.4) */
+    }
     if (!file_sha_ok(d)) {
         x->hash_attempt++;
         LOGI(T_PROVISION, LM_PROV_HASH_MISMATCH, (unsigned)x->hash_attempt, (unsigned)n);
         transfer_done(d, RC_HASH_MISMATCH);
         discard_partial(d);
-        if (x->hash_attempt >= n) report_failed(d, RC_HASH_MISMATCH, "HASH_MISMATCH");
+        if (x->hash_attempt >= n) dev_report_failed(d, RC_HASH_MISMATCH, "HASH_MISMATCH");
         else request_manifest(d, x->kind);   /* a full download again */
         return;
     }
@@ -280,7 +290,7 @@ static void verify(device_t *d)
         if (vrc != DEV_CFG_OK) {
             LOGI(T_PROVISION, "Config rejected: %s", err);
             transfer_done(d, RC_VALIDATION_FAILED);
-            report_failed(d, RC_VALIDATION_FAILED, "config invalid");
+            dev_report_failed(d, RC_VALIDATION_FAILED, "config invalid");
             return;
         }
         char dst[CFG_PATH + 32];
@@ -293,13 +303,28 @@ static void verify(device_t *d)
         snprintf(d->st.cfg_sha256, sizeof d->st.cfg_sha256, "%s", hex);
         d->st.stage = ST_CONFIG_OK;
     } else {
+        LOGI(T_PROVISION, LM_PROV_FW_VERIFIED);
+        /* §12.1 step 3: the header must name this model and the target version */
+        uint8_t h[64];
+        bool hdr_ok = pread(x->fd, h, sizeof h, 0) == (ssize_t)sizeof h && !memcmp(h, "ZTPFW\0", 6) &&
+                      !strncmp((const char *)h + 7, d->cfg.c.identity.model, 16) &&
+                      !strncmp((const char *)h + 23, d->st.fw_target, 8);
+        if (!hdr_ok) {
+            x->hash_attempt++;
+            LOGI(T_PROVISION, "Firmware header does not name %s %s, discarding (attempt %u/%u)", d->cfg.c.identity.model,
+                 d->st.fw_target, (unsigned)x->hash_attempt, (unsigned)n);
+            transfer_done(d, RC_HASH_MISMATCH);
+            discard_partial(d);
+            if (x->hash_attempt >= n) dev_report_failed(d, RC_HASH_MISMATCH, "bad firmware header");   /* §12.6 */
+            else request_manifest(d, x->kind);
+            return;
+        }
         char dst[CFG_PATH + 32], slot = d->st.active_slot == 'B' ? 'A' : 'B';
         snprintf(dst, sizeof dst, "%s/fw_slot_%c.bin", d->cfg.c.paths.state_dir, slot);
         close(x->fd);
         x->fd = -1;
         if (rename(x->part, dst) != 0) { dev_fail(d, "storage error"); return; }
         util_fsync_dir(dst);
-        LOGI(T_PROVISION, LM_PROV_FW_VERIFIED);
         LOGI(T_UPGRADE, LM_UPG_STAGED, x->version, slot);
         snprintf(d->st.fw_sha256, sizeof d->st.fw_sha256, "%s", hex);
         d->st.stage = ST_FW_STAGED;
@@ -310,6 +335,7 @@ static void verify(device_t *d)
     snprintf(bak, sizeof bak, "%s.bak", x->mappath);
     unlink(bak);
     if (dev_state_save(d->state_path, &d->st) != 0) LOGW(T_ERROR, "cannot persist state");
+    if (x->kind == FK_FIRMWARE) dev_crash_point(d, "verified");   /* slot written, FW_STAGED, still slot A */
     transfer_done(d, RC_OK);
     x->active = false;
     x->hash_attempt = 0;
@@ -350,6 +376,15 @@ void dev_xfer_on_chunk(device_t *d, const uint8_t *p, uint16_t n)
         }
         dev_xfermap_set(&x->map, i);
         x->writes++;
+        if (x->kind == FK_FIRMWARE) {
+            d->fw_chunks_this_process++;
+            if (d->fw_chunks_this_process == 20) dev_crash_point(d, "download");
+            if (d->hooks.enabled && d->hook_crash_after_chunks &&
+                d->fw_chunks_this_process == (uint32_t)d->hook_crash_after_chunks && hooks_fire_once(&d->hooks, "crash-after-chunks")) {
+                log_close();
+                abort();   /* chunks already on disk from an earlier run don't count (§19.2) */
+            }
+        }
         uint32_t have = dev_xfermap_present(&x->map);
         if (x->kind == FK_CONFIG) LOGI(T_PROVISION, LM_PROV_RECV_CONFIG, (unsigned)have, (unsigned)x->count);
         else if (have % 8 == 0 || have == x->count)
@@ -406,7 +441,7 @@ void dev_xfer_timer(device_t *d)
     }
     uint64_t full = (uint64_t)d->cfg.c.net.pmtu_blackhole_s * 1000u, quiet = d->now - x->req_acked_ms;
     if (!x->probed && quiet >= full / 2) {
-        dev_send_keepalive(d, false);
+        dev_send_keepalive(d, KA_PERIODIC);
         x->probed = true;
     } else if (x->probed && quiet >= full && d->ka_seq == 0) {   /* the probe was ACKed: small frames pass */
         LOGI(T_UDP, LM_UDP_MTU_BLACKHOLE);

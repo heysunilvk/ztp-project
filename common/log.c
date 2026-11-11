@@ -1,5 +1,6 @@
 #include "log.h"
 
+#include <fcntl.h>
 #include <string.h>
 #include <time.h>
 
@@ -17,6 +18,7 @@ int log_open(const char *path, bool append, bool echo_stdout)
     if (!path || !*path) return 0;
     g_file = fopen(path, append ? "a" : "w");
     if (!g_file) return -1;
+    fcntl(fileno(g_file), F_SETFD, FD_CLOEXEC);
     setvbuf(g_file, NULL, _IOLBF, 0);
     return 0;
 }

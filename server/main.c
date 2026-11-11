@@ -216,6 +216,13 @@ int main(int argc, char **argv)
         LOGW(T_ERROR, "%s", err);
         return 1;
     }
+    {   /* one-shot hooks fire at most once per server state (§19.2): state/server.hooks.fired */
+        char mk[CFG_PATH + 32];
+        snprintf(mk, sizeof mk, "%s", c->paths.db);
+        char *slash = strrchr(mk, '/');
+        snprintf(slash ? slash + 1 : mk, sizeof mk - (size_t)(slash ? slash + 1 - mk : 0), "server.hooks.fired");
+        hooks_set_marker(&s->hooks, mk);
+    }
     s->nonce_cap = (size_t)c->limits.nonce_cache_total;
     s->nonces = calloc(s->nonce_cap, sizeof *s->nonces);
 

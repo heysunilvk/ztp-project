@@ -71,6 +71,8 @@ void srv_sess_journal(srv_t *s, srv_session_t *ss)
     snprintf(r.model, sizeof r.model, "%s", ss->model);
     snprintf(r.state, sizeof r.state, "%s", srv_state_name(ss->st));
     addr_fmt(&ss->peer, r.peer);
+    r.nd_resume = ss->nd_resume;
+    r.ns_resume = ss->ns_resume;
     db_session(&s->db, &r, wall_ms());
 }
 
@@ -166,6 +168,10 @@ void srv_sess_restore(srv_t *s)
         ss->epoch = js[i].epoch;
         if (js[i].max_dgram) ss->max_dgram = js[i].max_dgram;
         ss->last_resume_ctr = js[i].last_resume_ctr;
+        ss->nd_resume = js[i].nd_resume;
+        ss->ns_resume = js[i].ns_resume;
+        db_rec_t *rec = db_get(&s->db, ss->serial);
+        ss->db_stage = rec ? (uint8_t)rec->stage : SST_REGISTERED;
         srv_policy_resolve(&s->policy, &s->cfg, ss->model, ss->serial, &ss->assign);
         rel_set_session(ss->rel, ss->session_id, ss->epoch);
         hostport_parse(js[i].peer, &ss->peer);
@@ -192,8 +198,8 @@ uint64_t srv_sess_next_deadline(srv_t *s)
         uint64_t r = rel_next_deadline(e->rel);
         if (r < d) d = r;
         if (e->st == SS_HALF_OPEN && e->half_open_deadline < d) d = e->half_open_deadline;
-        if (e->st == SS_IDLE_GRACE && e->grace_deadline < d) d = e->grace_deadline;
-        if (e->st != SS_HALF_OPEN && e->st != SS_IDLE_GRACE) {
+        if ((e->st == SS_IDLE_GRACE || e->st == SS_AWAIT_RESUME) && e->grace_deadline < d) d = e->grace_deadline;
+        if (e->st != SS_HALF_OPEN && e->st != SS_IDLE_GRACE && e->st != SS_AWAIT_RESUME) {
             uint64_t idle = e->last_rx_ms + (uint64_t)e->assign.nat.server_idle_intervals *
                                                (uint64_t)e->assign.nat.keepalive_interval_s * 1000u;
             if (idle < d) d = idle;
@@ -215,12 +221,15 @@ void srv_sess_run_timers(srv_t *s)
             srv_sess_free(s, e, "half-open TTL expired");
             continue;
         }
-        if (e->st == SS_IDLE_GRACE) {
+        if (e->st == SS_IDLE_GRACE || e->st == SS_AWAIT_RESUME) {
             if (s->now >= e->grace_deadline) {
                 log_sess(LOG_INFO, T_NAT, e->session_id, e->serial, "Grace period over (%d s): session deleted, DB record kept",
                          e->assign.nat.grace_s);
                 srv_sess_free(s, e, "grace expired");
+                continue;
             }
+            /* AWAIT_RESUME still ACKs and retransmits until the device restarts; IDLE_GRACE has no TX state */
+            if (e->st == SS_AWAIT_RESUME) rel_on_timer(e->rel, s->now);
             continue;
         }
         bool failed = rel_on_timer(e->rel, s->now) == REL_E_FAILED;

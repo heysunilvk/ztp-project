@@ -17,7 +17,10 @@ static void dev_usage(void)
 {
     fputs("usage: ztp-device --state-dir DIR [--config FILE] [--profile NAME] [--set key=value]...\n"
           "                  [--print-config] [--config-lenient] [--demo-timers] [-v|-q] [--reset-state]\n"
-          "                  [--test-hooks [--drop-seq tx:N[,N]] [--dup-seq tx:N] [--rebind-after S]]\n"
+          "                  [--test-hooks [--drop-seq tx:N[,N]] [--dup-seq tx:N] [--rebind-after S]\n"
+          "                                [--crash-at POINT] [--crash-after-chunks N] [--restart-mode exec|exit]\n"
+          "                                [--restart-delay S] [--fail-validate] [--hook-delete-config] [--no-refetch]\n"
+          "                                [--hook-bad-fw-version V]]\n"
           "                  [flags from DESIGN §19.2]\n",
           stderr);
 }
@@ -53,9 +56,10 @@ int main(int argc, char **argv)
 {
     static device_t D;
     device_t *d = &D;
+    dev_resolve_self(d, argv);
     cfg_args_t args = {0};
     bool want_hooks = false, reset = false;
-    const char *hook_names[4];
+    const char *hook_names[16];
     int nhooks = 0;
 
     for (int i = 1; i < argc; i++) {
@@ -74,6 +78,38 @@ int main(int argc, char **argv)
                 return EX_USAGE_CODE;
             }
             hook_names[nhooks++] = "--drop-seq";
+        } else if (!strcmp(f, "--crash-at") && i + 1 < argc) {
+            const char *p = argv[++i];
+            static const char *const points[] = {"download", "downloaded", "verified", "committed", "post-exec", "resume-sent"};
+            bool okp = false;
+            for (size_t k = 0; k < sizeof points / sizeof points[0]; k++) okp |= !strcmp(p, points[k]);
+            if (!okp) { fprintf(stderr, "--crash-at: one of download, downloaded, verified, committed, post-exec, resume-sent\n"); return EX_USAGE_CODE; }
+            snprintf(d->hook_crash_at, sizeof d->hook_crash_at, "%s", p);
+            hook_names[nhooks++] = "--crash-at";
+        } else if (!strcmp(f, "--crash-after-chunks") && i + 1 < argc) {
+            d->hook_crash_after_chunks = atoi(argv[++i]);
+            if (d->hook_crash_after_chunks <= 0) { fprintf(stderr, "--crash-after-chunks: expected N > 0\n"); return EX_USAGE_CODE; }
+            hook_names[nhooks++] = "--crash-after-chunks";
+        } else if (!strcmp(f, "--restart-mode") && i + 1 < argc) {
+            const char *m = argv[++i];
+            if (strcmp(m, "exec") && strcmp(m, "exit")) { fprintf(stderr, "--restart-mode: exec or exit\n"); return EX_USAGE_CODE; }
+            d->restart_exit = !strcmp(m, "exit");
+            hook_names[nhooks++] = "--restart-mode";
+        } else if (!strcmp(f, "--restart-delay") && i + 1 < argc) {
+            d->hook_restart_delay_s = atoi(argv[++i]);
+            hook_names[nhooks++] = "--restart-delay";
+        } else if (!strcmp(f, "--fail-validate")) {
+            d->hook_fail_validate = true;
+            hook_names[nhooks++] = "--fail-validate";
+        } else if (!strcmp(f, "--hook-delete-config")) {
+            d->hook_delete_config = true;
+            hook_names[nhooks++] = "--hook-delete-config";
+        } else if (!strcmp(f, "--no-refetch")) {
+            d->hook_no_refetch = true;
+            hook_names[nhooks++] = "--no-refetch";
+        } else if (!strcmp(f, "--hook-bad-fw-version") && i + 1 < argc) {
+            snprintf(d->hook_bad_fw_version, sizeof d->hook_bad_fw_version, "%s", argv[++i]);
+            hook_names[nhooks++] = "--hook-bad-fw-version";
         } else if (!strcmp(f, "--rebind-after") && i + 1 < argc) {
             d->hook_rebind_after_s = atoi(argv[++i]);
             if (d->hook_rebind_after_s <= 0) { fprintf(stderr, "--rebind-after: expected seconds > 0\n"); return EX_USAGE_CODE; }
@@ -109,6 +145,11 @@ int main(int argc, char **argv)
     }
     if (reset) reset_state(c->paths.state_dir);
     snprintf(d->state_path, sizeof d->state_path, "%s/device.state", c->paths.state_dir);
+    {
+        char mk[CFG_PATH + 32];
+        snprintf(mk, sizeof mk, "%s/hooks.fired", c->paths.state_dir);
+        hooks_set_marker(&d->hooks, mk);
+    }
     bool had_state = dev_state_load(d->state_path, &d->st) == 0;
     const char *origin;
     if (had_state) {
@@ -117,7 +158,7 @@ int main(int argc, char **argv)
                             "(use --reset-state)\n", c->identity.serial, cfg_source(&d->cfg, "identity.serial"), d->st.serial);
             return EX_CONFIG_CODE;
         }
-        origin = c->identity.serial_set ? LM_BOOT_SERIAL_ASSIGNED : LM_BOOT_SERIAL_LOADED;
+        origin = LM_BOOT_SERIAL_LOADED;   /* the persisted identity (a matching --serial changes nothing, §12.2) */
     } else if (c->identity.serial_set) {
         snprintf(d->st.serial, sizeof d->st.serial, "%s", c->identity.serial);
         origin = LM_BOOT_SERIAL_ASSIGNED;
@@ -161,9 +202,17 @@ int main(int argc, char **argv)
     for (int i = 0; i < nhooks; i++) LOGW(T_ERROR, LM_ERROR_TEST_HOOK, hook_names[i]);
 
     LOGI(T_BOOT, LM_BOOT_STARTING_N, (unsigned)d->st.boot_count);
+    d->upgraded = d->st.pending_reboot != 0;
+    if (d->upgraded) LOGI(T_BOOT, LM_BOOT_RESTART_PENDING, d->st.fw_target);   /* §12.2 */
+    d->hooks.enabled = want_hooks;
+    if (d->upgraded) dev_crash_point(d, "post-exec");   /* after the exec, before the resume (§12.4) */
     LOGI(T_BOOT, "%s", origin);
     LOGI(T_BOOT, LM_BOOT_SOFT_SERIAL, d->st.serial);
-    LOGI(T_BOOT, LM_BOOT_FW_VERSION, c->identity.factory_fw);   /* M5: read from the active slot header */
+    {
+        char ver[9], model[17];
+        if (dev_slot_version(d, d->st.active_slot, ver, model)) LOGI(T_BOOT, LM_BOOT_FW_VERSION " (slot %c)", ver, d->st.active_slot);
+        else LOGI(T_BOOT, LM_BOOT_FW_VERSION, c->identity.factory_fw);
+    }
     cfg_log_summary(&d->cfg);
     if (d->st.stage == ST_FAILED) {
         LOGI(T_STATE, LM_STATE_FAILED, d->st.last_fail_reason[0] ? d->st.last_fail_reason : "unknown");

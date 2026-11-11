@@ -106,6 +106,7 @@ jobs:
           sleep 2
           ZTP_PORT=25555 sh tests/m2_session.sh build/ztp-server build/ztp-device
           ZTP_PORT=25555 sh tests/m4_provision.sh build/ztp-server build/ztp-device build/mkartifacts
+          ZTP_PORT=25555 sh tests/m5_upgrade.sh build/ztp-server build/ztp-device build/mkartifacts
           sleep 1
           sudo pkill -INT tcpdump || true
           sleep 1

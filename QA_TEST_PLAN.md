@@ -641,7 +641,7 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 
 ---
 
-### 12.5 Open test tooling (recorded 2026-11-11, M3)
+### 12.5 Open test tooling (recorded 2026-11-11, M3; extended at M5)
 The M3 code these tests exercise is built and passes its other tests, and the logic behind each one is in place. What is missing is the tooling that **generates the hostile or malformed traffic** to test it end to end: the device test hooks and `peer_sim` modes below. They weren't built with M3, and the owner takes them on. Until they exist, the listed cases are recorded as open exceptions to the M3 gate (§11.1), not as passes.
 
 | Missing tooling | Unblocks | Logic already built (and how it is covered today) |
@@ -657,6 +657,9 @@ The M3 code these tests exercise is built and passes its other tests, and the lo
 | `peer_sim` fresh HELLOs for a serial with a live session, and a replay of the device's original HELLO | TC-SESS-09 (M4) | A HELLO never supersedes a registered session (§7.3, §14.2: only a verified REGISTER or resume does); cached HELLO_ACK for a repeated (serial, Nd) (TC-SESS-02/03 pass) |
 | `peer_sim` replay of a captured CHUNK_REQ from another port | TC-NAT-12, CHUNK_REQ half (M4; the KEEPALIVE half passes since M2) | The same duplicate and peer-update rule as the KEEPALIVE case |
 | `peer_sim` failing-registration load (20,000) | TC-SRV-11 | Failed-row cap, oldest evicted, Success rows never evicted (unit-tested at 1,000 rows over a cap of 100) |
+| `peer_sim` replay of a captured resume HELLO (M5) | TC-AUTH-07 | Resume counter must be newer than the last accepted one → `RESUME_REJECTED`; the live session is untouched (code review; the device's own retry after one `RESUME_REJECTED` is exercised by the resume paths in `tests/m5_upgrade.sh`) |
+| `peer_sim --flood` (HELLO flood from one IP) (M5) | TC-AUTH-10 | Per-IP token bucket (§10.5) and the half-open cap (code review) |
+| `peer_sim` replay of captured terminal ERRORs to another device (M5) | TC-AUTH-15 | The device accepts a terminal ERROR only if it echoes the Nd/Nd′ of its pending HELLO or resume, and RESUME_REQUIRED only for a seq it sent in the current epoch, once per seq (code review) |
 
 **Other QA tooling not yet built under its planned name** (no gate case is blocked by it):
 - `tests/check_logs.sh`, `check_invariants.sh` and `check_appendix_a.sh` (planned for M2, §12.1). So far each test script (`tests/m2_session.sh`, `m2_peer.sh`, `m3_register.sh`) checks its log lines inline, including the server matching rule (the `[sid=… …]` tag). The dedicated checkers are built with M5/M6, when the Appendix A run (TC-APX-*) and the full-flow invariants exist to check.

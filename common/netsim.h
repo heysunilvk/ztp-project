@@ -40,6 +40,7 @@ typedef struct {
 
 typedef struct {
     uint64_t due_ms;
+    uint64_t order;           /* send order: ties on due_ms are released FIFO (a plain delay never reorders) */
     int      fd;
     socklen_t alen;
     struct sockaddr_storage addr;
@@ -54,6 +55,7 @@ typedef struct {
     netsim_stats_t st;
     netsim_held_t *q;        /* unsorted array, at most NETSIM_QUEUE_MAX entries */
     size_t         qlen;
+    uint64_t       next_order;
 } netsim_t;
 
 int  netsim_init(netsim_t *ns, const netsim_cfg_t *cfg);   /* 0 or -1 (alloc) */

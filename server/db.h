@@ -29,6 +29,7 @@ typedef struct {
 
 /* A journaled, resumable session (no keys, §14.4). */
 typedef struct {
+    uint64_t nd_resume, ns_resume;    /* the accepted resume's public nonces: rule 1 after a restart */
     uint32_t sid, last_resume_ctr;
     uint16_t epoch, max_dgram;
     char     serial[17], model[17], state[16], peer[24];

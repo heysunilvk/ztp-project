@@ -39,6 +39,8 @@ typedef struct srv_session {
     bool     ks_verified;             /* a frame under K_s has been verified (REGISTER) */
     bool     doomed;                  /* free after the current datagram (terminal reply sent) */
     uint32_t last_resume_ctr;
+    uint64_t nd_resume, ns_resume;    /* the accepted resume (§12.3 rule 1) */
+    bool     resuming;                /* the HELLO being delivered is a resume */
     /* transfer (§11.2): chunk requests served by a pump that reads on demand, O(window) memory */
     uint16_t max_dgram;               /* the session's datagram limit: 1200, or 508 after §5.8 */
     uint32_t chunk_size;              /* from the last MANIFEST */

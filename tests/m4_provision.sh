@@ -27,8 +27,11 @@ sha() { shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -
 
 # Artifacts: the standard set plus the QA §4.2 boundary files, all copies under $T (tests modify some)
 "$MKA" --out "$T/art" > /dev/null && "$MKA" --test-set "$T/art" > /dev/null || { echo "mkartifacts failed"; exit 1; }
-cp "$T/art/fw_64k" "$T/art/fw_corrupt"
-cp "$T/art/fw_1m" "$T/art/fw_resume"
+# firmware images need a valid header (model and the target version, §12.1); fw_tiny (1 B) can't hold one
+for f in "fw_1023 v2.2 1023" "fw_1024 v2.3 1024" "fw_1025 v2.4 1025" "fw_1m v2.5 1048576" "fw_corrupt v3.0 65536" "fw_resume v4.0 1048576"; do
+    set -- $f
+    "$MKA" --fw "$T/art/$1" EDGE-GW-100 "$2" "$3" > /dev/null || { echo "mkartifacts --fw failed"; exit 1; }
+done
 A="$T/art"
 cat > "$T/policy.json" <<JSON
 { "schema_version": 1, "default": { "action": "reject" }, "tenants": { "cruise_ops": {} },
@@ -95,7 +98,7 @@ expect_line "$T/d1.log" "[PROVISION] Firmware manifest: v1.1, 65536 bytes, 64 ch
 expect_line "$T/d1.log" "[PROVISION] Firmware checksum verified" TC-PROV-03
 [ "$(sha "$T/d1.state/fw_slot_B.bin")" = "$(sha "$A/fw_EDGE-GW-100_v1.1.bin")" ] && ok || bad "TC-PROV-03: slot sha differs"
 [ "$(sha "$T/d1.state/config.json")" = "$(sha "$A/cfg_v3.json")" ] && ok || bad "TC-PROV-01: config sha differs"
-grep -q '^stage=FW_STAGED$' "$T/d1.state/device.state" && ok || bad "TC-PROV-03: stage"
+grep -q '^stage=OPERATIONAL$' "$T/d1.state/device.state" && ok || bad "TC-PROV-03: stage"
 ls "$T/d1.state"/xfer_* > /dev/null 2>&1 && bad "TC-PROV-03: transfer files left behind" || ok
 w=$(sed -n 's/.*ZTP-93AF21\] Firmware v1.1 delivered and verified by the device (max in flight \([0-9]*\)).*/\1/p' "$T/s1.log")
 [ -n "$w" ] && [ "$w" -le 8 ] && [ "$w" -ge 2 ] && ok || bad "TC-REL-06: max in flight '$w', want 2..8"
@@ -110,7 +113,11 @@ n=$(count "$T/d2.log" "Firmware manifest")
 for c in "B00001 1" "B00002 1" "B00003 1" "B00004 2" "B00005 1024"; do
     set -- $c
     run_device "b$1" 40 --serial "ZTP-$1"
-    [ "$DEV_RC" -eq 0 ] && ok || bad "TC-PROV-06 ZTP-$1: device exit $DEV_RC"
+    if [ "$1" = B00001 ]; then   # 1 B: downloads and verifies, but can't hold a firmware header (§12.1)
+        expect_line "$T/b$1.log" "Firmware header does not name EDGE-GW-100 v2.1" "TC-PROV-06 ZTP-$1 (header)"
+    else
+        [ "$DEV_RC" -eq 0 ] && ok || bad "TC-PROV-06 ZTP-$1: device exit $DEV_RC"
+    fi
     grep -q "Firmware manifest: v[0-9.]*, [0-9]* bytes, $2 chunks" "$T/b$1.log" && ok || bad "TC-PROV-06 ZTP-$1: want $2 chunks"
     expect_line "$T/b$1.log" "[PROVISION] Firmware checksum verified" "TC-PROV-06 ZTP-$1"
 done
@@ -176,7 +183,7 @@ start_device d7 --serial ZTP-2E5000
 wait_line "$T/d7.log" "[PROVISION] Firmware 160/1024" 30 || bad "TC-PROV-10: the download never reached 160 chunks"
 kill -9 "$DPID" 2>/dev/null; wait "$DPID" 2>/dev/null
 stop_server
-printf '\001' | dd of="$A/fw_resume" bs=1 seek=4 conv=notrunc 2>/dev/null   # a new artifact (new sha)
+printf '\001' | dd of="$A/fw_resume" bs=1 seek=4000 conv=notrunc 2>/dev/null   # a new artifact (new sha; payload, not header)
 start_server s7
 run_device d7 60 --serial ZTP-2E5000
 [ "$DEV_RC" -eq 0 ] && ok || bad "TC-PROV-10: device exit $DEV_RC"

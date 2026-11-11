@@ -1422,6 +1422,9 @@ Each crash point has a hook value, `--crash-at <point>`, which TC-UPG-07 tests o
 | `verified`: after verify, before the commit (step 5) | Slot B written, `stage=FW_STAGED`, state says slot A | Boot still uses A (v1.0); re-verify B's hash, send UPGRADE_STATUS, commit. **No re-download** |
 | `committed`: after the commit, before the exec | State says slot B and `pending_reboot` | The normal "restart detected" path |
 | `post-exec`: after the exec, before the resume | The same | Resume |
+| `resume-sent`: right after the resume HELLO leaves (TC-UPG-11 (a)) | The same, with `resume_ctr` and `proposed_epoch` already persisted | The next boot proposes a higher ctr and epoch, accepted whether or not the server accepted the first (§12.3) |
+
+*As built (M5).* `--crash-at download` aborts after the 20th firmware chunk written by the current process, and `--crash-after-chunks N` after the N-th (chunks already on disk from an earlier run don't count). A crash hook calls `abort()` after closing the log, so the log shows `[ERROR] TEST HOOK FIRED: crash-at <point>` as its last line. If `execv` itself fails, the device logs the error and exits 75, so a supervisor can restart it.
 
 ### 12.5 Rollback
 If validation on the new firmware fails (§13), for example a version mismatch or the test hook `--fail-validate`:
@@ -1457,10 +1460,12 @@ stateDiagram-v2
 | Check | Pass condition | Log |
 |---|---|---|
 | Configuration available | `config.json` exists, SHA-256 equals the stored `cfg_sha256`, required keys `interfaces`, `mtu`, `keepalive_interval` and `config_version` present (parsed with the strict JSON parser, §25.2), and `config_version` equals the assigned value | `[VALIDATION] Configuration present (v3, sha ok)` |
-| Firmware version | The active slot's header version equals `fw_target`, and its hash equals the stored hash | `[VALIDATION] Firmware v1.1 verified` |
+| Firmware version | After an upgrade: the active slot's header version equals `fw_target`, and its hash equals the stored hash. With no upgrade (running ≥ target, §12.1 step 2): the running version is still the one that decision accepted | `[VALIDATION] Firmware v1.1 verified` |
 | Session health | (a) a **fresh** KEEPALIVE(HEALTH_PROBE) round trip within 2 × RTO; (b) last authenticated RX < 1 keepalive interval ago; (c) SRTT < `val.srtt_max_ms` (1000 ms). The probe is retransmitted on the RTO schedule until `val.deadline_s` (§13.1) | `[VALIDATION] Session healthy (rtt=2 ms)` |
 
 If all three pass → STATUS_REPORT(OPERATIONAL), and wait for STATUS_ACK → `[STATE] Device is OPERATIONAL`. Persist `stage=OPERATIONAL`. The device stays in operational mode, sending keepalives. With `run.exit_when_operational = true` (the `demo` profile, or `--exit-when-operational`) it exits 0 after `run.operational_hold_s` (2 s by default; 5 s in the `demo` profile, so at least one periodic keepalive is logged) (§23 OQ-8).
+
+*As built (M5).* Check (b) is implied by (a): the probe's ACK is itself an authenticated frame received within the round trip. A health probe that comes back slower than 2 × RTO, or with SRTT at or above `val.srtt_max_ms`, is simply sent again, until `val.deadline_s`. `val_deadline` is set when VALIDATE is first entered and is kept across a resume, so a session lost during validation doesn't restart the clock.
 
 If a check fails: a firmware mismatch after an upgrade triggers the rollback (§12.5), while a mismatch with no upgrade in this run reports FAILED directly. A missing or corrupt config triggers one re-fetch of the config, then FAILED. An unhealthy session waits for recovery (resume) until `val.deadline_s` (180 s; demo 30 s), then FAILED.
 

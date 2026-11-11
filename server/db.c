@@ -355,6 +355,13 @@ void db_session(srv_db_t *db, const db_sess_t *in, uint64_t now)
     jint(line, sizeof line, &n, "keepalive_s", in->keepalive_s);
     jint(line, sizeof line, &n, "grace_s", in->grace_s);
     jstr(line, sizeof line, &n, "peer", in->peer);
+    if (in->nd_resume || in->ns_resume) {
+        char h[17];
+        snprintf(h, sizeof h, "%016llx", (unsigned long long)in->nd_resume);
+        jstr(line, sizeof line, &n, "nd_resume", h);
+        snprintf(h, sizeof h, "%016llx", (unsigned long long)in->ns_resume);
+        jstr(line, sizeof line, &n, "ns_resume", h);
+    }
     jwrite(db, line, n, true);
 }
 
@@ -452,6 +459,8 @@ static void replay_line(srv_db_t *db, const json_value_t *o)
         snprintf(s.model, sizeof s.model, "%s", gs(o, "model"));
         snprintf(s.state, sizeof s.state, "%s", gs(o, "state"));
         snprintf(s.peer, sizeof s.peer, "%s", gs(o, "peer"));
+        s.nd_resume = strtoull(gs(o, "nd_resume"), NULL, 16);
+        s.ns_resume = strtoull(gs(o, "ns_resume"), NULL, 16);
         db_session(db, &s, ms);
     } else if (!strcmp(ev, "SESSION_DEL")) {
         db_session_deleted(db, (uint32_t)gi(o, "sid"), gs(o, "serial"), ms);
@@ -542,6 +551,13 @@ void db_close(srv_db_t *db, bool compact)
                 jint(line, sizeof line, &k, "keepalive_s", s->keepalive_s);
                 jint(line, sizeof line, &k, "grace_s", s->grace_s);
                 jstr(line, sizeof line, &k, "peer", s->peer);
+                if (s->nd_resume || s->ns_resume) {
+                    char h[17];
+                    snprintf(h, sizeof h, "%016llx", (unsigned long long)s->nd_resume);
+                    jstr(line, sizeof line, &k, "nd_resume", h);
+                    snprintf(h, sizeof h, "%016llx", (unsigned long long)s->ns_resume);
+                    jstr(line, sizeof line, &k, "ns_resume", h);
+                }
             }
             k += (size_t)snprintf(line + k, sizeof line - k, "}\n");
             if (n + k < cap) { memcpy(buf + n, line, k); n += k; }

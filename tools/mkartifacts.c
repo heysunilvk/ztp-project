@@ -6,6 +6,7 @@
  *                                            (49,152 B), cfg_v3.json (2,310 B), cfg_v2.json
  *   mkartifacts --test-set DIR              QA §4.2 boundary files: fw_tiny (1 B), fw_1023, fw_1024, fw_1025,
  *                                            fw_64k, fw_1m (raw deterministic bytes, no header)
+ *   mkartifacts --fw FILE MODEL VERSION SIZE  one firmware image with a valid header, of SIZE bytes
  *   mkartifacts --keys FILE MODEL...        keys.json with the demo-derived K_fleet and K_mfg per model
  *                                            (the same derivation as device/keys.c), mode 0600
  *
@@ -26,10 +27,18 @@
 
 #define FW_HDR_LEN 64
 
+static int write_fw_path(const char *path, const char *model, const char *version, size_t total);
+
 static int write_fw(const char *dir, const char *model, const char *version, size_t total)
 {
     char path[512];
     snprintf(path, sizeof path, "%s/fw_%s_%s.bin", dir, model, version);
+    return write_fw_path(path, model, version, total);
+}
+
+static int write_fw_path(const char *path, const char *model, const char *version, size_t total)
+{
+    if (total < FW_HDR_LEN) { fprintf(stderr, "mkartifacts: %s: a firmware image needs at least %d bytes\n", path, FW_HDR_LEN); return -1; }
     uint8_t *b = calloc(1, total);
     if (!b) return -1;
     memcpy(b, "ZTPFW\0", 6);
@@ -129,6 +138,7 @@ int main(int argc, char **argv)
 {
     const char *out = "artifacts";
     if (argc >= 3 && !strcmp(argv[1], "--keys")) return write_keys(argv[2], argc - 3, argv + 3);
+    if (argc == 6 && !strcmp(argv[1], "--fw")) return write_fw_path(argv[2], argv[3], argv[4], (size_t)atol(argv[5])) ? 1 : 0;
     if (argc == 3 && !strcmp(argv[1], "--test-set")) {
         if (mkdir(argv[2], 0755) != 0 && errno != EEXIST) { perror(argv[2]); return 1; }
         static const struct { const char *name; size_t n; } T[] = {

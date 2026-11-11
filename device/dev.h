@@ -43,12 +43,15 @@ void dev_factory_keys(const char *model, uint8_t k_fleet[ZTP_KEY_LEN], uint8_t k
 typedef enum {
     DS_DISCOVERY = 1,   /* sending DISCOVER, waiting for an OFFER */
     DS_SESSION,         /* HELLO sent, waiting for HELLO_ACK */
+    DS_RESUMING,        /* resume HELLO (K_dev) sent, waiting for HELLO_ACK RESUMED (§12.3) */
     DS_PROBING,         /* HELLO_ACK verified, path-probe KEEPALIVE in flight */
     DS_REGISTER,        /* probe acknowledged, REGISTER sent, waiting for REGISTER_ACK / NAK */
     DS_REGISTERED,      /* REGISTER_ACK received */
     DS_CONFIG,          /* downloading the config (§11.5) */
     DS_FIRMWARE,        /* downloading the firmware into the inactive slot */
-    DS_PROVISIONED,     /* config (and firmware) done; upgrade and validation arrive in M5 */
+    DS_UPGRADING,       /* UPGRADE_STATUS INSTALLING sent; commit and restart once it is ACKed (§12.1) */
+    DS_VALIDATING,      /* the three checks of §13 */
+    DS_OPERATIONAL,     /* STATUS_ACK received; keepalives continue */
     DS_BACKOFF,         /* waiting (full jitter) before re-discovery */
     DS_FAILED,
     DS_EXIT,
@@ -112,7 +115,38 @@ typedef struct {
     /* reconnect backoff */
     int         backoff_n;
     uint64_t    backoff_until;
-    uint64_t    hold_until;          /* exit after run.operational_hold_s (M2: after the probe) */
+    uint64_t    hold_until;          /* exit after run.operational_hold_s once OPERATIONAL */
+
+    /* resume (§12.3) */
+    uint16_t    epoch;               /* the session's epoch (the proposed one while resuming) */
+    bool        resuming;
+    bool        rejected_once;       /* RESUME_REJECTED once: retry with a new ctr and epoch, then fresh */
+    bool        force_fresh;         /* next connect is a fresh HELLO + REGISTER */
+    int         resume_cycles;       /* resume attempts without a reply (net.resume_cycles) */
+    uint8_t     k_dev_ready;
+
+    /* upgrade (§12) and validation (§13) */
+    bool        upgraded;            /* this boot follows an upgrade restart (pending_reboot) */
+    uint32_t    upg_seq;             /* seq of UPGRADE_STATUS INSTALLING */
+    char       *self_path;           /* resolved at startup for execv (§12.2) */
+    bool        restart_exit;        /* --restart-mode exit: exit(75) instead of execv */
+    char      **argv;
+    bool        cfg_refetched;
+    bool        hook_no_refetch;     /* --no-refetch (test hook) */
+    char        fw_approved[9];      /* running version the firmware decision accepted as current (§13) */
+    uint32_t    rr_echo;             /* last ECHO_SEQ a RESUME_REQUIRED was honoured for (one per seq, §5.6) */
+    /* fault-injection hooks (§19.2): each fires at most once per state directory (hooks.fired) */
+    char        hook_crash_at[16];   /* download, downloaded, verified, committed, post-exec, resume-sent */
+    int         hook_crash_after_chunks;
+    int         hook_restart_delay_s;
+    bool        hook_fail_validate, hook_delete_config;
+    char        hook_bad_fw_version[9];
+    bool        hook_fw_override;
+    uint32_t    fw_chunks_this_process;
+    uint64_t    val_deadline;
+    uint32_t    health_seq;
+    uint64_t    health_sent;
+    bool        report_pending;      /* STATUS_REPORT OPERATIONAL sent, waiting for STATUS_ACK */
 
     /* NAT emulator (natsim.c, §9.8) */
     int         hook_rebind_after_s;
@@ -145,6 +179,27 @@ void dev_session_rx(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_t
 void dev_session_timer(device_t *d);
 uint64_t dev_session_deadline(const device_t *d);
 
+/* upgrade.c (§12) */
+bool     dev_slot_version(const device_t *d, char slot, char ver[9], char model[17]);   /* from the slot header */
+void     dev_running_fw(const device_t *d, char ver[9]);   /* active slot's header, or the factory version */
+void     dev_upgrade_begin(device_t *d);       /* FW_STAGED: re-verify, UPGRADE_STATUS INSTALLING */
+void     dev_upgrade_timer(device_t *d);       /* INSTALLING ACKed -> commit -> restart */
+void     dev_upgrade_rollback(device_t *d);
+void     dev_upgrade_installed(device_t *d);   /* after the restart: INSTALLED, then VALIDATE */
+void     dev_restart(device_t *d);             /* execv(self) or exit(75) (§12.2) */
+void     dev_resolve_self(device_t *d, char **argv);
+
+/* validation (§13), in validate.c */
+void     dev_validate_begin(device_t *d);
+void     dev_validate_timer(device_t *d);
+uint64_t dev_validate_deadline(const device_t *d);
+void     dev_validate_on_status_ack(device_t *d);
+
+/* session.c: resume */
+void     dev_resume_start(device_t *d);
+bool     dev_can_resume(const device_t *d);
+void     dev_report_failed(device_t *d, uint16_t reason, const char *why);
+
 /* provision.c (§11) */
 void     dev_provision_next(device_t *d);   /* after REGISTER_ACK: config, then firmware, by persisted stage */
 void     dev_xfer_on_manifest(device_t *d, const uint8_t *p, uint16_t n);
@@ -153,7 +208,8 @@ void     dev_xfer_on_status_ack(device_t *d);
 void     dev_xfer_timer(device_t *d);
 uint64_t dev_xfer_deadline(const device_t *d);
 void     dev_xfer_suspend(device_t *d);     /* session lost: persist the map, close the part file */
-void     dev_send_keepalive(device_t *d, bool probe);
+enum { KA_PERIODIC = 0, KA_PATH_PROBE = 1, KA_HEALTH_PROBE = 2 };
+void     dev_send_keepalive(device_t *d, int kind);
 
 /* natsim.c */
 bool     dev_nat_active(const device_t *d);
@@ -163,6 +219,9 @@ int      dev_nat_before_send(device_t *d, const struct sockaddr_in *dst);   /* 1
 bool     dev_nat_accept_rx(device_t *d);
 uint64_t dev_nat_deadline(const device_t *d);
 void     dev_nat_timer(device_t *d);
+
+/* Abort at a named §12.4 crash point if --crash-at names it (once per state directory). */
+void     dev_crash_point(device_t *d, const char *point);
 
 /* fsm.c */
 int  dev_send(device_t *d, const uint8_t *frame, size_t len, const struct sockaddr_in *dst);

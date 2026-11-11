@@ -1,6 +1,7 @@
 /* Device event loop and FSM glue (DESIGN §15.1, §15.5). */
 #include <arpa/inet.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
@@ -50,6 +51,16 @@ void dev_backoff(device_t *d, const char *why)
     d->backoff_until = d->now + wait;
     d->fsm = DS_BACKOFF;
     LOGI(T_UDP, "Reconnecting in %.1f s (%s)", (double)wait / 1000.0, why);
+}
+
+void dev_crash_point(device_t *d, const char *point)
+{
+    if (!d->hooks.enabled || strcmp(d->hook_crash_at, point) != 0) return;
+    char name[48];
+    snprintf(name, sizeof name, "crash-at %s", point);
+    if (!hooks_fire_once(&d->hooks, name)) return;
+    log_close();
+    abort();
 }
 
 void dev_fail(device_t *d, const char *reason)
@@ -112,8 +123,10 @@ static void on_datagram(device_t *d, const uint8_t *buf, size_t len, const struc
 int dev_run(device_t *d)
 {
     if (pipe(g_sigpipe) == 0) {
-        fcntl(g_sigpipe[0], F_SETFL, O_NONBLOCK);
-        fcntl(g_sigpipe[1], F_SETFL, O_NONBLOCK);
+        for (int i = 0; i < 2; i++) {
+            fcntl(g_sigpipe[i], F_SETFL, O_NONBLOCK);
+            fcntl(g_sigpipe[i], F_SETFD, FD_CLOEXEC);   /* nothing leaks across the upgrade execv (§12.2) */
+        }
     }
     struct sigaction sa = {0};
     sa.sa_handler = on_signal;
@@ -121,7 +134,8 @@ int dev_run(device_t *d)
     sigaction(SIGTERM, &sa, NULL);
 
     d->now = now_ms();
-    dev_discovery_start(d);
+    if (dev_can_resume(d)) dev_resume_start(d);   /* E2: a session saved, stage >= REGISTERED */
+    else dev_discovery_start(d);
     while (d->fsm != DS_EXIT && d->fsm != DS_FAILED) {
         d->now = now_ms();
         uint64_t t = UINT64_MAX;
@@ -158,7 +172,12 @@ int dev_run(device_t *d)
         d->now = now_ms();
         dev_nat_timer(d);
         if (d->fsm == DS_DISCOVERY) dev_discovery_timer(d);
-        else if (d->fsm == DS_BACKOFF) { if (d->now >= d->backoff_until) dev_discovery_start(d); }
+        else if (d->fsm == DS_BACKOFF) {
+            if (d->now >= d->backoff_until) {
+                if (dev_can_resume(d)) dev_resume_start(d);   /* registered: resume, not re-register (§9.3) */
+                else dev_discovery_start(d);
+            }
+        }
         else if (d->fsm != DS_EXIT && d->fsm != DS_FAILED) dev_session_timer(d);
         netsim_flush(&d->ns, d->now);
     }
