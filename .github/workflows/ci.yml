@@ -22,14 +22,25 @@ jobs:
       - name: Toolchain
         run: ${{ matrix.cc }} --version | head -1 && make --version | head -1
       - name: Build
-        run: make CC=${{ matrix.cc }}
+        shell: bash
+        run: |
+          set -o pipefail
+          make CC=${{ matrix.cc }} 2>&1 | tee build.log || {
+            grep -E 'error:|warning:' build.log | head -25 | sed 's/^/::error::/'
+            exit 1
+          }
       - name: Unit, CLI and session tests
+        shell: bash
         run: |
           # TC-DISC-05 (b): broadcast to the runner's directed broadcast address (Linux only)
           if [ "$RUNNER_OS" = Linux ]; then
             export BCAST=$(ip -4 -o addr show scope global | awk '{for (i = 1; i < NF; i++) if ($i == "brd") { print $(i + 1); exit }}')
           fi
-          make test CC=${{ matrix.cc }}
+          set -o pipefail
+          make test CC=${{ matrix.cc }} 2>&1 | tee test.log || {
+            grep -E 'error:|warning:|FAIL|ERROR: |runtime error' test.log | head -25 | sed 's/^/::error::/'
+            exit 1
+          }
 
   asan:
     name: asan (${{ matrix.os }})
@@ -47,7 +58,7 @@ jobs:
         run: |
           set -o pipefail
           make asan 2>&1 | tee asan.log || {
-            grep -E 'FAIL|ERROR: |SUMMARY:|runtime error' asan.log | head -20 | sed 's/^/::error::/'
+            grep -E 'error:|warning:|FAIL|ERROR: |SUMMARY:|runtime error' asan.log | head -20 | sed 's/^/::error::/'
             exit 1
           }
 

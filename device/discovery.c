@@ -83,9 +83,9 @@ void dev_on_offer(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_t *
         return;
     }
     tlv_set_t t;
-    uint64_t dn;
-    const uint8_t *ip;
-    uint16_t iplen, port;
+    uint64_t dn = 0;
+    const uint8_t *ip = NULL;
+    uint16_t iplen = 0, port = 0;
     if (tlv_parse(buf + ZTP_HDR_LEN, h->payload_len, &t) != ZTP_OK || !tlv_get_u64(&t, TAG_DISC_NONCE, &dn) ||
         !tlv_get_bytes(&t, TAG_SERVER_ADDR, &ip, &iplen) || !tlv_get_u16(&t, TAG_SERVER_PORT, &port) || port == 0) {
         d->c.rx_malformed++;

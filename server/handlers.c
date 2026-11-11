@@ -126,8 +126,8 @@ static void on_fresh_hello(srv_t *s, const uint8_t *buf, size_t len, const ztp_h
         return;
     }
     tlv_set_t t;
-    char serial[17], model[17], fw[9];
-    uint64_t nd;
+    char serial[17] = "", model[17] = "", fw[9] = "";
+    uint64_t nd = 0;
     static const uint8_t need[] = {TAG_SERIAL, TAG_MODEL, TAG_FW_VER, TAG_NONCE_DEV};
     if (h->seq != 1 || tlv_parse(buf + ZTP_HDR_LEN, h->payload_len, &t) != ZTP_OK ||
         tlv_require(&t, need, sizeof need, NULL) != ZTP_OK) {
@@ -256,7 +256,7 @@ static void on_unknown_resume(srv_t *s, const uint8_t *buf, size_t len, const zt
     secure_zero(k_dev, sizeof k_dev);
     if (!ok) { s->c.mac_fail++; return; }
     tlv_set_t t;
-    uint64_t nd2;
+    uint64_t nd2 = 0;
     if (tlv_parse(pl, h->payload_len, &t) != ZTP_OK || !tlv_get_u64(&t, TAG_NONCE_DEV, &nd2)) {
         s->c.rx_malformed++;
         return;
@@ -357,7 +357,7 @@ void srv_on_disc_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct
     }
     if (!srv_rate_ok(s, src)) return;
     tlv_set_t t;
-    uint64_t dn;
+    uint64_t dn = 0;
     char serial[17] = "";
     if (tlv_parse(buf + ZTP_HDR_LEN, h.payload_len, &t) != ZTP_OK || !tlv_get_u64(&t, TAG_DISC_NONCE, &dn)) {
         s->c.rx_malformed++;

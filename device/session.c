@@ -119,8 +119,8 @@ static void on_error(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_
 {
     if (!ztp_mac_verify(buf, len, d->k_boot)) { d->c.mac_fail++; return; }
     tlv_set_t t;
-    uint16_t reason;
-    uint64_t echo;
+    uint16_t reason = 0;
+    uint64_t echo = 0;
     char detail[65] = "";
     if (tlv_parse(buf + ZTP_HDR_LEN, h->payload_len, &t) != ZTP_OK || !tlv_get_u16(&t, TAG_REASON, &reason)) {
         d->c.rx_malformed++;
@@ -151,7 +151,7 @@ void dev_session_rx(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_t
     if (h->type == ZT_HELLO_ACK && d->sid == 0) {
         /* bind the session only to a HELLO_ACK that echoes our Nd under K_boot (§7.1) */
         tlv_set_t t;
-        uint64_t echo;
+        uint64_t echo = 0;
         if (!ztp_mac_verify(buf, len, d->k_boot)) { d->c.mac_fail++; return; }
         if (h->session_id == 0 || tlv_parse(buf + ZTP_HDR_LEN, h->payload_len, &t) != ZTP_OK ||
             !tlv_get_u64(&t, TAG_NONCE_DEV, &echo) || echo != d->nd) {

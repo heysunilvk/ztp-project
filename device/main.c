@@ -42,7 +42,7 @@ static void reset_state(const char *dir)
     struct dirent *e;
     while ((e = readdir(dp))) {
         if (e->d_name[0] == '.') continue;
-        char p[CFG_PATH * 2];
+        char p[CFG_PATH + 512];
         snprintf(p, sizeof p, "%s/%s", dir, e->d_name);
         unlink(p);
     }
@@ -132,13 +132,13 @@ int main(int argc, char **argv)
     }
 
     /* log file: paths.log with %s = serial; appended across restarts (§17.3) */
-    char logpath[CFG_PATH + 32];
+    char logpath[2 * CFG_PATH + 32];
     const char *pct = strstr(c->paths.log, "%s");   /* validated: at most one "%s" and no other '%' */
     if (pct)
         snprintf(logpath, sizeof logpath, "%.*s%s%s", (int)(pct - c->paths.log), c->paths.log, d->st.serial, pct + 2);
     else
         snprintf(logpath, sizeof logpath, "%s", c->paths.log);
-    char dir[CFG_PATH + 32];
+    char dir[2 * CFG_PATH + 32];
     snprintf(dir, sizeof dir, "%s", logpath);
     char *slash = strrchr(dir, '/');
     if (slash && slash != dir) { *slash = '\0'; mkdirs(dir); }
