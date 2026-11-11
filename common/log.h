@@ -34,6 +34,9 @@ void log_set_level(int level);
 int  log_get_level(void);
 int  log_level_parse(const char *s);   /* "debug"/"info"/"warn" -> level, -1 if unknown */
 
+/* Write text as-is (no timestamp or tag) to the log file only (e.g. the DB dump, §14.5). */
+void log_raw(const char *text);
+
 /* For tests: redirect output to a memory stream (NULL restores stdout). */
 void log_set_stream(FILE *f);
 

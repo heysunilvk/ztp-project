@@ -31,7 +31,7 @@ DCOMMON="--set discovery.discovery_port=$DPORT --set discovery.server=127.0.0.1:
 # start_server NAME [args...]: server in the background, logging to $T/NAME.log
 start_server() {
     name=$1; shift
-    "$SRV" --profile demo $COMMON --set net.mcast_iface_addr=127.0.0.1 --set paths.log="$T/$name.log" "$@" \
+    "$SRV" --profile demo $COMMON --set net.mcast_iface_addr=127.0.0.1 --set paths.log="$T/$name.log" --set paths.db="$T/$name.db" --set paths.dump="$T/$name.dump" "$@" \
         > "$T/$name.out" 2>&1 &
     SRV_PID=$!
     i=0

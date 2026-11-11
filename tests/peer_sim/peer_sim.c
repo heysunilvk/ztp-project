@@ -10,6 +10,7 @@
  *                       ERROR SESSION_UNKNOWN under K_boot echoing Nd' (TC-SESS-06)
  *   pdf-reorder         handshake, then KEEPALIVEs seq 3, seq 2 (RETX), seq 2 again (TC-REL-03)
  *   out-of-window       handshake, then a KEEPALIVE at rcv_ack + 100 (TC-REL-08)
+ *   resume-expired SID SERIAL   resume HELLO (K_dev) for a deleted session: ERROR SESSION_EXPIRED
  *   spoof-source        handshake on socket A; bad-MAC frame and a replayed valid frame from socket B;
  *                       replies must still go to A (TC-NAT-06, TC-NAT-12)
  * Responder modes (against a real ztp-device):
@@ -272,6 +273,37 @@ static int mode_unknown_sid(void)
     return (reason == RC_SESSION_UNKNOWN && echo == nd2) ? 0 : 1;
 }
 
+/* A resume HELLO (K_dev) for a given session id: expect the terminal ERROR named by want. */
+static int mode_resume_probe(uint32_t sid, const char *serial, uint16_t want)
+{
+    int fd = open_sock();
+    const uint8_t *k_mfg = srv_keys_model(&K, MODEL);
+    if (!k_mfg) { say("no key for %s", MODEL); return 2; }
+    uint8_t k_dev[32], pl[128], b[ZTP_MAX_DGRAM_CAP + 64];
+    ztp_derive_kdev(k_mfg, serial, k_dev);
+    uint64_t nd2 = rand_u64();
+    tlv_writer_t w;
+    tlv_writer_init(&w, pl, sizeof pl);
+    put_hello(&w, serial, nd2);
+    tlv_put_u32(&w, TAG_RESUME_CTR, 99);
+    tlv_put_u8(&w, TAG_STAGE, ST_REGISTERED);
+    fr_t f = {ZT_HELLO, ZF_RESUME, ZK_DEV, sid, 1, 0, 0, 5};
+    send_to(fd, b, build(b, &f, pl, (uint16_t)w.len, k_dev), &g_server);
+    ztp_hdr_t h;
+    int got = recv_one(fd, g_timeout_ms, b, &h, NULL);
+    tlv_set_t t;
+    uint16_t reason = 0;
+    uint64_t echo = 0;
+    if (got < 0 || h.type != ZT_ERROR || !ztp_mac_verify(b, (size_t)got, K.k_boot) ||
+        tlv_parse(b + ZTP_HDR_LEN, h.payload_len, &t) != ZTP_OK || !tlv_get_u16(&t, TAG_REASON, &reason) ||
+        !tlv_get_u64(&t, TAG_NONCE_DEV, &echo)) {
+        say("resume of sid %u: no valid ERROR reply", (unsigned)sid);
+        return 1;
+    }
+    say("resume of sid %u: ERROR %s, Nd' echo %s", (unsigned)sid, ztp_reason_name(reason), echo == nd2 ? "matches" : "WRONG");
+    return reason == want && echo == nd2 ? 0 : 1;
+}
+
 static int mode_pdf_reorder(void)
 {
     hs_t hs = {.fd = open_sock()};
@@ -488,6 +520,7 @@ int main(int argc, char **argv)
     const char *group = "239.255.90.90", *iface = "127.0.0.1", *capture = NULL, *listen = NULL;
     int count = 1000, disc_port = 5556, secs = 5, keepalive = 20, dead = 3;
     double loss = 0;
+    const char *arg1 = NULL, *arg2 = NULL;
     uint64_t seed = 1;
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i], *v = i + 1 < argc ? argv[i + 1] : NULL;
@@ -506,6 +539,8 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--seed") && v) { seed = strtoull(v, NULL, 10); i++; }
         else if (!mode) mode = a;
         else if (!strcmp(mode, "handshakes") || !strcmp(mode, "flood-discover")) count = atoi(a);
+        else if (!strcmp(mode, "resume-expired") && !arg1) arg1 = a;
+        else if (!strcmp(mode, "resume-expired") && !arg2) arg2 = a;
         else { fprintf(stderr, "peer_sim: unexpected argument %s\n", a); return 2; }
     }
     if (!mode) { fprintf(stderr, "usage: see the comment at the top of tests/peer_sim/peer_sim.c\n"); return 2; }
@@ -517,6 +552,8 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "handshakes")) rc = mode_handshakes(count);
     else if (!strcmp(mode, "unknown-sid")) rc = mode_unknown_sid();
     else if (!strcmp(mode, "pdf-reorder")) rc = mode_pdf_reorder();
+    else if (!strcmp(mode, "resume-expired"))
+        rc = arg1 && arg2 ? mode_resume_probe((uint32_t)strtoul(arg1, NULL, 10), arg2, RC_SESSION_EXPIRED) : 2;
     else if (!strcmp(mode, "out-of-window")) rc = mode_out_of_window();
     else if (!strcmp(mode, "spoof-source")) rc = mode_spoof_source();
     else if (!strcmp(mode, "rogue-offer")) rc = mode_offer(disc_port, group, iface, secs, NULL);

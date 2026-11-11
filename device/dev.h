@@ -43,7 +43,8 @@ typedef enum {
     DS_DISCOVERY = 1,   /* sending DISCOVER, waiting for an OFFER */
     DS_SESSION,         /* HELLO sent, waiting for HELLO_ACK */
     DS_PROBING,         /* HELLO_ACK verified, path-probe KEEPALIVE in flight */
-    DS_REGISTER,        /* probe acknowledged; REGISTER arrives in M3 (keepalives only for now) */
+    DS_REGISTER,        /* probe acknowledged, REGISTER sent, waiting for REGISTER_ACK / NAK */
+    DS_REGISTERED,      /* REGISTER_ACK received; CONFIG arrives in M4 (keepalives only for now) */
     DS_BACKOFF,         /* waiting (full jitter) before re-discovery */
     DS_FAILED,
     DS_EXIT,
@@ -81,6 +82,8 @@ typedef struct {
     int         keepalive_s, dead_intervals, grace_s;
     uint64_t    last_tx, last_auth_rx;
     uint32_t    ka_seq;              /* seq of the keepalive in flight, 0 = none */
+    bool        reg_sent;            /* REGISTER sent in this session: K_s from now on */
+    uint64_t    nonce_reg;           /* NONCE_REG of the outstanding REGISTER */
     uint64_t    ka_sent;
     bool        ka_is_probe;
 

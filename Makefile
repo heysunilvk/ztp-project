@@ -101,6 +101,7 @@ test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK) artifacts
 	sh tests/cli_config.sh $(SERVER_BIN) $(DEVICE_BIN)
 	sh tests/m2_session.sh $(SERVER_BIN) $(DEVICE_BIN)
 	sh tests/m2_peer.sh $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM)
+	sh tests/m3_register.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS) $(PEER_SIM)
 	@$(MAKE) --no-print-directory check-separation BUILD=$(BUILD)
 
 # TC-DEL-03: device and server share only common/.

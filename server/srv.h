@@ -8,6 +8,7 @@
 
 #include "auth.h"
 #include "config.h"
+#include "db.h"
 #include "hooks.h"
 #include "net.h"
 #include "netsim.h"
@@ -32,15 +33,19 @@ typedef struct srv_session {
     bool     has_k_dev;
     rel_t   *rel;
     srv_assignment_t assign;
-    uint64_t created_ms, last_rx_ms, half_open_deadline;
+    uint64_t created_ms, last_rx_ms, half_open_deadline, grace_deadline;
     bool     established_logged;
+    bool     ks_verified;             /* a frame under K_s has been verified (REGISTER) */
+    bool     doomed;                  /* free after the current datagram (terminal reply sent) */
+    uint32_t last_resume_ctr;
     uint8_t  cached_hello_ack[ZTP_MAX_DGRAM_CAP];
     uint16_t cached_hello_ack_len;
     uint8_t  cur_key_id;              /* key of the frame being delivered (KEEPALIVE_ACK uses it) */
     const uint8_t *cur_key;
 } srv_session_t;
 
-#define SRV_TABLE_SLOTS 2048          /* open addressing; load <= 0.5 at the 1024 cap (§14.2) */
+#define SRV_TABLE_SLOTS 2048
+#define SRV_NONCE_CACHE_MAX 65536          /* open addressing; load <= 0.5 at the 1024 cap (§14.2) */
 #define SRV_TOMBSTONES  256
 #define SRV_RATE_IPS    256
 
@@ -59,6 +64,12 @@ typedef struct {
     double   tokens;
     uint64_t last_ms;
 } srv_rate_t;
+
+typedef struct {
+    char     serial[17];
+    uint64_t nonce, ts_ms;
+    bool     used;
+} srv_nonce_t;
 
 typedef struct {
     uint64_t rx_malformed, rx_unknown, rx_stale, mac_fail, replay_rejected, rate_limited, mtu_stepdowns;
@@ -84,6 +95,9 @@ struct srv {
     srv_tombstone_t tomb[SRV_TOMBSTONES];
     int             tomb_next;
     srv_rate_t      rate[SRV_RATE_IPS];
+    srv_nonce_t    *nonces;           /* REGISTER nonce cache (§10.4 mechanism 3), ring */
+    size_t          nonce_cap, nonce_next;
+    srv_db_t        db;
 
     /* the datagram being processed (duplicates are re-ACKed to its source, §5.7) */
     struct sockaddr_in cur_src;
@@ -93,6 +107,11 @@ struct srv {
 /* session.c */
 srv_session_t *srv_sess_find(srv_t *s, uint32_t sid);
 srv_session_t *srv_sess_find_half_open(srv_t *s, const char *serial);
+srv_session_t *srv_sess_find_registered(srv_t *s, const char *serial);
+void           srv_sess_set_state(srv_t *s, srv_session_t *ss, srv_sess_state_t st);
+void           srv_sess_journal(srv_t *s, srv_session_t *ss);
+void           srv_sess_restore(srv_t *s);   /* journaled sessions -> IDLE_GRACE (§14.4) */
+const char    *srv_state_name(srv_sess_state_t st);
 srv_session_t *srv_sess_new(srv_t *s, const char *serial, const char *model);   /* NULL if full */
 void           srv_sess_free(srv_t *s, srv_session_t *ss, const char *why);
 uint64_t       srv_sess_next_deadline(srv_t *s);
@@ -105,5 +124,6 @@ void srv_on_ctl_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct 
 void srv_on_disc_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct sockaddr_in *src);
 int  srv_send(srv_t *s, int fd, const uint8_t *frame, size_t len, const struct sockaddr_in *dst);
 bool srv_rate_ok(srv_t *s, const struct sockaddr_in *src);
+bool srv_nonce_seen(srv_t *s, const char *serial, uint64_t nonce);   /* also records it */
 
 #endif

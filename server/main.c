@@ -14,6 +14,7 @@
 #include "logmsg.h"
 #include "srv.h"
 #include "timer.h"
+#include "util.h"
 
 static int g_sigpipe[2] = {-1, -1};
 
@@ -60,6 +61,59 @@ static void srv_log_counters(srv_t *s)
          (unsigned long long)s->c.mtu_stepdowns, (unsigned long long)s->c.sessions_peak, (unsigned)r.srtt_ms);
 }
 
+static void counters_str(srv_t *s, char *out, size_t n)
+{
+    rel_stats_t r = s->c.rel;
+    for (size_t k = 0; k < SRV_TABLE_SLOTS; k++) {   /* live sessions too */
+        srv_session_t *e = s->table[k];
+        if (!e || e == (srv_session_t *)NULL) continue;
+        if (!srv_sess_find(s, e->session_id)) continue;
+        const rel_stats_t *x = rel_stats(e->rel);
+        r.rx += x->rx; r.tx += x->tx; r.retx_timeout += x->retx_timeout; r.retx_fast += x->retx_fast;
+        r.dup += x->dup; r.ooo += x->ooo; r.out_of_window += x->out_of_window;
+    }
+    snprintf(out, n, "rx=%llu tx=%llu retx_timeout=%llu retx_fast=%llu dup=%llu ooo=%llu out_of_window=%llu mac_fail=%llu "
+             "replay_rejected=%llu rate_limited=%llu",
+             (unsigned long long)r.rx, (unsigned long long)r.tx, (unsigned long long)r.retx_timeout,
+             (unsigned long long)r.retx_fast, (unsigned long long)r.dup, (unsigned long long)r.ooo,
+             (unsigned long long)r.out_of_window, (unsigned long long)s->c.mac_fail,
+             (unsigned long long)s->c.replay_rejected, (unsigned long long)s->c.rate_limited);
+}
+
+/* §14.5: the dump (and summary) to stdout, the server log and paths.dump; verbose variant optional. */
+static void srv_dump(srv_t *s, bool summary)
+{
+    const ztp_config_t *c = &s->cfg.c;
+    char counters[512];
+    counters_str(s, counters, sizeof counters);
+    char *text = NULL;
+    size_t len = 0;
+    FILE *m = open_memstream(&text, &len);
+    if (!m) return;
+    db_dump(&s->db, m, false);
+    if (summary) db_summary(&s->db, m, counters);
+    fclose(m);
+    fputs(text, stdout);
+    fflush(stdout);
+    log_raw(text);
+    mkdir_parent(c->paths.dump);
+    if (atomic_write_file(c->paths.dump, text, len) != 0) LOGW(T_DB, "cannot write %s: %s", c->paths.dump, strerror(errno));
+    free(text);
+    if (c->log.dump_verbose) {
+        char vpath[CFG_PATH + 32];
+        snprintf(vpath, sizeof vpath, "%s", c->paths.dump);
+        char *slash = strrchr(vpath, '/');
+        snprintf(slash ? slash + 1 : vpath, sizeof vpath - (size_t)(slash ? slash + 1 - vpath : 0), "db_dump_verbose.txt");
+        m = open_memstream(&text, &len);
+        if (!m) return;
+        db_dump(&s->db, m, true);
+        if (summary) db_summary(&s->db, m, counters);
+        fclose(m);
+        if (atomic_write_file(vpath, text, len) != 0) LOGW(T_DB, "cannot write %s: %s", vpath, strerror(errno));
+        free(text);
+    }
+}
+
 static void drain(srv_t *s, int fd, bool disc)
 {
     for (int i = 0; i < 64; i++) {   /* at most 64 datagrams per wakeup, for fairness (§14.1) */
@@ -80,7 +134,7 @@ int main(int argc, char **argv)
     srv_t *s = &S;
     cfg_args_t args = {0};
     long run_for = 0;
-    bool want_hooks = false;
+    bool want_hooks = false, dump_on_exit = false;
     const char *hook_names[8];
     int nhooks = 0;
 
@@ -93,6 +147,8 @@ int main(int argc, char **argv)
         if (!strcmp(f, "--run-for") && i + 1 < argc) {
             run_for = atol(argv[++i]);
             if (run_for <= 0) { fprintf(stderr, "--run-for: expected seconds > 0\n"); return EX_USAGE_CODE; }
+        } else if (!strcmp(f, "--dump-on-exit")) {
+            dump_on_exit = true;
         } else if (!strcmp(f, "--test-hooks")) {
             want_hooks = true;
         } else if (!strcmp(f, "--first-session-id") && i + 1 < argc) {
@@ -143,11 +199,20 @@ int main(int argc, char **argv)
     char err[512];
     if ((rc = srv_keys_load(c->paths.keys, &s->keys, err, sizeof err)) ||
         (rc = srv_policy_load(c->paths.policy, &s->policy, err, sizeof err)) ||
-        (rc = srv_policy_validate(&s->policy, &s->cfg, &s->keys, err, sizeof err))) {
+        (rc = srv_policy_validate(&s->policy, &s->cfg, &s->keys, err, sizeof err)) ||
+        (rc = srv_policy_check_files(&s->policy, err, sizeof err))) {
         fprintf(stderr, "%s\n", err);
         LOGW(T_ERROR, "%s", err);
         return rc;
     }
+
+    if (db_open(&s->db, c->paths.db, c->limits.max_failed_records, err, sizeof err) != 0) {
+        fprintf(stderr, "%s\n", err);
+        LOGW(T_ERROR, "%s", err);
+        return 1;
+    }
+    s->nonce_cap = (size_t)c->limits.nonce_cache_total;
+    s->nonces = calloc(s->nonce_cap, sizeof *s->nonces);
 
     netsim_cfg_t nc = {c->sim.loss, c->sim.reorder, c->sim.dup, (uint32_t)c->sim.reorder_delay_ms,
                        (uint32_t)c->sim.delay_ms, (uint32_t)c->sim.jitter_ms, (uint32_t)c->sim.mtu,
@@ -179,10 +244,13 @@ int main(int argc, char **argv)
     sa.sa_handler = on_signal;
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGUSR1, &sa, NULL);
     signal(SIGPIPE, SIG_IGN);
+    s->now = now_ms();
+    srv_sess_restore(s);
 
     uint64_t start = now_ms(), stop_at = run_for ? start + (uint64_t)run_for * 1000u : UINT64_MAX;
-    bool running = true;
+    bool running = true, by_signal = false;
     while (running) {
         s->now = now_ms();
         uint64_t d = srv_sess_next_deadline(s);
@@ -196,8 +264,10 @@ int main(int argc, char **argv)
         s->now = now_ms();
         if (p[1].revents & POLLIN) {
             unsigned char b;
-            while (read(g_sigpipe[0], &b, 1) == 1)
-                if (b == SIGINT || b == SIGTERM) running = false;
+            while (read(g_sigpipe[0], &b, 1) == 1) {
+                if (b == SIGINT || b == SIGTERM) { running = false; by_signal = true; }
+                if (b == SIGUSR1) srv_dump(s, false);
+            }
         }
         if (p[0].revents & POLLIN) drain(s, s->ctl_fd, false);
         if (np == 3 && (p[2].revents & POLLIN)) drain(s, s->disc_fd, true);
@@ -208,10 +278,13 @@ int main(int argc, char **argv)
     }
 
     LOGI(T_BOOT, "Server stopping");
+    if (by_signal || dump_on_exit) srv_dump(s, true);
     srv_sess_free_all(s);
     srv_log_counters(s);
     netsim_log_totals(&s->ns);
     netsim_free(&s->ns);
+    db_close(&s->db, true);
+    free(s->nonces);
     srv_policy_free(&s->policy);
     srv_keys_free(&s->keys);
     cfg_free(&s->cfg);

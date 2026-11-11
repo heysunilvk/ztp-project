@@ -27,6 +27,11 @@ void log_close(void)
     g_file = NULL;
 }
 
+void log_raw(const char *text)
+{
+    if (g_file) fputs(text, g_file);
+}
+
 void log_set_level(int level) { g_level = level; }
 int  log_get_level(void) { return g_level; }
 void log_set_stream(FILE *f) { g_stream = f; }

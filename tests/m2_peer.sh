@@ -30,7 +30,7 @@ counter() { sed -n "s/.*\[UDP\] Counters: .* $2=\([0-9]*\).*/\1/p" "$1" | tail -
 COMMON="--set net.server_port=$PORT --set net.discovery_port=$DPORT --set net.mcast_iface_addr=127.0.0.1"
 start_server() {
     name=$1; shift
-    "$SRV" --profile demo $COMMON --set paths.log="$T/$name.log" "$@" > "$T/$name.out" 2>&1 &
+    "$SRV" --profile demo $COMMON --set paths.log="$T/$name.log" --set paths.db="$T/$name.db" --set paths.dump="$T/$name.dump" "$@" > "$T/$name.out" 2>&1 &
     SRV_PID=$!
     i=0
     while [ $i -lt 50 ] && ! has "$T/$name.log" "Server listening"; do sleep 0.1; i=$((i + 1)); done
