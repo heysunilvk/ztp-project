@@ -97,7 +97,7 @@ jobs:
           B=$(ip -4 -o addr show scope global | awk '{for (i = 1; i < NF; i++) if ($i == "brd") { print $(i + 1); exit }}')
           build/netspike bcast "$B" && echo "::notice::bcast to $B: ok" || { echo "::warning::bcast to $B: FAILED"; exit 1; }
       - name: Build the binaries and tools
-        run: make all build/pcapcheck
+        run: make all build/pcapcheck artifacts
       - name: TC-REL-01 - capture the session tests and check every frame on the wire
         shell: bash
         run: |

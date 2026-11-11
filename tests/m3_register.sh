@@ -78,7 +78,9 @@ run_device d2 20 --serial ZTP-999999 --model EDGE-GW-999
 
 # --- TC-REL-04: the REGISTER_ACK is lost; the retransmitted REGISTER is a duplicate, processed once ---
 stop_server
-start_server s2 db1 --test-hooks --drop-seq tx:2
+# A slower server RTO makes the device's REGISTER retransmission arrive before the server's own
+# REGISTER_ACK retransmission, so the duplicate path is what recovers (otherwise it's a race).
+start_server s2 db1 --test-hooks --drop-seq tx:2 --set rel.rto_min_ms=1500 --set rel.rto_initial_ms=1500
 run_device d3 25 --serial ZTP-71DD08
 [ "$DEV_RC" -eq 0 ] && ok || bad "TC-REL-04: device exit $DEV_RC"
 expect_line "$T/d3.log" "[UDP] Retransmitting seq=3 (timeout)" TC-REL-04
