@@ -70,8 +70,9 @@ static void test_limits_and_errors(void)
     s[0] = '1';
     s[big] = '\0';
     CHECK(json_parse(s, big, &e) == NULL && strstr(e.msg, "larger"));
-    CHECK(json_parse(s, JSON_MAX_INPUT, &e) != NULL || 0);   /* exactly 64 KiB: allowed */
-    json_free(json_parse(s, JSON_MAX_INPUT, &e));
+    json_doc_t *ok = json_parse(s, JSON_MAX_INPUT, &e);   /* exactly 64 KiB: allowed */
+    CHECK(ok != NULL);
+    json_free(ok);
     free(s);
 
     /* error line, column and path */
