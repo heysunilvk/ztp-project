@@ -72,7 +72,7 @@ typedef struct {
         int      reorder_delay_ms, delay_ms, jitter_ms, mtu;
         char     mtu_mode[16];
         uint64_t seed;
-        struct { int idle_timeout_s, reboot_at_s, change_ip_at_s; bool block_server_port; } nat;
+        struct { double idle_timeout_s; int reboot_at_s, change_ip_at_s; bool block_server_port; } nat;
     } sim;
 
     /* device only */

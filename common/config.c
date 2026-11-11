@@ -110,7 +110,7 @@ static const ent_t SCHEMA[] = {
     I("sim.mtu", B_, sim.mtu, 0, 1500, 0),
     EN("sim.mtu_mode", B_, sim.mtu_mode, "emsgsize", "emsgsize|blackhole"),
     {"sim.seed", KT_U64, B_, F(sim.seed), 0, 0, "0", NULL, NULL},
-    I("sim.nat.idle_timeout_s", D_, sim.nat.idle_timeout_s, 0, 86400, 0),
+    DB("sim.nat.idle_timeout_s", D_, sim.nat.idle_timeout_s, 0, 86400, 0),
     I("sim.nat.reboot_at_s", D_, sim.nat.reboot_at_s, 0, 86400, 0),
     I("sim.nat.change_ip_at_s", D_, sim.nat.change_ip_at_s, 0, 86400, 0),
     BO("sim.nat.block_server_port", D_, sim.nat.block_server_port, false),

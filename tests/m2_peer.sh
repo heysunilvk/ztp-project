@@ -98,6 +98,26 @@ else bad "TC-REL-03: server lines missing or out of order (sid $sid)"; fi
 if grep -q 'ZTP-5900F0\] Peer \(address\|IP\) changed' "$L"; then bad "TC-NAT-06/12: the peer moved"; else ok; fi
 [ "$(counter "$L" mac_fail)" -ge 2 ] && ok || bad "TC-NAT-06: mac_fail=$(counter "$L" mac_fail), want >= 2"
 
+# --- TC-SIM-01: loss per direction and end to end, 10k datagrams each way at --loss 0.15 ----------
+start_server sim01 --loss 0.15 --seed 5 --set limits.hello_rate_per_ip=1000000 --set limits.hello_burst=1000000
+sim sim01 flood-discover 10000 --disc-port "$DPORT" --loss 0.15 --seed 6 || bad "TC-SIM-01: flood failed"
+stop_server
+# peer_sim: sent=N tx_dropped=D offers_received=R ; server [SIM] tx=Ns dropped=Ds ... rx=Rs
+N=$(sed -n 's/.*sent=\([0-9]*\).*/\1/p' "$T/sim01.sim")
+D=$(sed -n 's/.*tx_dropped=\([0-9]*\).*/\1/p' "$T/sim01.sim")
+R=$(sed -n 's/.*offers_received=\([0-9]*\).*/\1/p' "$T/sim01.sim")
+NS=$(sed -n 's/.*\[SIM\] tx=\([0-9]*\).*/\1/p' "$T/sim01.log" | tail -1)
+DS=$(sed -n 's/.*\[SIM\] tx=[0-9]* dropped=\([0-9]*\).*/\1/p' "$T/sim01.log" | tail -1)
+RS=$(sed -n 's/.*\[SIM\] .* rx=\([0-9]*\).*/\1/p' "$T/sim01.log" | tail -1)
+rates=$(awk -v n="$N" -v d="$D" -v ns="$NS" -v ds="$DS" -v rs="$RS" -v r="$R" 'BEGIN {
+    printf "%.2f %.2f %.2f %.2f", 100*d/n, 100*ds/ns, 100*(1-rs/n), 100*(1-r/ns) }')
+echo "    loss %: peer TX $(echo $rates | cut -d" " -f1), server TX $(echo $rates | cut -d" " -f2), peer->server end to end $(echo $rates | cut -d" " -f3), server->peer end to end $(echo $rates | cut -d" " -f4)"
+[ -n "$N" ] && [ -n "$D" ] && [ -n "$R" ] && [ -n "$NS" ] && [ -n "$DS" ] && [ -n "$RS" ] && [ "$(echo $rates | wc -w)" -eq 4 ] && ok ||
+    bad "TC-SIM-01: missing measurements (N=$N D=$D R=$R NS=$NS DS=$DS RS=$RS)"
+for v in $rates; do
+    awk -v x="$v" 'BEGIN { exit !(x >= 13 && x <= 17) }' && ok || bad "TC-SIM-01: a loss rate of $v % is outside 15 +/- 2 % ($rates)"
+done
+
 # --- TC-DISC-07: forged OFFERs are ignored, the genuine server is used -------------------------
 start_server d07 --test-hooks --no-discovery
 "$SIM" rogue-offer --disc-port "$DPORT" --secs 5 > "$T/d07.sim" 2>&1 &

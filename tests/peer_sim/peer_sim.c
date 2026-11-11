@@ -18,6 +18,10 @@
  *                                                                     to later DISCOVERs (TC-DISC-08)
  *   fake-server   --listen IP:PORT --keepalive K --dead D [--secs S]  advertises arbitrary KEEPALIVE_S
  *                                                                     and DEAD_INTERVALS (TC-CFG-08)
+ * Measurement mode:
+ *   flood-discover N --disc-port P [--loss L] [--seed S]   N DISCOVERs through peer_sim's own netsim
+ *                   (TX-side loss L), counting the OFFERs that come back; with the server's own --loss this
+ *                   gives the per-direction and end-to-end loss rates of TC-SIM-01
  * Exit status: 0 = the expected behaviour was observed, 1 = not, 2 = usage or setup error. */
 #include <arpa/inet.h>
 #include <errno.h>
@@ -31,6 +35,8 @@
 
 #include "auth.h"
 #include "net.h"
+#include "netsim.h"
+#include "log.h"
 #include "protocol.h"
 #include "rand.h"
 #include "timer.h"
@@ -332,6 +338,37 @@ static int mode_spoof_source(void)
     return (ac_r == 1 && ka_r == 0 && a3 == 3 && ka_a2 == 1) ? 0 : 1;
 }
 
+static int mode_flood_discover(int count, int disc_port, double loss, uint64_t seed)
+{
+    struct sockaddr_in dst = g_server;
+    dst.sin_port = htons((uint16_t)disc_port);
+    int fd = open_sock();
+    netsim_t ns;
+    netsim_cfg_t nc = {.loss = loss, .seed = seed};
+    netsim_init(&ns, &nc);
+    long received = 0;
+    uint8_t pl[64], b[ZTP_MAX_DGRAM_CAP + 64];
+    for (int i = 0; i < count; i++) {
+        tlv_writer_t w;
+        tlv_writer_init(&w, pl, sizeof pl);
+        tlv_put_str(&w, TAG_MODEL, MODEL);
+        tlv_put_str(&w, TAG_SERIAL, "ZTP-F100D0");
+        tlv_put_u64(&w, TAG_DISC_NONCE, (uint64_t)i + 1);
+        fr_t f = {ZT_DISCOVER, 0, ZK_BOOT, 0, 1, 0, 0, 0};
+        int n = build(b, &f, pl, (uint16_t)w.len, K.k_boot);
+        netsim_sendto(&ns, fd, b, (size_t)n, 0, (struct sockaddr *)&dst, sizeof dst, now_ms());
+        if (i % 50 == 49 || i == count - 1) {   /* pace: drain replies so no socket buffer overflows */
+            ztp_hdr_t h;
+            while (recv_one(fd, i == count - 1 ? 500 : 20, b, &h, NULL) > 0)
+                if (h.type == ZT_OFFER) received++;
+        }
+    }
+    say("flood: sent=%d tx_dropped=%llu offers_received=%ld", count,
+        (unsigned long long)(ns.st.dropped), received);
+    netsim_free(&ns);
+    return 0;
+}
+
 /* ---------- responder side ---------- */
 
 static int open_disc_listener(int port, const char *group, const char *iface)
@@ -450,6 +487,8 @@ int main(int argc, char **argv)
     const char *keys = "conf/keys.json", *server = "127.0.0.1:5555", *mode = NULL;
     const char *group = "239.255.90.90", *iface = "127.0.0.1", *capture = NULL, *listen = NULL;
     int count = 1000, disc_port = 5556, secs = 5, keepalive = 20, dead = 3;
+    double loss = 0;
+    uint64_t seed = 1;
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i], *v = i + 1 < argc ? argv[i + 1] : NULL;
         if (!strcmp(a, "--keys") && v) { keys = v; i++; }
@@ -463,12 +502,15 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--listen") && v) { listen = v; i++; }
         else if (!strcmp(a, "--keepalive") && v) { keepalive = atoi(v); i++; }
         else if (!strcmp(a, "--dead") && v) { dead = atoi(v); i++; }
+        else if (!strcmp(a, "--loss") && v) { loss = atof(v); i++; }
+        else if (!strcmp(a, "--seed") && v) { seed = strtoull(v, NULL, 10); i++; }
         else if (!mode) mode = a;
-        else if (!strcmp(mode, "handshakes")) count = atoi(a);
+        else if (!strcmp(mode, "handshakes") || !strcmp(mode, "flood-discover")) count = atoi(a);
         else { fprintf(stderr, "peer_sim: unexpected argument %s\n", a); return 2; }
     }
     if (!mode) { fprintf(stderr, "usage: see the comment at the top of tests/peer_sim/peer_sim.c\n"); return 2; }
     char err[256];
+    log_set_level(LOG_OFF);
     if (srv_keys_load(keys, &K, err, sizeof err) != 0) { fprintf(stderr, "peer_sim: %s\n", err); return 2; }
     if (!hostport_parse(server, &g_server)) { fprintf(stderr, "peer_sim: bad --server\n"); return 2; }
     int rc;
@@ -479,6 +521,7 @@ int main(int argc, char **argv)
     else if (!strcmp(mode, "spoof-source")) rc = mode_spoof_source();
     else if (!strcmp(mode, "rogue-offer")) rc = mode_offer(disc_port, group, iface, secs, NULL);
     else if (!strcmp(mode, "replay-offer")) rc = mode_offer(disc_port, group, iface, secs, capture);
+    else if (!strcmp(mode, "flood-discover")) rc = mode_flood_discover(count, disc_port, loss, seed);
     else if (!strcmp(mode, "fake-server")) rc = listen ? mode_fake_server(listen, keepalive, dead, secs) : 2;
     else { fprintf(stderr, "peer_sim: unknown mode %s\n", mode); rc = 2; }
     srv_keys_free(&K);

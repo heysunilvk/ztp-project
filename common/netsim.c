@@ -186,5 +186,5 @@ void netsim_log_totals(const netsim_t *ns)
     uint64_t lost = ns->st.dropped + ns->st.mtu_dropped;
     double pct = ns->st.tx ? 100.0 * (double)lost / (double)ns->st.tx : 0.0;
     LOGI(T_SIM, LM_SIM_TOTALS, (unsigned long long)ns->st.tx, (unsigned long long)lost, pct,
-         (unsigned long long)ns->st.reordered, (unsigned long long)ns->st.duplicated);
+         (unsigned long long)ns->st.reordered, (unsigned long long)ns->st.duplicated, (unsigned long long)ns->st.rx);
 }

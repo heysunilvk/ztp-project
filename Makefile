@@ -79,9 +79,16 @@ $(BUILD)/%.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # Unit tests (TC-UNIT-*). FUZZ_ITERS controls the JSON mutation fuzz (default 100000).
-test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM)
+# Wire-level checker for packet captures (tests/pcapcheck; TC-REL-01).
+PCAPCHECK := $(BUILD)/pcapcheck
+$(PCAPCHECK): tests/pcapcheck/pcapcheck.c $(LIB)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB) $(LDFLAGS) $(LDLIBS)
+
+test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK)
 	@chmod 600 conf/keys.json
 	$(TEST_BIN)
+	@mkdir -p $(BUILD)/selftest && $(PCAPCHECK) --selftest $(BUILD)/selftest
 	sh tests/cli_config.sh $(SERVER_BIN) $(DEVICE_BIN)
 	sh tests/m2_session.sh $(SERVER_BIN) $(DEVICE_BIN)
 	sh tests/m2_peer.sh $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM)

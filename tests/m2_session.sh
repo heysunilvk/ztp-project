@@ -164,6 +164,29 @@ run_device d9 6 --serial ZTP-0FF0FF --discover static --set rel.max_retries=2 --
 expect_line "$T/d9.log" "[NAT] No response from 127.0.0.1:$PORT after 3 HELLO transmissions: check that outbound UDP to port $PORT is allowed (firewall or NAT policy)" TC-NAT-11
 expect_line "$T/d9.log" "[UDP] Reconnecting in" "TC-NAT-11 backoff"
 
+# --- TC-REL-02: one data frame lost -> retransmitted once on timeout, delivered once ----------------
+start_server s9
+run_device d10 20 --serial ZTP-2E1002 --discover static --test-hooks --drop-seq tx:2
+[ "$DEV_RC" -eq 0 ] && ok || bad "TC-REL-02: device exit $DEV_RC"
+n=$(count "$T/d10.log" "[UDP] Retransmitting seq=2 (timeout)")
+[ "$n" -eq 1 ] && ok || bad "TC-REL-02: seq 2 retransmitted $n times, want 1"
+stop_server
+n=$(count "$T/s9.log" "ZTP-2E1002] Keepalive (path probe) acknowledged")
+[ "$n" -eq 1 ] && ok || bad "TC-REL-02: path probe delivered $n times, want 1"
+expect_line "$T/d10.log" "[NAT] Keepalive acknowledged" "TC-REL-02 (ACK advances)"
+
+# --- TC-SIM-02: reordering and duplication are applied and visible --------------------------------
+start_server s10 --reorder 0.5 --dup 0.5 --seed 21
+run_device d11 30 --serial ZTP-51A002 --discover static --reorder 0.5 --dup 0.5 --seed 22
+[ "$DEV_RC" -eq 0 ] && ok || bad "TC-SIM-02: device exit $DEV_RC"
+stop_server
+for f in "$T/s10.log" "$T/d11.log"; do
+    line=$(grep -F "[SIM] tx=" "$f" | tail -1)
+    re=$(echo "$line" | sed -n 's/.*reordered=\([0-9]*\).*/\1/p'); du=$(echo "$line" | sed -n 's/.*duplicated=\([0-9]*\).*/\1/p')
+    [ "${re:-0}" -gt 0 ] && [ "${du:-0}" -gt 0 ] && ok || bad "TC-SIM-02: $(basename "$f"): $line"
+done
+if grep -F -q "Duplicate packet seq=" "$T/s10.log" "$T/d11.log"; then ok; else bad "TC-SIM-02: no [UDP] duplicate events"; fi
+
 # --- TC-SESS-08: UDP only ------------------------------------------------------------------------
 if grep -rn 'SOCK_STREAM' common server device >/dev/null 2>&1; then bad "TC-SESS-08: SOCK_STREAM in source"; else ok; fi
 

@@ -96,6 +96,24 @@ jobs:
         run: |
           B=$(ip -4 -o addr show scope global | awk '{for (i = 1; i < NF; i++) if ($i == "brd") { print $(i + 1); exit }}')
           build/netspike bcast "$B" && echo "::notice::bcast to $B: ok" || { echo "::warning::bcast to $B: FAILED"; exit 1; }
+      - name: Build the binaries and tools
+        run: make all build/pcapcheck
+      - name: TC-REL-01 - capture the session tests and check every frame on the wire
+        shell: bash
+        run: |
+          command -v tcpdump >/dev/null || sudo apt-get install -y tcpdump
+          sudo tcpdump -i lo -U -w rel01.pcap 'udp and (portrange 25555-25557)' 2> tcpdump.err &
+          sleep 2
+          ZTP_PORT=25555 sh tests/m2_session.sh build/ztp-server build/ztp-device
+          sleep 1
+          sudo pkill -INT tcpdump || true
+          sleep 1
+          if build/pcapcheck --max-size 1200 rel01.pcap 25555 25556 > rel01.txt; then
+            echo "::notice::TC-REL-01: $(cat rel01.txt)"
+          else
+            echo "::error::TC-REL-01: $(cat rel01.txt)"
+            exit 1
+          fi
       - name: netem availability (R-11; failure waives TC-SIM-03)
         id: netem
         continue-on-error: true

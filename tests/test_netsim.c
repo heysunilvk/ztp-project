@@ -185,7 +185,7 @@ static void test_send_path(void)
     char line[256] = "";
     CHECK(fgets(line, sizeof line, f) != NULL);
     fclose(f);
-    CHECK(strstr(line, "[SIM] tx=10 dropped=10 (100.0%) reordered=0 duplicated=0") != NULL);
+    CHECK(strstr(line, "[SIM] tx=10 dropped=10 (100.0%) reordered=0 duplicated=0 rx=0") != NULL);
     netsim_free(&ns);
 
     /* pass-through when inactive */

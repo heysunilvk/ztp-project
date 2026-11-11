@@ -83,6 +83,6 @@
 #define LM_CONFIG_SUMMARY          "profile=%s file=%s sha256=%s keepalive=%us grace=%s window=%u max_dgram=%u"
 #define LM_DB_ROW                  "  %s %s fw=%s cfg=%u"
 #define LM_ERROR_TEST_HOOK         "TEST HOOK ACTIVE: %s"
-#define LM_SIM_TOTALS              "tx=%llu dropped=%llu (%.1f%%) reordered=%llu duplicated=%llu"
+#define LM_SIM_TOTALS              "tx=%llu dropped=%llu (%.1f%%) reordered=%llu duplicated=%llu rx=%llu"
 
 #endif
