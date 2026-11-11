@@ -1,0 +1,2 @@
+{ "_comment": "Battery-powered or cellular links where radio wake-ups cost. grace 200 = 2 x 25 x 4.",
+  "nat": { "keepalive_interval_s": 25, "dead_intervals": 4, "server_idle_intervals": 4, "grace_s": 200 } }

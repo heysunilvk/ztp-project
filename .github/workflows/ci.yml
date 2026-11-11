@@ -1,0 +1,77 @@
+# CI: GitHub-hosted runners are the project's only Linux environment (DESIGN §19.4, PRD D-09).
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    name: build-test (${{ matrix.os }}, ${{ matrix.cc }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, cc: gcc }
+          - { os: ubuntu-latest, cc: clang }
+          - { os: macos-latest, cc: clang }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: ${{ matrix.cc }} --version | head -1 && make --version | head -1
+      - name: Build
+        run: make CC=${{ matrix.cc }}
+      - name: Unit and CLI tests
+        run: make test CC=${{ matrix.cc }}
+
+  asan:
+    name: asan (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: ASan + UBSan, 1M-input JSON fuzz (TC-UNIT-18, TC-DEL-08)
+        env:
+          FUZZ_ITERS: "1000000"
+        run: make asan
+
+  # M1 platform checks: PRD R-03 (multicast/broadcast) and R-11 (netem on the hosted kernel).
+  platform-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Multicast on loopback and broadcast to the runner's directed broadcast address
+        run: |
+          make spike BCAST="$(ip -4 -o addr show scope global | awk '/brd/{print $6; exit}')"
+      - name: netem availability (R-11; failure waives TC-SIM-03)
+        id: netem
+        continue-on-error: true
+        run: |
+          sudo modprobe sch_netem
+          sudo tc qdisc add dev lo root netem loss 15% 25% delay 5ms 2ms reorder 10% 50% duplicate 5%
+          tc qdisc show dev lo
+          ping -c 20 -i 0.05 127.0.0.1 | tail -2
+          sudo tc qdisc del dev lo root
+      - name: Record the result
+        run: |
+          echo "### Platform spike (ubuntu-latest)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- multicast/broadcast: ok" >> "$GITHUB_STEP_SUMMARY"
+          echo "- netem: ${{ steps.netem.outcome }}" >> "$GITHUB_STEP_SUMMARY"
+          uname -a >> "$GITHUB_STEP_SUMMARY"
+
+  platform-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Multicast on lo0
+        run: make spike
+      - name: Broadcast on the primary interface (informational)
+        continue-on-error: true
+        run: |
+          IF=$(route -n get default | awk '/interface:/{print $2}')
+          make spike BCAST="$(ifconfig "$IF" | awk '/broadcast/{print $NF; exit}')"

@@ -1,0 +1,6 @@
+{ "_comment": "Demo and CI timers (DESIGN §25.7). --demo-timers is an alias.",
+  "nat": { "keepalive_interval_s": 2, "keepalive_min_s": 1 },
+  "net": { "reconnect_min_s": 0.5, "reconnect_max_s": 5, "resume_cycles": 3, "pmtu_blackhole_s": 3 },
+  "discovery": { "interval_ms": 500 },
+  "val": { "deadline_s": 30 },
+  "run": { "exit_when_operational": true, "operational_hold_s": 5 } }

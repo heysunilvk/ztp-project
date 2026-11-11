@@ -1,0 +1,2 @@
+{ "_comment": "Many devices behind one public IP (carrier-grade NAT).",
+  "nat": { "keepalive_interval_s": 15 } }

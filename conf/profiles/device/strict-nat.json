@@ -1,0 +1,2 @@
+{ "_comment": "Sites with aggressive UDP NAT timers (<= 20 s). grace 120 >= 2 x 10 x 3.",
+  "nat": { "keepalive_interval_s": 10 } }

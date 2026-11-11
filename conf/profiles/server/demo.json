@@ -1,0 +1,2 @@
+{ "_comment": "Demo and CI timers (DESIGN §25.7). --demo-timers is an alias.",
+  "nat": { "keepalive_interval_s": 2, "grace_s": 30 } }

@@ -1,0 +1,2 @@
+{ "_comment": "Battery-powered or cellular links where radio wake-ups cost.",
+  "nat": { "keepalive_interval_s": 25, "dead_intervals": 4 } }

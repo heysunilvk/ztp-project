@@ -1,0 +1,94 @@
+# ZTP over UDP — build (DESIGN §19.1).
+# Must stay compatible with GNU Make 3.81 (macOS): no .ONESHELL, $(file ...), grouped targets.
+
+CC      ?= cc
+BUILD   ?= build
+OPT     ?= -O2
+SAN     ?=
+CSTD    := -std=c11
+WARN    := -Wall -Wextra -Werror -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Wno-unused-parameter
+DEFS    := -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE
+CFLAGS  ?=
+CFLAGS  += $(CSTD) $(OPT) $(WARN) $(DEFS) $(SAN) -Icommon -MMD -MP
+LDFLAGS += $(SAN)
+LDLIBS  += -lm
+
+COMMON_SRC := $(wildcard common/*.c)
+SERVER_SRC := $(wildcard server/*.c)
+DEVICE_SRC := $(wildcard device/*.c)
+TEST_SRC   := $(wildcard tests/*.c)
+
+COMMON_OBJ := $(COMMON_SRC:%.c=$(BUILD)/%.o)
+SERVER_OBJ := $(SERVER_SRC:%.c=$(BUILD)/%.o)
+DEVICE_OBJ := $(DEVICE_SRC:%.c=$(BUILD)/%.o)
+TEST_OBJ   := $(TEST_SRC:%.c=$(BUILD)/%.o)
+
+LIB        := $(BUILD)/libztpcommon.a
+SERVER_BIN := $(BUILD)/ztp-server
+DEVICE_BIN := $(BUILD)/ztp-device
+TEST_BIN   := $(BUILD)/unit-tests
+
+.PHONY: all server device test asan debug clean clean-logs check-separation spike
+
+all: server device
+	@ln -sf $(SERVER_BIN) ztp-server
+	@ln -sf $(DEVICE_BIN) ztp-device
+
+server: $(SERVER_BIN)
+device: $(DEVICE_BIN)
+
+$(LIB): $(COMMON_OBJ)
+	@rm -f $@
+	$(AR) rcs $@ $^
+
+$(SERVER_BIN): $(SERVER_OBJ) $(LIB)
+	$(CC) $(LDFLAGS) -o $@ $(SERVER_OBJ) $(LIB) $(LDLIBS)
+
+$(DEVICE_BIN): $(DEVICE_OBJ) $(LIB)
+	$(CC) $(LDFLAGS) -o $@ $(DEVICE_OBJ) $(LIB) $(LDLIBS)
+
+$(TEST_BIN): $(TEST_OBJ) $(LIB)
+	$(CC) $(LDFLAGS) -o $@ $(TEST_OBJ) $(LIB) $(LDLIBS)
+
+$(BUILD)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# Unit tests (TC-UNIT-*). FUZZ_ITERS controls the JSON mutation fuzz (default 100000).
+test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN)
+	$(TEST_BIN)
+	sh tests/cli_config.sh $(SERVER_BIN) $(DEVICE_BIN)
+	@$(MAKE) --no-print-directory check-separation BUILD=$(BUILD)
+
+# TC-DEL-03: device and server share only common/.
+check-separation: $(SERVER_BIN) $(DEVICE_BIN)
+	@if nm $(DEVICE_BIN) | grep -q ' [TtDdBb] _*srv_'; then echo "FAIL: srv_ symbols in ztp-device"; exit 1; fi
+	@if nm $(SERVER_BIN) | grep -q ' [TtDdBb] _*dev_'; then echo "FAIL: dev_ symbols in ztp-server"; exit 1; fi
+	@if grep -l '#include *"\.\./server/' device/*.c device/*.h 2>/dev/null; then echo "FAIL: device includes server headers"; exit 1; fi
+	@if grep -l '#include *"\.\./device/' server/*.c server/*.h 2>/dev/null; then echo "FAIL: server includes device headers"; exit 1; fi
+	@echo "separation OK"
+
+# M1 platform spike: multicast on loopback, broadcast to BCAST (PRD R-03).
+SPIKE_BIN := $(BUILD)/netspike
+$(SPIKE_BIN): tools/netspike.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -o $@ $<
+spike: $(SPIKE_BIN)
+	$(SPIKE_BIN) mcast 239.255.90.90 127.0.0.1
+	@if [ -n "$(BCAST)" ]; then $(SPIKE_BIN) bcast $(BCAST); else echo "set BCAST=<directed broadcast> to test broadcast"; fi
+
+# Same build and tests with AddressSanitizer + UBSan (TC-DEL-08).
+asan:
+	$(MAKE) BUILD=build-asan OPT="-O1 -g -fno-omit-frame-pointer" \
+	    SAN="-fsanitize=address,undefined -fno-sanitize-recover=undefined" test
+
+debug:
+	$(MAKE) BUILD=build-debug OPT="-O0 -g" all
+
+clean:
+	rm -rf build build-asan build-debug ztp-server ztp-device state
+
+clean-logs:
+	rm -rf logs *.pcap
+
+-include $(COMMON_OBJ:.o=.d) $(SERVER_OBJ:.o=.d) $(DEVICE_OBJ:.o=.d) $(TEST_OBJ:.o=.d)

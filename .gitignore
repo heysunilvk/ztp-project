@@ -10,3 +10,6 @@ ztp-assignment-analysis.md
 /state/
 /artifacts/
 *.pcap
+/build/
+/build-asan/
+/build-debug/

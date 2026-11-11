@@ -1,0 +1,2 @@
+{ "_comment": "No NAT (same L2 network). grace 360 = 2 x 60 x 3; path_probe stays on.",
+  "nat": { "keepalive_interval_s": 60, "grace_s": 360 } }

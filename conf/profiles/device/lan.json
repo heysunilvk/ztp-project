@@ -1,0 +1,2 @@
+{ "_comment": "No NAT (same L2 network); path_probe stays on.",
+  "nat": { "keepalive_interval_s": 60 } }
