@@ -395,7 +395,7 @@ ztp/
 └── logs/                    produced by `make demo` and committed for the submission
 ```
 
-**Separation rule.** `device/` and `server/` never include each other's headers. Both depend only on `common/`. The CI check is that `nm ztp-device` contains no `srv_*` symbols, and vice versa (TC-DEL-03).
+**Separation rule.** `device/` and `server/` never include each other's headers. Both depend only on `common/`. The CI check is that `nm ztp-device` contains no `srv_*` symbols, and vice versa (TC-DEL-03). Everything except each `main.c` is built into `libztpserver.a` / `libztpdevice.a`, so the unit tests can link both sides. The rule applies to the binaries, not to the test runner.
 
 ### 4.3 Layering (on both sides)
 ```
@@ -1302,7 +1302,7 @@ sequenceDiagram
 - On mismatch: `[PROVISION] Checksum mismatch, discarding (attempt 1/2)` → the partial file and bitmap are deleted → full re-download. `xfer.hash_attempts` (2) counts the **total** number of downloads, so the second mismatch logs `(attempt 2/2)` and ends in STATUS_REPORT(FAILED, HASH_MISMATCH).
 
 ### 11.4 Resume after failure (ZTP-FR-19)
-- **Persistence:** `xfer_<id>.part` (preallocated to `size`; chunks written at offset `i × CHUNK_SIZE`) and `xfer_<id>.map` (`sha256`, `size`, `chunk_size`, `count`, bitmap). The map is written atomically (§15.3) **every `xfer.persist_every_chunks` (16) chunks** and on clean shutdown.
+- **Persistence:** `xfer_<id>.part` (preallocated to `size`; chunks written at offset `i × CHUNK_SIZE`) and `xfer_<id>.map` (`sha256`, `size`, `chunk_size`, `count`, bitmap). The map is a small text file: a `ztp-xfermap 1` line, then `key=value` lines, with the bitmap as hex (bit *i*, least significant bit first in each byte, is chunk *i*; bits past `count` must be 0). A map whose `sha256` or `size` differs from the current manifest is discarded, and so is a malformed one; the download then starts from scratch. The map is written atomically (§15.3) **every `xfer.persist_every_chunks` (16) chunks** and on clean shutdown.
 - **Durability order (required for crash consistency):** the map may claim only chunks that are already durable. So every map update runs in this order:
   1. `fsync(part_fd)` (on macOS `fcntl(F_FULLFSYNC)`, because plain `fsync` there doesn't flush the drive cache);
   2. write `map.tmp`;

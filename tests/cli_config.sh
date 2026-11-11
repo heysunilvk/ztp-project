@@ -54,6 +54,20 @@ case "$msg" in *"unknown key nat.keepalive_intervl_s"*) pass=$((pass + 1)) ;; *)
 msg=$("$SRV" --set nat.keepalive_interval_s=0 2>&1 >/dev/null)
 check_eq "range message" "$msg" "config: nat.keepalive_interval_s=0 (cli): must be 1..300"
 
+# TC-CFG-04 with the QA §4.3 fixture files: exit 78, message names key, value, file and range
+for f in bad_range bad_type unknown_key dup_key trailing_comma too_deep dgram_over_cap chunk_too_big; do
+    expect 78 "fixture $f.json" "$SRV" --config "tests/conf/$f.json" --print-config
+done
+# too_big.json (> 64 KiB) is generated here rather than committed
+{ printf '{"_comment": "'; head -c 70000 /dev/zero | tr '\0' 'x'; printf '"}'; } > "$T/too_big.json"
+expect 78 "fixture too_big.json" "$SRV" --config "$T/too_big.json" --print-config
+msg=$("$SRV" --config tests/conf/bad_range.json 2>&1 >/dev/null)
+check_eq "bad_range message" "$msg" "config: nat.keepalive_interval_s=0 (file:tests/conf/bad_range.json): must be 1..300"
+msg=$("$SRV" --config tests/conf/dup_key.json 2>&1 >/dev/null)
+case "$msg" in *"tests/conf/dup_key.json:2:"*"duplicate key"*"nat.grace_s"*) pass=$((pass + 1)) ;; *) echo "  FAIL: dup_key message: $msg"; fail=$((fail + 1)) ;; esac
+msg=$("$SRV" --config "$T/too_big.json" 2>&1 >/dev/null)
+case "$msg" in *"larger than 65536 bytes"*) pass=$((pass + 1)) ;; *) echo "  FAIL: too_big message: $msg"; fail=$((fail + 1)) ;; esac
+
 # usage errors exit 64
 expect 64 "unknown flag" "$SRV" --no-such-flag
 expect 64 "missing argument" "$DEV" --loss

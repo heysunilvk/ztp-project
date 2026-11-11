@@ -1,0 +1,1 @@
+{ "_comment": "TC-CFG-04: above the 1200 B cap", "net": { "max_datagram": 1400 } }

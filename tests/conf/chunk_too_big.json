@@ -1,0 +1,1 @@
+{ "_comment": "TC-CFG-04: chunk above 1024 and above max_datagram - 52", "xfer": { "chunk_size": 2048 } }

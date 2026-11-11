@@ -330,7 +330,7 @@ See §3.2 for the non-goals. Also out of scope: real NAT hardware, real power-lo
 ## 11. Release plan, milestones and timeline
 
 ### 11.1 Effort and timeline (approximate)
-These estimates assume one senior C developer full-time, a QA engineer working in parallel from M1 onward (building the harness and fixtures in M1, then running each milestone's tests), and a part-time architect for reviews. They include about 20% contingency.
+These estimates assume one senior C developer full-time, a QA engineer working in parallel from M1 onward (building the fixtures in M1 and the protocol harness, `peer_sim` and the log checkers, in M2 when there is session traffic to drive; then running each milestone's tests), and a part-time architect for reviews. They include about 20% contingency.
 
 | Phase | Scope | Effort | Indicative dates (start Mon 2026-11-16) | Exit criteria |
 |---|---|---|---|---|
@@ -366,8 +366,8 @@ gantt
     M5 Upgrade and validation      :m5, after m4, 2d
     M6 Server hardening and demo   :m6, after m5, 1d
     section QA
-    Test harness and fixtures      :q1, after p0, 3d
-    Test execution per milestone   :q2, after q1, 11d
+    Test fixtures (M1)             :q1, after p0, 2d
+    Harness (M2) and test runs     :q2, after q1, 12d
     M7 Full regression and docs    :m7, after m6, 2d
     Submission ready               :milestone, ms1, after m7, 0d
 ```

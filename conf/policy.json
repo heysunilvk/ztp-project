@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "_comment": "Assignments only; no nat overrides, so the server's effective nat.* (defaults, file, profile, CLI) reaches every device (DESIGN §25.6).",
+  "default": { "action": "reject" },
+  "tenants": { "cruise_ops": {} },
+  "models": {
+    "EDGE-GW-100": { "firmware": "v1.1", "firmware_file": "artifacts/fw_EDGE-GW-100_v1.1.bin",
+                     "config_version": 3, "config_file": "artifacts/cfg_v3.json", "tenant": "cruise_ops" },
+    "EDGE-GW-050": { "firmware": "v1.0", "firmware_file": "artifacts/fw_EDGE-GW-050_v1.0.bin",
+                     "config_version": 2, "config_file": "artifacts/cfg_v2.json", "tenant": "cruise_ops",
+                     "notes": "Legacy device" }
+  },
+  "serials": {}
+}

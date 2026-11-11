@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "_comment": "QA fixture (TC-CFG-06, TC-SRV-02, TC-UNIT-20): conf/policy.json plus per-tenant and per-serial nat overrides (DESIGN §25.6).",
+  "default": { "action": "reject" },
+  "tenants": { "cruise_ops": { "nat": { "grace_s": 180 } } },
+  "models": {
+    "EDGE-GW-100": { "firmware": "v1.1", "firmware_file": "artifacts/fw_EDGE-GW-100_v1.1.bin",
+                     "config_version": 3, "config_file": "artifacts/cfg_v3.json", "tenant": "cruise_ops" },
+    "EDGE-GW-050": { "firmware": "v1.0", "firmware_file": "artifacts/fw_EDGE-GW-050_v1.0.bin",
+                     "config_version": 2, "config_file": "artifacts/cfg_v2.json", "tenant": "cruise_ops",
+                     "notes": "Legacy device" }
+  },
+  "serials": {
+    "_comment": "Highest precedence. Example: a site whose NAT drops UDP mappings after 15 s.",
+    "ZTP-55AC90": { "nat": { "keepalive_interval_s": 10 } }
+  }
+}

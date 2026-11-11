@@ -1,0 +1,41 @@
+{
+  "config_version": 3,
+  "tenant": "cruise_ops",
+  "interfaces": {
+    "wan": "eth0",
+    "lan": "eth1"
+  },
+  "mtu": 1500,
+  "keepalive_interval": 20,
+  "ntp": [
+    "10.10.10.1"
+  ],
+  "syslog": "10.10.10.2:514",
+  "vlans": [
+    {
+      "id": 10,
+      "name": "mgmt"
+    },
+    {
+      "id": 20,
+      "name": "data"
+    }
+  ],
+  "banner": "Authorized access only. This edge gateway is managed by cruise_ops; all sessions are logged and monitored",
+  "acl": [
+    "permit udp 10.20.0.1/32 any eq 5000",
+    "permit udp 10.20.0.2/32 any eq 5001",
+    "permit udp 10.20.0.3/32 any eq 5002",
+    "permit udp 10.20.0.4/32 any eq 5003",
+    "permit udp 10.20.0.5/32 any eq 5004",
+    "permit udp 10.20.0.6/32 any eq 5005",
+    "permit udp 10.20.0.7/32 any eq 5006",
+    "permit udp 10.20.0.8/32 any eq 5007",
+    "permit udp 10.20.0.9/32 any eq 5008",
+    "permit udp 10.20.0.10/32 any eq 5009",
+    "permit udp 10.20.0.11/32 any eq 5010",
+    "permit udp 10.20.0.12/32 any eq 5011",
+    "permit udp 10.20.0.13/32 any eq 5012",
+    "permit udp 10.20.0.14/32 any eq 5013",
+    "permit udp 10.20.0.15/32 any eq 5014",
+    "permit udp 10.20.0.16/32 any eq 5

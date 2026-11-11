@@ -22,8 +22,15 @@ COMMON_OBJ := $(COMMON_SRC:%.c=$(BUILD)/%.o)
 SERVER_OBJ := $(SERVER_SRC:%.c=$(BUILD)/%.o)
 DEVICE_OBJ := $(DEVICE_SRC:%.c=$(BUILD)/%.o)
 TEST_OBJ   := $(TEST_SRC:%.c=$(BUILD)/%.o)
+# Everything except main.o goes into a per-binary library, so unit tests can link it.
+SERVER_MAIN := $(BUILD)/server/main.o
+DEVICE_MAIN := $(BUILD)/device/main.o
+SERVER_LIB_OBJ := $(filter-out $(SERVER_MAIN),$(SERVER_OBJ))
+DEVICE_LIB_OBJ := $(filter-out $(DEVICE_MAIN),$(DEVICE_OBJ))
 
 LIB        := $(BUILD)/libztpcommon.a
+SRV_LIB    := $(BUILD)/libztpserver.a
+DEV_LIB    := $(BUILD)/libztpdevice.a
 SERVER_BIN := $(BUILD)/ztp-server
 DEVICE_BIN := $(BUILD)/ztp-device
 TEST_BIN   := $(BUILD)/unit-tests
@@ -41,14 +48,24 @@ $(LIB): $(COMMON_OBJ)
 	@rm -f $@
 	$(AR) rcs $@ $^
 
-$(SERVER_BIN): $(SERVER_OBJ) $(LIB)
-	$(CC) $(LDFLAGS) -o $@ $(SERVER_OBJ) $(LIB) $(LDLIBS)
+$(SRV_LIB): $(SERVER_LIB_OBJ)
+	@rm -f $@
+	$(AR) rcs $@ $^
 
-$(DEVICE_BIN): $(DEVICE_OBJ) $(LIB)
-	$(CC) $(LDFLAGS) -o $@ $(DEVICE_OBJ) $(LIB) $(LDLIBS)
+$(DEV_LIB): $(DEVICE_LIB_OBJ)
+	@rm -f $@
+	$(AR) rcs $@ $^
 
-$(TEST_BIN): $(TEST_OBJ) $(LIB)
-	$(CC) $(LDFLAGS) -o $@ $(TEST_OBJ) $(LIB) $(LDLIBS)
+$(SERVER_BIN): $(SERVER_MAIN) $(SRV_LIB) $(LIB)
+	$(CC) $(LDFLAGS) -o $@ $(SERVER_MAIN) $(SRV_LIB) $(LIB) $(LDLIBS)
+
+$(DEVICE_BIN): $(DEVICE_MAIN) $(DEV_LIB) $(LIB)
+	$(CC) $(LDFLAGS) -o $@ $(DEVICE_MAIN) $(DEV_LIB) $(LIB) $(LDLIBS)
+
+# Unit tests may link both sides' libraries (the separation rule applies to the binaries).
+$(TEST_OBJ): CFLAGS += -Iserver -Idevice
+$(TEST_BIN): $(TEST_OBJ) $(SRV_LIB) $(DEV_LIB) $(LIB)
+	$(CC) $(LDFLAGS) -o $@ $(TEST_OBJ) $(SRV_LIB) $(DEV_LIB) $(LIB) $(LDLIBS)
 
 $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)

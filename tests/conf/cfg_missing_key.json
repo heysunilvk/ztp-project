@@ -1,0 +1,68 @@
+{
+  "config_version": 3,
+  "tenant": "cruise_ops",
+  "interfaces": {
+    "wan": "eth0",
+    "lan": "eth1"
+  },
+  "mtu": 1500,
+  "ntp": [
+    "10.10.10.1"
+  ],
+  "syslog": "10.10.10.2:514",
+  "vlans": [
+    {
+      "id": 10,
+      "name": "mgmt"
+    },
+    {
+      "id": 20,
+      "name": "data"
+    }
+  ],
+  "banner": "Authorized access only. This edge gateway is managed by cruise_ops; all sessions are logged and monitored",
+  "acl": [
+    "permit udp 10.20.0.1/32 any eq 5000",
+    "permit udp 10.20.0.2/32 any eq 5001",
+    "permit udp 10.20.0.3/32 any eq 5002",
+    "permit udp 10.20.0.4/32 any eq 5003",
+    "permit udp 10.20.0.5/32 any eq 5004",
+    "permit udp 10.20.0.6/32 any eq 5005",
+    "permit udp 10.20.0.7/32 any eq 5006",
+    "permit udp 10.20.0.8/32 any eq 5007",
+    "permit udp 10.20.0.9/32 any eq 5008",
+    "permit udp 10.20.0.10/32 any eq 5009",
+    "permit udp 10.20.0.11/32 any eq 5010",
+    "permit udp 10.20.0.12/32 any eq 5011",
+    "permit udp 10.20.0.13/32 any eq 5012",
+    "permit udp 10.20.0.14/32 any eq 5013",
+    "permit udp 10.20.0.15/32 any eq 5014",
+    "permit udp 10.20.0.16/32 any eq 5015",
+    "permit udp 10.20.0.17/32 any eq 5016",
+    "permit udp 10.20.0.18/32 any eq 5017",
+    "permit udp 10.20.0.19/32 any eq 5018",
+    "permit udp 10.20.0.20/32 any eq 5019",
+    "permit udp 10.20.0.21/32 any eq 5020",
+    "permit udp 10.20.0.22/32 any eq 5021",
+    "permit udp 10.20.0.23/32 any eq 5022",
+    "permit udp 10.20.0.24/32 any eq 5023",
+    "permit udp 10.20.0.25/32 any eq 5024",
+    "permit udp 10.20.0.26/32 any eq 5025",
+    "permit udp 10.20.0.27/32 any eq 5026",
+    "permit udp 10.20.0.28/32 any eq 5027",
+    "permit udp 10.20.0.29/32 any eq 5028",
+    "permit udp 10.20.0.30/32 any eq 5029",
+    "permit udp 10.20.0.31/32 any eq 5030",
+    "permit udp 10.20.0.32/32 any eq 5031",
+    "permit udp 10.20.0.33/32 any eq 5032",
+    "permit udp 10.20.0.34/32 any eq 5033",
+    "permit udp 10.20.0.35/32 any eq 5034",
+    "permit udp 10.20.0.36/32 any eq 5035",
+    "permit udp 10.20.0.37/32 any eq 5036",
+    "permit udp 10.20.0.38/32 any eq 5037",
+    "permit udp 10.20.0.39/32 any eq 5038",
+    "permit udp 10.20.0.40/32 any eq 5039",
+    "permit udp 10.20.0.41/32 any eq 5040",
+    "permit udp 10.20.0.42/32 any eq 5041"
+  ]
+}
