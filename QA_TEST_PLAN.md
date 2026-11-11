@@ -610,14 +610,14 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 |---|---|
 | **M1** | TC-UNIT-01..06, TC-UNIT-11..20, TC-CFG-01..05, TC-CFG-07 (codec, crypto, netsim, config and policy loaders, transfer bitmap and provisioned-config check; no reliability engine, which is built in M2) |
 | **M2** | TC-UNIT-07..10 (reliability engine, simulated clock), TC-DISC-01..08, TC-SESS-01..04/06/08, TC-REL-01/02/03/08, TC-NAT-06/11, TC-SIM-01/02 (OOO half from M4), TC-CFG-08 (discovery, handshake, reliability, path probe; driven by HELLO, keepalive or `peer_sim` traffic) |
-| **M3** | TC-AUTH-01..06/08/09/11..14, TC-REL-04, TC-REL-11 (needs a session that lives 60 s; M2 sessions are half-open and expire after `nat.half_open_ttl_s`), TC-CFG-09, TC-SRV-03/08/11 (registration, keys, policy, DB) |
+| **M3** | TC-AUTH-01..06/08/09/11..14, TC-REL-04, TC-REL-11 (needs a session that lives 60 s; M2 sessions are half-open and expire after `nat.half_open_ttl_s`), TC-CFG-09, TC-SRV-03/08/11 (registration, keys, policy, DB). **Open (2026-11-11):** TC-AUTH-03/04/05/06/08/11/13/14 and TC-SRV-08/11 wait for attack-simulation tooling (§12.5); the rest of the M3 gate passes |
 | **M4** | TC-PROV-01..07/10/11, TC-REL-06/07, TC-SESS-09, TC-NAT-05/12 (transfer into the inactive slot, a PROVISIONING session, many frames in flight) |
 | **M5** | TC-UPG-01..11, TC-VAL-01..05, TC-SESS-05/07, TC-AUTH-07/10/15, TC-REL-05/09/10, TC-PROV-08/09/12/13, TC-NAT-01..04/07..10/13, TC-CFG-06/10, TC-APX-01..10, TC-PDF-01/03/04 (anything that completes the full flow or needs the resume handshake) |
 | **M6** | TC-SRV-01/02/04..07/09/10, TC-PERF-01..04, TC-E2E-01/02, TC-PDF-02/05, TC-LOG-01..04 (server hardening, dump, demo, scale) |
 | **M7** | TC-DEL-01..10, TC-SIM-03/04, the full impairment matrix (§6), and a full regression of every gate |
 
 ### 12.2 QA dependencies
-- QA-D1: the test hooks in DESIGN §19.2 (all gated by `--test-hooks`): `--first-session-id`, `--corrupt-chunk`, `--drop-seq`, `--dup-seq`, `--no-discovery`, `--bad-key`, `--replay-test`, `--reuse-nonce`, `--nonce`, `--crash-after-chunks`, `--crash-at`, `--restart-mode`, `--restart-delay`, `--rebind-after`, `--fail-validate`, `--hook-delete-config`, `--no-refetch`, `--hook-bad-fw-version`, plus the simulation flags `--sim-mtu` and `--nat-sim`. These must land with each milestone.
+- QA-D1: the test hooks in DESIGN §19.2 (all gated by `--test-hooks`): `--first-session-id`, `--corrupt-chunk`, `--drop-seq`, `--dup-seq`, `--no-discovery`, `--bad-key`, `--replay-test`, `--reuse-nonce`, `--nonce`, `--crash-after-chunks`, `--crash-at`, `--restart-mode`, `--restart-delay`, `--rebind-after`, `--fail-validate`, `--hook-delete-config`, `--no-refetch`, `--hook-bad-fw-version`, plus the simulation flags `--sim-mtu` and `--nat-sim`. These must land with each milestone. **Status (2026-11-11):** `--bad-key`, `--replay-test`, `--reuse-nonce` and `--nonce` are not built yet (§12.5).
 - QA-D2: **GitHub Actions** on https://github.com/heysunilvk/ztp-project (PRD D-09) as the Linux environment for netem (TC-SIM-03), broadcast (TC-DISC-05 (b)), valgrind and the gcc build. There's no local Linux host or VM, because of limited disk space on the Mac. CI is set up in M1.
 - QA-D3: the Xcode CLT on the macOS host. Satisfied: verified on 2026-11-10 (PRD D-08).
 - QA-D4: `tcpdump` permission on the test host (sudo), for the pcap-based cases.
@@ -640,6 +640,23 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 | Limited test time at M7 | Most cases are automated and run from M2 onward, so M7 is mainly regression |
 
 ---
+
+### 12.5 Open test tooling (recorded 2026-11-11, M3)
+The M3 code these tests exercise is built and passes its other tests, and the logic behind each one is in place. What is missing is the tooling that **generates the hostile or malformed traffic** to test it end to end: the device test hooks and `peer_sim` modes below. They weren't built with M3, and the owner takes them on. Until they exist, the listed cases are recorded as open exceptions to the M3 gate (§11.1), not as passes.
+
+| Missing tooling | Unblocks | Logic already built (and how it is covered today) |
+|---|---|---|
+| Device hook `--bad-key` (corrupt K_mfg; K_fleet stays correct) | TC-AUTH-03; demo device ZTP-84BC19 (PRD §5.2 S2) | BAD_MAC NAK echoing NONCE_REG; DB "Invalid HMAC"; device retries up to `auth.register_attempts`, then FAILED (code review; DB rules unit-tested in `tests/test_db.c`) |
+| Device hook `--replay-test` | TC-AUTH-04, TC-AUTH-05; demo device ZTP-71DD08 (S3) | Duplicate drop in the reliability window (TC-NAT-12, TC-REL-04 pass); BAD_MAC for a frame under another session's K_s; a failure never overwrites a Success row (unit-tested) |
+| Device hooks `--reuse-nonce`, `--nonce N` | TC-AUTH-06; Appendix A nonce 984312 (TC-APX-05) | REGISTER nonce cache → REPLAY NAK (code review) |
+| A tool that bit-flips each byte of a captured REGISTER (and CHUNK_DATA from M4) | TC-AUTH-08 | MAC verification on every frame (TC-UNIT-03 flips every bit of a frame; TC-NAT-06 passes) |
+| `peer_sim` rogue server (bad-MAC HELLO_ACK) | TC-AUTH-11 | Device verifies HELLO_ACK under K_boot with the Nd echo (code review) |
+| `peer_sim` wrong fleet key | TC-AUTH-13 | Silent drop and `mac_fail` on the server; blocked-path hint on the device (TC-NAT-11 passes) |
+| `peer_sim` forged and replayed REGISTER_NAK | TC-AUTH-14 | Device accepts a NAK only under K_boot with the outstanding NONCE_REG (code review) |
+| `peer_sim` half-open load (300 HELLOs) | TC-SRV-08 | `limits.max_half_open` → `SERVER_BUSY`; half-open TTL (TTL expiry passes in the M2 tests) |
+| `peer_sim` failing-registration load (20,000) | TC-SRV-11 | Failed-row cap, oldest evicted, Success rows never evicted (unit-tested at 1,000 rows over a cap of 100) |
+
+When a tool lands, its cases move back into the gate and run in CI like the others. Anything still open at M7 is listed in the README's "Test coverage and known gaps" section (DESIGN §21.3).
 
 ## 13. Caveats: what is not or cannot be tested
 | Gap | Why | Mitigation / substitute |

@@ -2208,6 +2208,7 @@ Specifically: a lost HELLO or REGISTER is retransmitted with identical bytes and
 | How configuration and firmware provisioning works | §11 |
 | How version upgrades and restarts are handled | §12 |
 | Known limitations and tradeoffs | §22 |
+| Test coverage and known gaps: which QA cases ran where (CI, the Mac), and every case still open at submission with its reason (QA §12.5, PRD R-15) | QA §10, §12.5 |
 | *Bonus:* how packet loss and out-of-order delivery are handled | §8.3–8.4 |
 | *Bonus:* how duplicate packets are detected and ignored | §8.5–8.6 |
 | *Bonus:* how loss and reordering were simulated | §16 |
