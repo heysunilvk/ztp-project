@@ -1134,9 +1134,14 @@ K_mfg[model]   32 B   per-model manufacturing secret: in that model's firmware i
    │
    └── K_dev  = HMAC(K_mfg, "ZTP-DEV-v1" ‖ serial)               resume HELLO/HELLO_ACK, root of K_s
           │
-          └── K_s = HMAC(K_dev, "ZTP-SK-v1" ‖ Nd ‖ Ns ‖ be32(session_id) ‖ be16(epoch))
+          └── K_s = HMAC(K_dev, "ZTP-SK-v1" ‖ be64(Nd) ‖ be64(Ns) ‖ be32(session_id) ‖ be16(epoch))
                                                                 every in-session frame (REGISTER onward)
 ```
+- **Byte encoding of the HMAC inputs (normative).** These are the exact bytes that are MACed:
+  - Labels are their ASCII bytes, with no NUL terminator and no length prefix.
+  - The serial is its ASCII bytes as carried in the SERIAL TLV (for example the 10 bytes `ZTP-93AF21`), again with no terminator or length prefix.
+  - `Nd` and `Ns` are the 64-bit nonces as carried in NONCE_DEV and NONCE_SRV, written as **8-byte big-endian** values (`be64`). The session id is `be32` and the epoch `be16`, matching the header. The K_s message after the label is therefore always 22 bytes.
+  - The reference vectors for TC-UNIT-16 are in `tests/test_crypto.c`. They were computed independently with Python's `hmac` module, and K_boot was cross-checked with `openssl dgst -sha256 -mac HMAC`.
 - **Two roots with separate jobs.**
   - `K_fleet` (through K_boot) only lets a peer *take part in the bootstrap*: discover the server, open a half-open session, probe the path, and receive an authenticated rejection. It proves **nothing about identity**.
   - `K_mfg` (through K_dev and K_s) proves that a device is a genuine unit of its model, and that the server can provision it.
@@ -1979,7 +1984,7 @@ These are the non-PDF lines that tests assert on. Each one is a `logmsg.h` const
 | `[VALIDATION] Session healthy (rtt=<n> ms)` | device | §13 | §13 |
 | `[STATE] Device is FAILED (reason: <reason>)` | device | FAILED entered | §15.2 |
 | `[STATE] Exiting after operational hold (run.exit_when_operational, <h> s)` | device | Demo or test exit after OPERATIONAL (§13, §23 OQ-8) | §13 |
-| `[CONFIG] profile=<p> file=<f> sha256=<h> keepalive=<k>s grace=<g>s window=<w> max_dgram=<d>` | both | Startup | §25.9 |
+| `[CONFIG] profile=<p> file=<f> sha256=<h> keepalive=<k>s grace=<g> window=<w> max_dgram=<d>` (`<g>` is `<n>s` on the server, `-` on the device) | both | Startup | §25.9 |
 | `[PROVISION] Config manifest: <v>, <n> bytes, <c> chunks, sha256=<h>` / `[PROVISION] Firmware manifest: <v>, <n> bytes, <c> chunks` | device | MANIFEST received | §11.2 |
 | `[PROVISION] Firmware <i>/<n> (<p>%)` / `[PROVISION] Firmware checksum verified` | device | Progress every 8 chunks / firmware verified | §11.2, §11.3 |
 | `[UPGRADE] Image <v> staged in slot <S> (verified; commit after the INSTALLING ACK)` | device | Stage FW_STAGED | §12.1 |
@@ -2478,7 +2483,21 @@ These rules also apply to **every resolved per-device policy result**, and the s
 
 ### 25.9 Effective configuration and observability
 - `--print-config` prints the merged JSON with the **source of every value** (`default`, `file:conf/server.json`, `profile:demo`, `cli`, and for per-device values `policy:tenant cruise_ops`, `policy:model EDGE-GW-100` or `policy:serial ZTP-55AC90`) and exits. This is useful for reviewers and in support cases.
+  - **Format.** The nesting follows the configuration file, and each leaf is replaced by `{"value": …, "source": "…"}`. The output is itself valid strict JSON (re-parsed in TC-UNIT-20), so tests and tools can extract values with any JSON reader. Only the keys that exist on the running side are printed, and a `null` serial prints as `"value": null`. Example (server, abridged):
+    ```json
+    {
+      "schema_version": {"value": 1, "source": "file:conf/server.json"},
+      "profile": {"value": "demo", "source": "cli"},
+      "nat": {
+        "keepalive_interval_s": {"value": 2, "source": "profile:demo"},
+        "grace_s": {"value": 30, "source": "profile:demo"},
+        "half_open_ttl_s": {"value": 10, "source": "file:conf/server.json"}
+      }
+    }
+    ```
 - At startup each binary logs one line: `[CONFIG] profile=demo file=conf/server.json sha256=… keepalive=2s grace=30s window=8 max_dgram=1200`. The full dump is logged at `-v`.
+  - The **device** prints `grace=-`. The grace period is a server-side setting with no device configuration key; the device learns it from GRACE_S in HELLO_ACK, after this line is logged. Example: `[CONFIG] profile=demo file=conf/device.json sha256=… keepalive=2s grace=- window=8 max_dgram=1200`.
+  - With no configuration file, the line shows `file=(none) sha256=-`.
 - The verbose DB dump shows each device's effective `keepalive_interval_s` and `grace_s`.
 - **Reload:** configuration is read at startup, so a change needs a restart. Reloading policy on SIGHUP is a roadmap item (§22.3).
 
