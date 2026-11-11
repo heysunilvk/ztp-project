@@ -85,7 +85,7 @@ Real NAT hardware, real flash or power-loss rigs, IPv6, Windows, and production 
 **QA tools and their options.** These options belong to test tooling, not to the ZTP binaries; the binaries' flags are in DESIGN §19.2.
 | Tool | Options used by the tests | Purpose |
 |---|---|---|
-| `tests/peer_sim` | `--rogue-offer`, `--rogue-server`, `--fake-server` (advertises arbitrary KEEPALIVE_S and DEAD_INTERVALS), `--bad-fleet-key`, `--flood N/s`, `--replay file.pcap` | A scripted protocol peer for negative, security and component tests (TC-REL-03, TC-AUTH-*, TC-NAT-06/12, TC-CFG-08) |
+| `tests/peer_sim` | Modes built in M2: `handshakes N` (TC-SESS-04), `unknown-sid` (TC-SESS-06), `pdf-reorder` (TC-REL-03), `out-of-window` (TC-REL-08), `spoof-source` (TC-NAT-06/12), `rogue-offer` (TC-DISC-07), `replay-offer` (TC-DISC-08), `fake-server` (advertises arbitrary KEEPALIVE_S and DEAD_INTERVALS; TC-CFG-08). Added with their milestones: `rogue-server`, `bad-fleet-key`, `flood N/s`, `replay file.pcap` | A scripted protocol peer for negative, security and component tests (TC-REL-03, TC-AUTH-*, TC-NAT-06/12, TC-CFG-08); driven by `tests/m2_peer.sh` |
 | `scripts/pcapcheck.sh` | `--dump-hdr` (decode ZTP headers), maximum-size and fragment filters | Wire-level checks (TC-REL-01, TC-PROV-04/05, TC-APX-03) |
 | `tools/mkartifacts` | `--test-set` (the boundary-size firmware and config fixtures in §4.2) | Deterministic artifacts |
 | `tests/check_logs.sh`, `check_appendix_a.sh`, `check_invariants.sh` | `--server` (the server matching rule, DESIGN §17.4) | Log, Appendix A and invariant assertions |
