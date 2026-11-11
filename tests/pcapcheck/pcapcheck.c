@@ -64,7 +64,7 @@ static void fmt_ep(uint32_t ip, uint16_t port, char *out)
     struct in_addr a = {ip};
     char b[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &a, b, sizeof b);
-    sprintf(out, "%s:%u", b, (unsigned)port);
+    snprintf(out, 32, "%s:%u", b, (unsigned)port);
 }
 
 static int check(const char *path, const uint16_t *ports, int nports, bool dump, size_t max_size, bool quiet)
