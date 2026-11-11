@@ -306,7 +306,7 @@ void dev_session_rx(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_t
         d->in_rx = false;
         if (d->fail_pending) {
             d->fail_pending = false;
-            dev_fail(d, d->fail_reason);
+            dev_fail(d, d->pending_reason);
             return;
         }
     }

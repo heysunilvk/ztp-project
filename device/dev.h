@@ -126,6 +126,7 @@ typedef struct {
     uint64_t    fail_after;          /* FAILED once STATUS_ACK arrives, or at this deadline */
     bool        in_rx;               /* inside the engine's deliver callback: the engine must not be freed */
     bool        fail_pending;        /* dev_fail() requested from inside delivery */
+    char        pending_reason[48];  /* its reason (a separate buffer: the caller may pass fail_reason) */
     char        fail_reason[48];
 
     dev_counters_t c;
