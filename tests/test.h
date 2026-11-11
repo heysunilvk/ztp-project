@@ -52,5 +52,6 @@ void suite_netsim(void);
 void suite_timer(void);
 void suite_policy(void);
 void suite_transfer(void);
+void suite_reliable(void);
 
 #endif

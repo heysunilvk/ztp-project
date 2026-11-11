@@ -35,6 +35,7 @@ static const struct { const char *name; void (*fn)(void); } SUITES[] = {
     {"crypto", suite_crypto}, {"protocol", suite_protocol}, {"json", suite_json},
     {"config", suite_config}, {"util", suite_util},         {"netsim", suite_netsim},
     {"timer", suite_timer},   {"policy", suite_policy},     {"transfer", suite_transfer},
+    {"reliable", suite_reliable},
 };
 
 int main(int argc, char **argv)

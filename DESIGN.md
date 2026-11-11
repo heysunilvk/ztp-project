@@ -911,7 +911,9 @@ srtt, rttvar, rto   RFC 6298 estimator
 ### 8.3 Timeouts and retransmission (ZTP-FR-06, BON-03)
 - **RTO** follows the RFC 6298 estimator: `RTO = SRTT + max(G, 4·RTTVAR)`, initial RTO **500 ms** (`rel.rto_initial_ms`), clamped to **[200 ms, 4 s]** (`rel.rto_min_ms`, `rel.rto_max_ms`). The first RTT sample comes from HELLO → HELLO_ACK, unless HELLO was retransmitted (Karn's rule), in which case the path probe (§9.2) gives it. Either way the initial value is replaced after the first exchange.
 - **Karn's algorithm:** RTT samples come only from frames that were never retransmitted.
-- **Exponential backoff:** RTO ×2 on each timeout of the same frame, up to the 4 s cap.
+- **Exponential backoff:** RTO ×2 on each timeout of the same frame, up to the 4 s cap. The backoff is kept **per frame**: each TX slot starts from the estimator's RTO when it is first sent and doubles on its own timeouts, so a burst of timeouts doesn't compound into a single shared RTO. A fresh RTT sample updates the estimator, and later frames start from that value.
+- **Retransmitted frames** keep their seq, payload and key, but the header is rebuilt: the `RETX` flag is set and the current ack and SACK are piggybacked. The MAC covers the flags, so it is recomputed; the bytes are therefore not identical to the original. Each TX slot stores the key it was first sent under, so a path-probe KEEPALIVE sent under K_boot is retransmitted under K_boot even after REGISTER switches the session to K_s (§10.1).
+- **Timers on SACKed frames.** A SACKed frame is already held by the receiver, so it normally needs no timer. The exception is the **oldest unacknowledged frame**: a frame SACKed under an older ACK becomes the oldest when the gaps before it are filled. If the cumulative ACK covering it is then lost, nothing else would prompt the peer to ACK again, and the sender would wait forever. Its timer therefore stays armed; the retransmission arrives as a duplicate, and the immediate re-ACK (§8.7) repairs the state. This was found by the 10k-permutation test (TC-UNIT-08) and is pinned by a regression test.
 - **Retry limit:** after **8** retransmissions of one frame (`rel.max_retries`), the engine raises `SESSION_FAILED`. Timing from the initial 500 ms RTO: the original is followed by retransmissions at +0.5, +1.5, +3.5, +7.5, +11.5, +15.5, +19.5 and +23.5 s (waits of 0.5+1+2+4+4+4+4+4 = 23.5 s), and the 8th retransmission's own 4 s timer expires at **about 27.5 s**. **KEEPALIVE frames are exempt from this limit.** They are retransmitted until the liveness detector's dead interval expires (§9.3), so session death is decided by `nat.dead_intervals` and not by two competing timers. The device then moves to *resume* (if it's registered) or a fresh HELLO, with jittered reconnect backoff (§9.3). The server moves the session to `IDLE_GRACE`.
 - **Fast retransmit:** if frame X is unacknowledged and **3** frames sent after it have been SACKed, X is retransmitted at once, without waiting for its RTO, at most once per RTO period. This recovers losses in the middle of a window in about one RTT instead of one RTO.
 - Log: `[UDP] Retransmitting seq=N (timeout)` or `(fast, sack)`.
@@ -1010,11 +1012,11 @@ Comparisons use serial-number arithmetic (RFC 1982): `seq_lt(a,b) = (int32_t)(a-
 ### 8.10 Retransmission timer logic (sender side)
 ```mermaid
 flowchart TD
-    T["timer fires for TX slot with seq N"] --> A{"slot already ACKed or SACKed?"}
-    A -- yes --> Z["free slot, and if never retransmitted<br/>take RTT sample (Karn) and update SRTT, RTTVAR, RTO"]
+    T["timer fires for TX slot with seq N"] --> A{"slot ACKed, or SACKed and not the oldest unacked?"}
+    A -- yes --> Z["no retransmission (an ACK frees the slot;<br/>RTT samples are taken on ACK/SACK arrival, Karn)"]
     A -- no --> B{"retries below rel.max_retries?<br/>(default 8)"}
     B -- no --> F["raise SESSION_FAILED:<br/>device resumes (12.3) or re-HELLOs,<br/>server moves session to IDLE_GRACE"]
-    B -- yes --> C["retransmit identical bytes with RETX flag,<br/>retries + 1, RTO x2 capped at rel.rto_max_ms (default 4 s),<br/>log: Retransmitting seq=N (timeout)"]
+    B -- yes --> C["retransmit the same seq, payload and key with RETX<br/>and the current ack/sack (header and MAC rebuilt),<br/>retries + 1, this frame's RTO x2 capped at rel.rto_max_ms (default 4 s),<br/>log: Retransmitting seq=N (timeout)"]
     C --> R["re-arm timer at now + RTO"]
     S["ACK arrives with SACK bits"] --> G{"rel.fast_retx_threshold (default 3)<br/>later frames SACKed and N still unacked?"}
     G -- yes --> H["fast retransmit N once per RTO period,<br/>log: Retransmitting seq=N (fast, sack)"]
@@ -2704,38 +2706,27 @@ typedef struct {
     uint8_t  mac[ZTP_MAC_LEN];
 } ztp_hdr_t;
 
-/* common/reliable.h */
+/* common/reliable.h (as implemented in M2; the engine owns no socket and no clock) */
 #define ZTP_TX_WINDOW_MAX 16        /* rel.tx_window is 1..16 */
 #define ZTP_RX_WINDOW     32        /* = SACK width, fixed     */
-typedef struct {
-    uint32_t seq; uint16_t len; uint8_t retries; bool in_use, sacked, retransmitted, is_keepalive;
-    uint64_t first_sent_ms, last_sent_ms, deadline_ms;
-    uint8_t  bytes[ZTP_MAX_DGRAM_CAP];
-} rel_tx_slot_t;
+typedef int  (*rel_tx_fn)(void *ctx, const uint8_t *frame, size_t len, bool to_source);  /* to_source: re-ACK of a duplicate (§5.7) */
+typedef void (*rel_deliver_fn)(void *ctx, uint8_t type, uint8_t flags, uint32_t seq, const uint8_t *p, uint16_t n);
+typedef struct { int window, rto_initial_ms, rto_min_ms, rto_max_ms, max_retries, fast_retx_threshold,
+                 delayed_ack_ms, queue_max; uint16_t max_dgram; } rel_cfg_t;                 /* from ztp_config_t (§25) */
+typedef struct { uint8_t type, flags; bool keepalive; const uint8_t *key; uint8_t key_id; } rel_msg_t;  /* key copied per TX slot */
+typedef enum { REL_RX_NEW = 1, REL_RX_DUP, REL_RX_OOW } rel_rx_t;   /* NEW = never-seen seq (peer-update rule, §9.4) */
+typedef struct rel rel_t;   /* opaque: TX slots {seq, payload, key, rto_ms, retries, sacked, ...}, send queue,
+                               SRTT/RTTVAR/RTO, rcv_ack, rx_bitmap, rx[32], delayed-ACK state, counters (§17.3) */
 
-typedef struct {
-    /* configuration (from ztp_config_t, §25) */
-    uint8_t  window; uint8_t max_retries; uint16_t max_dgram;      /* current datagram limit (1200 or 508) */
-    /* sender */
-    uint32_t next_seq, snd_una;
-    rel_tx_slot_t tx[ZTP_TX_WINDOW_MAX];
-    uint32_t srtt_ms, rttvar_ms, rto_ms;
-    uint8_t  big_frame_timeouts;                                   /* §5.8 black-hole detector */
-    /* receiver */
-    uint32_t rcv_ack, rx_bitmap;
-    struct { uint16_t len; uint8_t type; uint8_t payload[ZTP_MAX_DGRAM_CAP]; } rx[ZTP_RX_WINDOW];
-    bool ack_pending; uint64_t ack_deadline_ms;
-    /* stats (canonical names, §17.3) */
-    uint32_t c_retx_timeout, c_retx_fast, c_dup, c_ooo, c_out_of_window, c_mtu_stepdowns;
-} rel_state_t;
-
-/* reliable.c API (shared by device and server) */
-int  rel_send(rel_state_t *, uint8_t type, const uint8_t *payload, uint16_t len, uint64_t now);  /* -E2BIG if > max_dgram */
-int  rel_on_rx(rel_state_t *, const ztp_hdr_t *, const uint8_t *payload, uint64_t now,
-               bool *is_new,                                     /* out: never-seen seq (peer-update rule, §9.4) */
-               void (*deliver)(void *ctx, uint8_t type, const uint8_t *p, uint16_t n), void *ctx);
-uint64_t rel_next_deadline(const rel_state_t *);
-int  rel_on_timer(rel_state_t *, uint64_t now);  /* retransmissions; -ETIMEDOUT on retry exhaustion of a non-keepalive frame */
+rel_t   *rel_new(const rel_cfg_t *, rel_tx_fn, rel_deliver_fn, void *ctx);
+void     rel_reset(rel_t *, uint16_t epoch);                                    /* new epoch: both seq spaces restart */
+int      rel_send(rel_t *, const rel_msg_t *, const uint8_t *payload, uint16_t len, uint64_t now);
+         /* seq (>0) if sent, 0 if queued (window full), ZTP_E_TOOBIG (> max_dgram), REL_E_NOBUFS, REL_E_FAILED */
+int      rel_send_ackclass(rel_t *, const rel_msg_t *, const uint8_t *payload, uint16_t len, bool to_source);
+rel_rx_t rel_on_rx(rel_t *, const ztp_hdr_t *, const uint8_t *payload, uint64_t now);   /* reliable frames */
+void     rel_on_ack(rel_t *, const ztp_hdr_t *, uint64_t now);                          /* ack-class frames */
+uint64_t rel_next_deadline(const rel_t *);
+int      rel_on_timer(rel_t *, uint64_t now);  /* retransmissions, delayed ACK; REL_E_FAILED on retry exhaustion (keepalives exempt) */
 
 /* server/session.h */
 typedef enum { SS_HALF_OPEN, SS_REGISTERED, SS_PROVISIONING, SS_AWAIT_RESUME,
