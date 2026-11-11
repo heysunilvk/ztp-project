@@ -23,8 +23,13 @@ jobs:
         run: ${{ matrix.cc }} --version | head -1 && make --version | head -1
       - name: Build
         run: make CC=${{ matrix.cc }}
-      - name: Unit and CLI tests
-        run: make test CC=${{ matrix.cc }}
+      - name: Unit, CLI and session tests
+        run: |
+          # TC-DISC-05 (b): broadcast to the runner's directed broadcast address (Linux only)
+          if [ "$RUNNER_OS" = Linux ]; then
+            export BCAST=$(ip -4 -o addr show scope global | awk '{for (i = 1; i < NF; i++) if ($i == "brd") { print $(i + 1); exit }}')
+          fi
+          make test CC=${{ matrix.cc }}
 
   asan:
     name: asan (${{ matrix.os }})

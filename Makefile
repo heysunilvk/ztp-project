@@ -38,6 +38,7 @@ TEST_BIN   := $(BUILD)/unit-tests
 .PHONY: all server device test asan debug clean clean-logs check-separation spike
 
 all: server device
+	@chmod 600 conf/keys.json   # git does not keep file modes; the server refuses anything looser
 	@ln -sf $(SERVER_BIN) ztp-server
 	@ln -sf $(DEVICE_BIN) ztp-device
 
@@ -73,8 +74,10 @@ $(BUILD)/%.o: %.c
 
 # Unit tests (TC-UNIT-*). FUZZ_ITERS controls the JSON mutation fuzz (default 100000).
 test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN)
+	@chmod 600 conf/keys.json
 	$(TEST_BIN)
 	sh tests/cli_config.sh $(SERVER_BIN) $(DEVICE_BIN)
+	sh tests/m2_session.sh $(SERVER_BIN) $(DEVICE_BIN)
 	@$(MAKE) --no-print-directory check-separation BUILD=$(BUILD)
 
 # TC-DEL-03: device and server share only common/.

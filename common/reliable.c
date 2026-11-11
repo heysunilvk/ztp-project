@@ -202,6 +202,7 @@ bool     rel_idle(const rel_t *r) { return rel_in_flight(r) == 0 && r->qlen == 0
 bool     rel_failed(const rel_t *r) { return r->failed; }
 uint32_t rel_rcv_ack(const rel_t *r) { return r->rcv_ack; }
 uint32_t rel_next_seq(const rel_t *r) { return r->next_seq; }
+uint32_t rel_acked_through(const rel_t *r) { return r->snd_una - 1; }
 uint32_t rel_rto_ms(const rel_t *r) { return r->rto; }
 const rel_stats_t *rel_stats(const rel_t *r) { return &r->st; }
 
@@ -374,6 +375,15 @@ static void deliver_one(rel_t *r, uint8_t type, uint8_t flags, uint32_t seq, con
         r->ack_deadline = now + (uint64_t)r->cfg.delayed_ack_ms;
     }
     if (r->deliver) r->deliver(r->ctx, type, flags, seq, p, n);
+}
+
+rel_rx_t rel_classify(const rel_t *r, uint32_t s)
+{
+    if (seq_le(s, r->rcv_ack)) return REL_RX_DUP;
+    uint32_t d = s - r->rcv_ack;
+    if (d > 1 + RX_SLOTS) return REL_RX_OOW;
+    if (d > 1 && ((r->rx_bitmap >> (d - 2)) & 1u)) return REL_RX_DUP;
+    return REL_RX_NEW;
 }
 
 rel_rx_t rel_on_rx(rel_t *r, const ztp_hdr_t *h, const uint8_t *payload, uint64_t now)

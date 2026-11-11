@@ -51,7 +51,7 @@
 #define LM_NAT_TIMEOUT             "Session timeout detected (no response for %u s)"
 #define LM_NAT_PEER_CHANGED        "Peer address changed %s -> %s (rebinding)"
 #define LM_NAT_REBIND_ADVICE       "Rebinding after %u s idle: NAT idle timeout is probably below keepalive_interval (%u s); consider lowering it"
-#define LM_NAT_BLOCKED_HINT        "No response from %s:%u after 9 HELLO transmissions: check that outbound UDP to port %u is allowed (firewall or NAT policy)"
+#define LM_NAT_BLOCKED_HINT        "No response from %s:%u after %u HELLO transmissions: check that outbound UDP to port %u is allowed (firewall or NAT policy)"
 #define LM_NAT_IDLE_GRACE          "Session idle, entering grace"
 #define LM_NAT_IP_CHANGED_OK       "Peer IP changed %s -> %s (allowed)"
 #define LM_NAT_IP_CHANGED_REQ      "Peer IP changed %s -> %s: RESUME_REQUIRED sent"

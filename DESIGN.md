@@ -1154,6 +1154,7 @@ K_mfg[model]   32 B   per-model manufacturing secret: in that model's firmware i
   - The device authenticates the server *as a fleet member* through the HELLO_ACK MAC under K_boot, which binds Nd.
   - It authenticates the server *as authorised for its model* through REGISTER_ACK under K_s, which only a holder of K_mfg can produce.
   - A rogue server holding only K_fleet is therefore detected at REGISTER_ACK at the latest, and can cause only denial of service (§18.3).
+- **Demo key material.** For the demo and CI, the factory keys are derived deterministically, so the device binary and `conf/keys.json` agree without a provisioning step: `K_fleet = SHA-256("ZTP-DEMO-K_fleet")` and `K_mfg[model] = SHA-256("ZTP-DEMO-K_mfg:" ‖ model)` (`device/keys.c`). A unit test checks that `conf/keys.json` matches. A real product embeds random per-fleet and per-model secrets and keeps `keys.json` out of version control.
 - Comparisons use constant time (`ct_memeq`). Nonces and IDs come from the CSPRNG. Keys are wiped (`explicit_bzero` or a volatile loop) when a session is freed.
 
 **Key derivation, as a diagram:**
@@ -1976,7 +1977,7 @@ These are the non-PDF lines that tests assert on. Each one is a `logmsg.h` const
 | `[NAT] Session timeout detected (no response for <t> s)` | device | E22 | §9.3 |
 | `[NAT] [sid=<s> <serial>] Peer address changed <old> -> <new> (rebinding)` | server | New frame from a new address | §9.4 |
 | `[NAT] [sid=<s> <serial>] Rebinding after <g> s idle: NAT idle timeout is probably below keepalive_interval (<k> s); consider lowering it` | server | §9.7 advice | §9.7 |
-| `[NAT] No response from <ip>:<port> after 9 HELLO transmissions: check that outbound UDP to port <port> is allowed (firewall or NAT policy)` | device | E6a | §9.7 |
+| `[NAT] No response from <ip>:<port> after <n> HELLO transmissions: check that outbound UDP to port <port> is allowed (firewall or NAT policy)` (`<n>` = 1 + `rel.max_retries`, 9 by default) | device | E6a | §9.7 |
 | `[AUTH] REGISTER: session_id=<s> soft_serial=<serial> model=<m> firmware=<v> nonce=<n>` | device | REGISTER sent | §10.2 |
 | `[AUTH] Registration failed: Invalid HMAC (<i>/<n>)` … `, giving up` / `[AUTH] Registration failed: NO_POLICY` / `[AUTH] Registration failed: UNKNOWN_MODEL` | device | §10.3 outcomes | §10.3 |
 | `[AUTH] [sid=<s> <serial>] Resume accepted (ctr=<c>, epoch=<e>), no re-registration` | server | §12.3 | §12.3 |
@@ -1993,6 +1994,10 @@ These are the non-PDF lines that tests assert on. Each one is a `logmsg.h` const
 | `[NAT] [sid=<s> <serial>] Session idle, entering grace` | server | Idle detection | §9.3 |
 | `[NAT] [sid=<s> <serial>] Peer IP changed <old> -> <new> (allowed)` / `[NAT] [sid=<s> <serial>] Peer IP changed <old> -> <new>: RESUME_REQUIRED sent` | server | A new frame from a new IP, with `allow_ip_change` true / false | §9.4 |
 | `[UDP] Resume required by server (IP change)` | device | ERROR RESUME_REQUIRED (E25) | §9.4 |
+| `[DISCOVERY] DISCOVER sent to <group-or-bcast>:<port> (<mode>, attempt <i>/<n>)` / `[DISCOVERY] No valid OFFER after <n> DISCOVER attempts: falling back to the static address` | device | Each attempt / fallback (E4) | §6.2 |
+| `[DISCOVERY] DISCOVER from <serial> (<ip>:<port>), attempt <i>: OFFER sent (server <ip>:<port>)` | server | DISCOVER verified | §6.2 |
+| `[UDP] Reconnecting in <t> s (<reason>)` | device | Backoff with full jitter before re-discovery (E6a, E6c, E22) | §9.3 |
+| `[UDP] Counters: tx=… rx=… …` | both | Exit (the canonical counter names, §17.3) | §17.3 |
 | `[PROVISION] [sid=<s> <serial>] Policy: <model> -> fw <v>, cfg <c>, keepalive <k> s, grace <g> s (source: <label>)` | server | Per registration; labels as in §25.9 | §25.6 |
 | `[UDP] [sid=<s> <serial>] HELLO seq=1 received (serial <serial>, <model>, <v>), HELLO_ACK seq=1 sent` / `[UDP] [sid=<s> <serial>] Session established` | server | Handshake | §7.1 |
 | `[NAT] [sid=<s> <serial>] Keepalive (path probe) acknowledged` | server | Path probe | §9.2 |

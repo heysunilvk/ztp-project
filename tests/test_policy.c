@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "auth.h"
+#include "dev.h"
 #include "config.h"
 #include "policy.h"
 #include "test.h"
@@ -304,8 +305,27 @@ static void test_files_and_keys(void)
     CHECK_EQ_INT(srv_keys_load("/nonexistent/keys.json", &k, err, sizeof err), EX_CONFIG_CODE);
 }
 
+static void test_demo_keys_match(void)
+{
+    /* conf/keys.json must hold exactly the keys the device derives "in its firmware" (device/keys.c) */
+    char err[300];
+    srv_keys_t k;
+    chmod("conf/keys.json", 0600);
+    CHECK_EQ_INT(srv_keys_load("conf/keys.json", &k, err, sizeof err), 0);
+    const char *models[] = {"EDGE-GW-100", "EDGE-GW-050"};
+    for (int i = 0; i < 2; i++) {
+        uint8_t kf[32], km[32];
+        dev_factory_keys(models[i], kf, km);
+        CHECK(memcmp(kf, k.k_fleet, 32) == 0);
+        const uint8_t *s = srv_keys_model(&k, models[i]);
+        CHECK(s && memcmp(km, s, 32) == 0);
+    }
+    srv_keys_free(&k);
+}
+
 void suite_policy(void)
 {
+    test_demo_keys_match();
     test_shipped_policy();
     test_precedence();
     test_nat_override();

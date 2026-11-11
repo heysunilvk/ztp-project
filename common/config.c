@@ -489,6 +489,12 @@ static int validate(cfg_t *cfg)
         if (version_parse(c->identity.factory_fw, parts) != 0)
             VFAIL("identity.factory_fw", "%s", c->identity.factory_fw, "must be a version like v1.0");
         if (!*c->identity.model) VFAIL("identity.model", "%s", "\"\"", "must not be empty");
+        const char *pl = c->paths.log, *p1 = strstr(pl, "%s");
+        bool log_ok = !p1 || !strstr(p1 + 2, "%s");
+        for (const char *q = pl; log_ok && (q = strchr(q, '%')); q++)
+            if (q != p1) log_ok = false;
+            else q++;
+        if (!log_ok) VFAIL("paths.log", "%s", pl, "may contain one %s (the serial) and no other '%'");
         c->identity.serial_set = *s != '\0';
     }
     return 0;

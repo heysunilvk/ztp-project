@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "_comment": "DEMO KEYS, not secret: derived as SHA-256(\"ZTP-DEMO-K_fleet\") and SHA-256(\"ZTP-DEMO-K_mfg:\" + model), matching device/keys.c. A real deployment uses random keys kept out of version control. Must be mode 0600 (make sets it).",
+  "fleet": "14305036558b0646ea60675be9871614d34977a2edccea5ac5d6867c9bab0918",
+  "models": {
+    "EDGE-GW-100": "6c25cf25a47f2bdee00700a8d87c9152f8d9b01795c0b29f8a6ed3b3eb092fa7",
+    "EDGE-GW-050": "eae0cca203a2eab7396b5c6711891f3296eba4a82a3a9e5229aeef1951b079d0"
+  }
+}

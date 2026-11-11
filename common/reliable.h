@@ -82,6 +82,9 @@ int    rel_send(rel_t *r, const rel_msg_t *m, const uint8_t *payload, uint16_t l
  * consumed, never retransmitted; carries the current ACK/SACK. */
 int    rel_send_ackclass(rel_t *r, const rel_msg_t *m, const uint8_t *payload, uint16_t len, bool to_source);
 
+/* Classify a reliable frame's seq without side effects, so the caller can apply the
+ * peer-address rule (only never-seen seqs move the peer, §5.7) before delivery. */
+rel_rx_t rel_classify(const rel_t *r, uint32_t seq);
 /* A MAC-verified reliable frame: process its ACK fields, classify its seq, deliver. */
 rel_rx_t rel_on_rx(rel_t *r, const ztp_hdr_t *h, const uint8_t *payload, uint64_t now);
 /* A MAC-verified ack-class frame: process its ACK fields only. */
@@ -98,6 +101,7 @@ bool     rel_idle(const rel_t *r);             /* nothing in flight or queued */
 bool     rel_failed(const rel_t *r);
 uint32_t rel_rcv_ack(const rel_t *r);
 uint32_t rel_next_seq(const rel_t *r);
+uint32_t rel_acked_through(const rel_t *r);   /* highest seq of ours cumulatively ACKed */
 uint32_t rel_rto_ms(const rel_t *r);
 const rel_stats_t *rel_stats(const rel_t *r);
 

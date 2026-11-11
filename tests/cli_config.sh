@@ -68,6 +68,11 @@ case "$msg" in *"tests/conf/dup_key.json:2:"*"duplicate key"*"nat.grace_s"*) pas
 msg=$("$SRV" --config "$T/too_big.json" 2>&1 >/dev/null)
 case "$msg" in *"larger than 65536 bytes"*) pass=$((pass + 1)) ;; *) echo "  FAIL: too_big message: $msg"; fail=$((fail + 1)) ;; esac
 
+# paths.log is never used as a format string: only one %s (the serial) is allowed
+expect 78 "paths.log with %n" "$DEV" --set 'paths.log=logs/x_%n%s.log' --print-config
+expect 78 "paths.log with two %s" "$DEV" --set 'paths.log=logs/%s_%s.log' --print-config
+expect 0 "paths.log with one %s" "$DEV" --set 'paths.log=logs/device_%s.log' --print-config
+
 # usage errors exit 64
 expect 64 "unknown flag" "$SRV" --no-such-flag
 expect 64 "missing argument" "$DEV" --loss
