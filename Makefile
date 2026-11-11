@@ -37,6 +37,12 @@ TEST_BIN   := $(BUILD)/unit-tests
 
 .PHONY: all server device test asan debug clean clean-logs check-separation spike
 
+# QA protocol peer (tests/peer_sim): links the server library for keys.json loading.
+PEER_SIM := $(BUILD)/peer_sim
+$(PEER_SIM): tests/peer_sim/peer_sim.c $(SRV_LIB) $(LIB)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Iserver -o $@ $< $(SRV_LIB) $(LIB) $(LDFLAGS) $(LDLIBS)
+
 all: server device
 	@chmod 600 conf/keys.json   # git does not keep file modes; the server refuses anything looser
 	@ln -sf $(SERVER_BIN) ztp-server
@@ -73,11 +79,12 @@ $(BUILD)/%.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # Unit tests (TC-UNIT-*). FUZZ_ITERS controls the JSON mutation fuzz (default 100000).
-test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN)
+test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM)
 	@chmod 600 conf/keys.json
 	$(TEST_BIN)
 	sh tests/cli_config.sh $(SERVER_BIN) $(DEVICE_BIN)
 	sh tests/m2_session.sh $(SERVER_BIN) $(DEVICE_BIN)
+	sh tests/m2_peer.sh $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM)
 	@$(MAKE) --no-print-directory check-separation BUILD=$(BUILD)
 
 # TC-DEL-03: device and server share only common/.
