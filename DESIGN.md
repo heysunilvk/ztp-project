@@ -1511,6 +1511,7 @@ loop:
 - **Supersede rule.** A session for a serial is replaced **only** when a new REGISTER (verified under K_s) or a resume (verified under K_dev) arrives for that serial, never by a HELLO alone (§7.3). The server logs `[UDP] [sid=9930 ZTP-93AF21] Session 7421 superseded by 9930`.
 - Each session holds: peer address, epoch, keys, the reliability engine state, stage, assignment and effective NAT values, last_rx, timers, `last_resume_ctr`, and response caches (HELLO_ACK and the last resume HELLO_ACK).
 - Expiry runs from the timer heap, using generation counters so a stale timer is ignored.
+- > **Implementation status (M3).** The current server does not use the timer heap: each loop iteration scans the 2048-slot session table for the next deadline (retransmission, delayed ACK, half-open TTL, idle, grace), and the `serial → session` lookup and the REGISTER nonce cache are linear scans as well. That is a few microseconds per wakeup at the 1024-session cap, so correctness and the targets are unaffected. The heap and the secondary index are planned for M6 (server hardening), where TC-PERF-01/02 and the 50-device scale test measure the difference.
 
 ### 14.3 Policy engine (ZTP-FR-29)
 The policy lives in `conf/policy.json`; its full format, including NAT and session overrides per tenant, model and serial, is in **§25.6**. In summary:
@@ -1869,7 +1870,7 @@ flowchart TD
 | `--loss P` (`sim.loss`) | Drop the datagram with probability P | Sender TX |
 | `--reorder P` (`sim.reorder`) | With probability P, hold the datagram in a delay queue for `--reorder-delay MS` (`sim.reorder_delay_ms`, 30 ms), so later datagrams overtake it | Sender TX |
 | `--dup P` (`sim.dup`) | With probability P, send a second copy (after 0–10 ms) | Sender TX |
-| `--delay MS[±J]` (`sim.delay_ms`, `sim.jitter_ms`) | Base latency with jitter | Sender TX |
+| `--delay MS` and `--jitter MS` (`sim.delay_ms`, `sim.jitter_ms`) | Base latency, plus a uniform jitter of ± `jitter_ms` | Sender TX |
 | `--sim-mtu N[:emsgsize\|:blackhole]` (`sim.mtu`, `sim.mtu_mode`) | Datagrams larger than N either fail with `EMSGSIZE` (the default mode) or are silently dropped (black hole). This drives §5.8 portably, with no sudo | Sender TX |
 | `--seed N` (`sim.seed`) | Seeds a **separate** xorshift PRNG (never the CSPRNG), so runs are reproducible | both |
 | `--nat-sim …` (`sim.nat.*`) | Device-side NAT emulator (§9.8). It acts on the device's own socket (mapping expiry, rebind, IP change, port blocking), and inbound drops happen on the device's RX because that is where a NAT drops them | Device |
@@ -2129,6 +2130,7 @@ There is no local Linux host, and disk space on the development Mac is limited (
 | `mtu` | `ubuntu-latest` | Network namespace pair on a veth link at MTU 1280, then 576; server and device inside; `make demo-single` | TC-PROV-12 (1200 fits at 1280), TC-PROV-13 (fallback at 576) |
 | `nat-real` (optional, P2) | `ubuntu-latest` | Namespaces plus `iptables -t nat MASQUERADE` with `nf_conntrack_udp_timeout=5`; device behind the NAT | TC-NAT-08 on a real conntrack NAT |
 
+- **Status (2026-11-11).** Running on every push: `build-test` (Ubuntu gcc and clang, macOS clang; unit, CLI, session, `peer_sim` and registration tests, with broadcast TC-DISC-05 (b) on Ubuntu), `asan` (both platforms), `platform-linux` (multicast/broadcast probes, the netem availability check, and the TC-REL-01 capture checked by `tests/pcapcheck`) and `platform-macos`. **Not yet created:** `impair-matrix`, `impair-netem` (the demo under netem), `valgrind`, `mtu` and the optional `nat-real`. They all run the demo or a full provisioning flow, so they arrive with M5/M6.
 - **Cost and footprint:** about 5–8 runner-minutes per push. Free for public repositories; 2,000 min/month on the free plan for private ones. Zero local disk.
 - **Triggers:** every push and pull request, plus `workflow_dispatch` to run the full matrix on demand.
 - **Evidence:** the CI artifacts (logs, `db_dump.txt`, the test report) back up the submission's claim that it works on Linux and macOS.

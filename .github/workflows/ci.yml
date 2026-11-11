@@ -18,7 +18,7 @@ jobs:
           - { os: macos-latest, cc: clang }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Toolchain
         run: ${{ matrix.cc }} --version | head -1 && make --version | head -1
       - name: Build
@@ -50,7 +50,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: ASan + UBSan, 1M-input JSON fuzz (TC-UNIT-18, TC-DEL-08)
         env:
           FUZZ_ITERS: "1000000"
@@ -66,7 +66,7 @@ jobs:
   platform-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build the spike tool
         run: make build/netspike
       - name: Interfaces
@@ -138,7 +138,7 @@ jobs:
   platform-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Multicast on lo0
         run: |
           make build/netspike

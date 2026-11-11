@@ -26,6 +26,15 @@ static int write_all(int fd, const void *data, size_t len)
     return 0;
 }
 
+/* fsync that also flushes the drive's cache on macOS, where plain fsync() doesn't (DESIGN §15.3). */
+static int full_fsync(int fd)
+{
+#ifdef F_FULLFSYNC
+    if (fcntl(fd, F_FULLFSYNC) == 0) return 0;   /* some filesystems don't support it: fall back */
+#endif
+    return fsync(fd);
+}
+
 static void fsync_dir_of(const char *path)
 {
     char dir[PATH_MAX];
@@ -36,7 +45,7 @@ static void fsync_dir_of(const char *path)
     else strcpy(dir, ".");
     int fd = open(dir, O_RDONLY);
     if (fd >= 0) {
-        (void)fsync(fd);
+        (void)full_fsync(fd);
         close(fd);
     }
 }
@@ -53,7 +62,7 @@ int atomic_write_file(const char *path, const void *data, size_t len)
     if (fd < 0) return -1;
     if (write_all(fd, data, len) != 0) goto fail;
     if (util_atomic_fault == AF_AFTER_WRITE) { errno = EIO; goto fail; }
-    if (fsync(fd) != 0) goto fail;
+    if (full_fsync(fd) != 0) goto fail;
     if (util_atomic_fault == AF_AFTER_FSYNC) { errno = EIO; goto fail; }
     if (close(fd) != 0) { fd = -1; goto fail; }
     fd = -1;

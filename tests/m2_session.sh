@@ -134,6 +134,12 @@ if [ -n "${BCAST:-}" ]; then
     run_device d7 20 --serial ZTP-0B0B0B --discover bcast --bcast-addr "$BCAST"
     expect_line "$T/d7.log" "(OFFER verified)" "TC-DISC-05 ($BCAST)"
     stop_server
+    if has "$T/d7.log" "(OFFER verified)"; then
+        echo "  TC-DISC-05: broadcast discovery via $BCAST ran and passed"
+        [ -n "${GITHUB_ACTIONS:-}" ] && echo "::notice::TC-DISC-05 (b): broadcast discovery via $BCAST passed"
+    fi
+else
+    echo "  TC-DISC-05: skipped (BCAST not set)"
 fi
 
 # --- UNKNOWN_MODEL: terminal, persisted ---------------------------------------------------------

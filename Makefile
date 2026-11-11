@@ -52,7 +52,7 @@ $(PEER_SIM): tests/peer_sim/peer_sim.c $(SRV_LIB) $(LIB)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Iserver -o $@ $< $(SRV_LIB) $(LIB) $(LDFLAGS) $(LDLIBS)
 
-all: server device $(MKARTIFACTS)
+all: server device artifacts
 	@chmod 600 conf/keys.json   # git does not keep file modes; the server refuses anything looser
 	@ln -sf $(SERVER_BIN) ztp-server
 	@ln -sf $(DEVICE_BIN) ztp-device

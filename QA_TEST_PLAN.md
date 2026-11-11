@@ -76,7 +76,7 @@ Real NAT hardware, real flash or power-loss rigs, IPv6, Windows, and production 
 | Build variants | `make` (release, `-O2 -Wall -Wextra -Werror`); `make asan` (ASan + UBSan); `make debug` (`-O0 -g`) |
 | Impairment | In-code netsim (`--loss/--reorder/--dup/--delay/--seed`), everywhere; macOS dummynet (`scripts/dummynet.sh`), local, TC-SIM-04; Linux `tc netem` (`scripts/netem.sh`), CI Ubuntu runner only, TC-SIM-03 |
 | Reduced MTU and real NAT | CI `mtu` job: Linux network namespaces joined by a veth pair at MTU 1280 and 576 (TC-PROV-12/13). Local: `--sim-mtu N:emsgsize` or `N:blackhole` (portable, no sudo). Optional CI `nat-real` job: iptables MASQUERADE with a short conntrack UDP timeout |
-| Capture | `tcpdump -i lo0 -w run.pcap udp` (macOS) or `-i lo` (Linux); Wireshark; `scripts/pcapcheck.sh` (maximum datagram size, fragment filter) |
+| Capture | `tcpdump -i lo0 -w run.pcap udp` (macOS) or `-i lo` (Linux); Wireshark; `tests/pcapcheck/pcapcheck` (maximum datagram size, fragment filter) |
 | Memory | Locally: ASan + LeakSanitizer (`make asan`) and `leaks --atExit` (built into macOS). CI: valgrind on the Ubuntu runner |
 | Disk footprint (local) | Build outputs, logs, test artifacts and pcaps: < 100 MB in total. `make clean` and `make clean-logs` reclaim it. Large pcaps are limited with `tcpdump -c`. No VMs or containers locally |
 | Fuzzing | `tests/fuzz_decode` (a random and mutation-based datagram generator); libFuzzer if available (§14) |
@@ -86,7 +86,7 @@ Real NAT hardware, real flash or power-loss rigs, IPv6, Windows, and production 
 | Tool | Options used by the tests | Purpose |
 |---|---|---|
 | `tests/peer_sim` | Modes built in M2: `handshakes N` (TC-SESS-04), `unknown-sid` (TC-SESS-06), `pdf-reorder` (TC-REL-03), `out-of-window` (TC-REL-08), `spoof-source` (TC-NAT-06/12), `rogue-offer` (TC-DISC-07), `replay-offer` (TC-DISC-08), `fake-server` (advertises arbitrary KEEPALIVE_S and DEAD_INTERVALS; TC-CFG-08). Added with their milestones: `rogue-server`, `bad-fleet-key`, `flood N/s`, `replay file.pcap` | A scripted protocol peer for negative, security and component tests (TC-REL-03, TC-AUTH-*, TC-NAT-06/12, TC-CFG-08); driven by `tests/m2_peer.sh` |
-| `scripts/pcapcheck.sh` | `--dump-hdr` (decode ZTP headers), maximum-size and fragment filters | Wire-level checks (TC-REL-01, TC-PROV-04/05, TC-APX-03) |
+| `tests/pcapcheck/pcapcheck` (built in M2; C, no dependencies) | `--dump-hdr` (decode ZTP headers), `--max-size N`, IP-fragment and seq-gap checks, `--selftest DIR` | Wire-level checks (TC-REL-01, TC-PROV-04/05, TC-APX-03) |
 | `tools/mkartifacts` | `--test-set` (the boundary-size firmware and config fixtures in §4.2) | Deterministic artifacts |
 | `tests/check_logs.sh`, `check_appendix_a.sh`, `check_invariants.sh` | `--server` (the server matching rule, DESIGN §17.4) | Log, Appendix A and invariant assertions |
 | valgrind / `leaks` | `--leak-check=full` / `--atExit` | Leak checks (TC-PERF-04) |
@@ -655,6 +655,10 @@ The M3 code these tests exercise is built and passes its other tests, and the lo
 | `peer_sim` forged and replayed REGISTER_NAK | TC-AUTH-14 | Device accepts a NAK only under K_boot with the outstanding NONCE_REG (code review) |
 | `peer_sim` half-open load (300 HELLOs) | TC-SRV-08 | `limits.max_half_open` → `SERVER_BUSY`; half-open TTL (TTL expiry passes in the M2 tests) |
 | `peer_sim` failing-registration load (20,000) | TC-SRV-11 | Failed-row cap, oldest evicted, Success rows never evicted (unit-tested at 1,000 rows over a cap of 100) |
+
+**Other QA tooling not yet built under its planned name** (no gate case is blocked by it):
+- `tests/check_logs.sh`, `check_invariants.sh` and `check_appendix_a.sh` (planned for M2, §12.1). So far each test script (`tests/m2_session.sh`, `m2_peer.sh`, `m3_register.sh`) checks its log lines inline, including the server matching rule (the `[sid=… …]` tag). The dedicated checkers are built with M5/M6, when the Appendix A run (TC-APX-*) and the full-flow invariants exist to check.
+- The CI jobs `impair-matrix`, `impair-netem`, `valgrind`, `mtu` and `nat-real` (DESIGN §19.4 status): M5/M6.
 
 When a tool lands, its cases move back into the gate and run in CI like the others. Anything still open at M7 is listed in the README's "Test coverage and known gaps" section (DESIGN §21.3).
 

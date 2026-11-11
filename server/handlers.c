@@ -485,8 +485,14 @@ void srv_on_ctl_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct 
         return;
     }
     if (ss->st == SS_HALF_OPEN && (h.type == ZT_KEEPALIVE || h.type == ZT_ACK)) {
+        /* §5.3: until the session's first K_s frame is verified, an ACK or KEEPALIVE may come under either
+         * key: the device switches to K_s as soon as it sends REGISTER, which may not have arrived yet */
         key = s->keys.k_boot;
         key_id = ZK_BOOT;
+        if (!ztp_mac_verify(buf, len, key) && ztp_mac_verify(buf, len, ss->k_s)) {
+            key = ss->k_s;
+            key_id = ZK_SESSION;
+        }
     } else {
         key = ss->k_s;
         key_id = ZK_SESSION;
