@@ -609,8 +609,8 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 | Gate | Test cases (prerequisites in brackets) |
 |---|---|
 | **M1** | TC-UNIT-01..06, TC-UNIT-11..20, TC-CFG-01..05, TC-CFG-07 (codec, crypto, netsim, config and policy loaders, transfer bitmap and provisioned-config check; no reliability engine, which is built in M2) |
-| **M2** | TC-UNIT-07..10 (reliability engine, simulated clock), TC-DISC-01..08, TC-SESS-01..04/06/08, TC-REL-01/02/03/08/11, TC-NAT-06/11, TC-SIM-01/02, TC-CFG-08 (discovery, handshake, reliability, path probe; driven by HELLO, keepalive or `peer_sim` traffic) |
-| **M3** | TC-AUTH-01..06/08/09/11..14, TC-REL-04, TC-CFG-09, TC-SRV-03/08/11 (registration, keys, policy, DB) |
+| **M2** | TC-UNIT-07..10 (reliability engine, simulated clock), TC-DISC-01..08, TC-SESS-01..04/06/08, TC-REL-01/02/03/08, TC-NAT-06/11, TC-SIM-01/02 (OOO half from M4), TC-CFG-08 (discovery, handshake, reliability, path probe; driven by HELLO, keepalive or `peer_sim` traffic) |
+| **M3** | TC-AUTH-01..06/08/09/11..14, TC-REL-04, TC-REL-11 (needs a session that lives 60 s; M2 sessions are half-open and expire after `nat.half_open_ttl_s`), TC-CFG-09, TC-SRV-03/08/11 (registration, keys, policy, DB) |
 | **M4** | TC-PROV-01..07/10/11, TC-REL-06/07, TC-SESS-09, TC-NAT-05/12 (transfer into the inactive slot, a PROVISIONING session, many frames in flight) |
 | **M5** | TC-UPG-01..11, TC-VAL-01..05, TC-SESS-05/07, TC-AUTH-07/10/15, TC-REL-05/09/10, TC-PROV-08/09/12/13, TC-NAT-01..04/07..10/13, TC-CFG-06/10, TC-APX-01..10, TC-PDF-01/03/04 (anything that completes the full flow or needs the resume handshake) |
 | **M6** | TC-SRV-01/02/04..07/09/10, TC-PERF-01..04, TC-E2E-01/02, TC-PDF-02/05, TC-LOG-01..04 (server hardening, dump, demo, scale) |
