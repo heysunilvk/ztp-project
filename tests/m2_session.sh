@@ -187,6 +187,41 @@ for f in "$T/s10.log" "$T/d11.log"; do
 done
 if grep -F -q "Duplicate packet seq=" "$T/s10.log" "$T/d11.log"; then ok; else bad "TC-SIM-02: no [UDP] duplicate events"; fi
 
+# --- NAT emulator (§9.8) and --rebind-after; the device keeps sending 2 s keepalives after the probe -
+HOLD="--set run.operational_hold_s=7"
+start_server s12
+run_device d12 20 --serial ZTP-AA0001 --discover static $HOLD --nat-sim reboot_at_s=3
+[ "$DEV_RC" -eq 0 ] && ok || bad "NAT reboot: device exit $DEV_RC"
+expect_line "$T/d12.log" "[SIM] NAT: reboot, all mappings flushed" "NAT reboot"
+if grep -q 'ZTP-AA0001\] Peer address changed 127.0.0.1:[0-9]* -> 127.0.0.1:[0-9]* (rebinding)' "$T/s12.log"; then ok; else bad "NAT reboot: no rebinding on the server"; fi
+
+run_device d13 20 --serial ZTP-AA0002 --discover static $HOLD --nat-sim idle_timeout_s=1.5
+[ "$DEV_RC" -eq 0 ] && ok || bad "NAT idle: device exit $DEV_RC"
+expect_line "$T/d13.log" "[SIM] NAT: mapping expired after idle" "NAT idle timeout"
+if grep -q 'ZTP-AA0002\] Peer address changed .* (rebinding)' "$T/s12.log"; then ok; else bad "NAT idle: no rebinding on the server"; fi
+if grep -q 'ZTP-AA0002\] Rebinding after [0-9]* s idle: NAT idle timeout is probably below keepalive_interval (2 s); consider lowering it' "$T/s12.log"; then ok
+else bad "NAT idle: no rebind advice (§9.7)"; fi
+
+run_device d14 20 --serial ZTP-AA0003 --discover static $HOLD --test-hooks --rebind-after 3
+[ "$DEV_RC" -eq 0 ] && ok || bad "--rebind-after: device exit $DEV_RC"
+if grep -q 'ZTP-AA0003\] Peer address changed .* (rebinding)' "$T/s12.log"; then ok; else bad "--rebind-after: no rebinding"; fi
+n=$(count "$T/s12.log" "HELLO seq=1 received (serial ZTP-AA0003")
+[ "$n" -eq 1 ] && ok || bad "--rebind-after: $n HELLOs, want 1 (the session continues)"
+
+if [ "$(uname)" = Linux ]; then   # 127.0.0.2 is local on Linux; macOS needs an lo0 alias
+    run_device d15 20 --serial ZTP-AA0004 --discover static $HOLD --nat-sim change_ip_at_s=3
+    if grep -q 'ZTP-AA0004\] Peer IP changed 127.0.0.1:[0-9]* -> 127.0.0.2:[0-9]* (allowed)' "$T/s12.log"; then ok
+    else bad "NAT IP change: no 'Peer IP changed ... (allowed)'"; fi
+fi
+
+# TC-NAT-11 with the server up: a firewall rule drops everything to the server port
+run_device d16 6 --serial ZTP-AA0005 --discover static --nat-sim block_server_port \
+    --set rel.max_retries=2 --set rel.rto_initial_ms=200 --set rel.rto_max_ms=400
+expect_line "$T/d16.log" "after 3 HELLO transmissions: check that outbound UDP to port $PORT is allowed" "TC-NAT-11 (blocked port)"
+n=$(count "$T/s12.log" "ZTP-AA0005")
+[ "$n" -eq 0 ] && ok || bad "TC-NAT-11: the server saw the blocked device"
+stop_server
+
 # --- TC-SESS-08: UDP only ------------------------------------------------------------------------
 if grep -rn 'SOCK_STREAM' common server device >/dev/null 2>&1; then bad "TC-SESS-08: SOCK_STREAM in source"; else ok; fi
 

@@ -316,6 +316,7 @@ void srv_on_ctl_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct 
         log_limited(3, LOG_DEBUG, T_UDP, "sid=%u %s: MAC invalid, dropped", (unsigned)h.session_id, ztp_type_name(h.type));
         return;
     }
+    uint64_t prev_rx = ss->last_rx_ms;
     ss->last_rx_ms = s->now;
     const ztp_type_info_t *ti = ztp_type_info(h.type);
     if (ti->cls == ZC_RELIABLE) {
@@ -329,6 +330,12 @@ void srv_on_ctl_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct 
             else
                 log_sess(LOG_INFO, T_NAT, ss->session_id, ss->serial, LM_NAT_IP_CHANGED_OK, from, to);
             ss->peer = *src;
+            /* §9.7: a rebinding after an idle gap longer than the keepalive interval means the NAT's
+             * idle timeout is probably shorter than the keepalive */
+            uint64_t gap = s->now - prev_rx, ka = (uint64_t)ss->assign.nat.keepalive_interval_s * 1000u;
+            if (s->cfg.c.nat.rebind_advice && gap > ka)
+                log_sess(LOG_INFO, T_NAT, ss->session_id, ss->serial, LM_NAT_REBIND_ADVICE, (unsigned)((gap + 500) / 1000),
+                         (unsigned)ss->assign.nat.keepalive_interval_s);
         }
         ss->cur_key = key;
         ss->cur_key_id = key_id;

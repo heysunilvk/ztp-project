@@ -1112,7 +1112,7 @@ The server's view is simpler: `last_rx` is refreshed by every authenticated fram
 > **Reviewer note.** The device can't measure the NAT's idle timeout directly. The *server* infers it: a rebinding after an idle gap of *g* seconds means the timeout is < *g*. That's why the hint is logged on the server, which is the operator's view, and appears in the verbose dump's Provisioning Notes. Automatic keepalive tuning (probing the timeout as RFC 5780 does) is a roadmap item (§22.3).
 
 ### 9.8 NAT emulation for testing
-There's no NAT hardware, so `netsim` (§16.1) gains a **device-side NAT emulator**, set with `--nat-sim` or the `sim.nat` block in the config:
+There's no NAT hardware, so the device gains a **NAT emulator** (`device/natsim.c`) that acts on its own socket, set with `--nat-sim` or the `sim.nat` block in the config. It logs each event under `[SIM]` (`NAT: reboot, all mappings flushed`, `NAT: mapping expired after idle: new source address <ip:port>`, …) and its totals at exit (`NAT: blocked=<n> inbound_dropped=<n>`):
 - `idle_timeout_s`: if the device hasn't sent anything for this long, the emulated mapping is gone. Inbound datagrams are dropped until the device sends again, and the next send uses a **new source port**: the socket is re-bound, just as a real NAT allocates a new external port.
 - `reboot_at_s`: at time T, flush the mapping immediately, regardless of idle time.
 - `change_ip_at_s`: at time T, re-bind to a different source IP (for example 127.0.0.2; on Linux all of 127/8 is local, on macOS this needs a lo0 alias).
@@ -2304,9 +2304,9 @@ These were the open questions for reviewers. On 2026-11-10 the owner **adopted t
 |---|---|---|---|---|
 | P0 | This document | 2 d | 16–17 Nov | Sign-off on §5 (wire format frozen), §8, §10 |
 | M1 | §5 codec, §10.1 crypto, §16 netsim, §17 logging, timers, §19.4 CI, §25 JSON parser and config loader | 3 d | 18–20 Nov | Known-answer tests pass on both CI runners; netem availability on the runner confirmed; multicast/broadcast spike on macOS done |
-| M2 | §7, §8, §9 (including the §9.8 NAT emulator), §5.8 MTU fallback | 4 d | 23–26 Nov | The reliability engine passes 10k seeded permutations; review of the window, RTO and peer-update code |
+| M2 | §7, §8, §9 (including the §9.8 NAT emulator) | 4 d | 23–26 Nov | The reliability engine passes 10k seeded permutations; review of the window, RTO and peer-update code |
 | M3 | §10 (fleet and model keys), §14.2–14.4 (policy, DB, session journal) | 2 d | 27–30 Nov | Replay attack walkthroughs reproduced; every §10.3 outcome produced |
-| M4 | §11 | 2 d | 1–2 Dec | kill -9 resume demonstrated |
+| M4 | §11, §5.8 MTU fallback (moved from M2: the server's EMSGSIZE trigger and the device's black-hole detector both need CHUNK_DATA) | 2 d | 1–2 Dec | kill -9 resume demonstrated |
 | M5 | §12, §13, §15 | 2 d | 3–4 Dec | Crash-point table (§12.4) verified |
 | M6 | §14.5–14.9, §19 | 1 d | 7 Dec | The demo reproduces the PDF's table; resume across a server restart |
 | M7 | §21 → README | 2 d | 8–9 Dec | Docs updated to match the code (version 1.0) |

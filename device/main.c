@@ -17,7 +17,7 @@ static void dev_usage(void)
 {
     fputs("usage: ztp-device --state-dir DIR [--config FILE] [--profile NAME] [--set key=value]...\n"
           "                  [--print-config] [--config-lenient] [--demo-timers] [-v|-q] [--reset-state]\n"
-          "                  [--test-hooks [--drop-seq tx:N[,N]] [--dup-seq tx:N]]\n"
+          "                  [--test-hooks [--drop-seq tx:N[,N]] [--dup-seq tx:N] [--rebind-after S]]\n"
           "                  [flags from DESIGN §19.2]\n",
           stderr);
 }
@@ -74,6 +74,10 @@ int main(int argc, char **argv)
                 return EX_USAGE_CODE;
             }
             hook_names[nhooks++] = "--drop-seq";
+        } else if (!strcmp(f, "--rebind-after") && i + 1 < argc) {
+            d->hook_rebind_after_s = atoi(argv[++i]);
+            if (d->hook_rebind_after_s <= 0) { fprintf(stderr, "--rebind-after: expected seconds > 0\n"); return EX_USAGE_CODE; }
+            hook_names[nhooks++] = "--rebind-after";
         } else if (!strcmp(f, "--dup-seq") && i + 1 < argc) {
             int n1 = 0;
             if (hooks_parse_seq_list(argv[++i], &d->hooks.dup_seq, 1, &n1) != 0) {
@@ -183,6 +187,7 @@ int main(int argc, char **argv)
                        (uint32_t)c->sim.delay_ms, (uint32_t)c->sim.jitter_ms, (uint32_t)c->sim.mtu,
                        !strcmp(c->sim.mtu_mode, "blackhole") ? NS_MTU_BLACKHOLE : NS_MTU_EMSGSIZE, c->sim.seed};
     netsim_init(&d->ns, &nc);
+    dev_nat_init(d);
     rel_cfg_from(&d->relcfg, c, 8);
     d->keepalive_s = c->nat.keepalive_interval_s;
     d->dead_intervals = c->nat.dead_intervals;

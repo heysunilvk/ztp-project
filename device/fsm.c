@@ -1,4 +1,5 @@
 /* Device event loop and FSM glue (DESIGN §15.1, §15.5). */
+#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -17,6 +18,10 @@ int dev_send(device_t *d, const uint8_t *frame, size_t len, const struct sockadd
 {
     int act = hooks_tx_action(&d->hooks, frame, len);
     d->last_tx = d->now;
+    if (dev_nat_before_send(d, dst)) {
+        LOGD(T_SIM, "NAT: datagram to port %u blocked", (unsigned)ntohs(dst->sin_port));
+        return 0;
+    }
     if (act == HOOK_DROP) {
         LOGD(T_UDP, "test hook: dropped %s seq=%u", ztp_type_name(frame[3]), (unsigned)be32_get(frame + 12));
         return 0;
@@ -84,6 +89,10 @@ static void log_counters(device_t *d)
 
 static void on_datagram(device_t *d, const uint8_t *buf, size_t len, const struct sockaddr_in *src)
 {
+    if (!dev_nat_accept_rx(d)) {
+        LOGD(T_SIM, "NAT: inbound datagram dropped (no mapping)");
+        return;
+    }
     ztp_hdr_t h;
     if (ztp_hdr_decode(buf, len, d->st.max_dgram ? d->st.max_dgram : ZTP_MAX_DGRAM_CAP, ZD_S2D, &h) != ZTP_OK) {
         d->c.rx_malformed++;
@@ -116,6 +125,7 @@ int dev_run(device_t *d)
         else t = dev_session_deadline(d);
         uint64_t nd = netsim_next_deadline(&d->ns);
         if (nd < t) t = nd;
+        if ((nd = dev_nat_deadline(d)) < t) t = nd;
         int timeout = t == UINT64_MAX ? 1000 : (t <= d->now ? 0 : (int)(t - d->now > 1000 ? 1000 : t - d->now));
         struct pollfd p[2] = {{d->fd, POLLIN, 0}, {g_sigpipe[0], POLLIN, 0}};
         if (poll(p, 2, timeout) < 0 && errno != EINTR) break;
@@ -141,6 +151,7 @@ int dev_run(device_t *d)
                 on_datagram(d, buf, (size_t)n, &src);
             }
         d->now = now_ms();
+        dev_nat_timer(d);
         if (d->fsm == DS_DISCOVERY) dev_discovery_timer(d);
         else if (d->fsm == DS_BACKOFF) { if (d->now >= d->backoff_until) dev_discovery_start(d); }
         else if (d->fsm != DS_EXIT && d->fsm != DS_FAILED) dev_session_timer(d);
@@ -148,6 +159,9 @@ int dev_run(device_t *d)
     }
     log_counters(d);
     netsim_log_totals(&d->ns);
+    if (dev_nat_active(d))
+        LOGI(T_SIM, "NAT: blocked=%llu inbound_dropped=%llu", (unsigned long long)d->nat.blocked,
+             (unsigned long long)d->nat.rx_dropped);
     dev_session_end(d);
     return d->exit_code;
 }

@@ -89,6 +89,14 @@ typedef struct {
     uint64_t    backoff_until;
     uint64_t    hold_until;          /* exit after run.operational_hold_s (M2: after the probe) */
 
+    /* NAT emulator (natsim.c, §9.8) */
+    int         hook_rebind_after_s;
+    struct {
+        uint64_t start_ms, last_out_ms, blocked, rx_dropped;
+        bool     mapped, flushed, reboot_done, ip_done, rebind_done;
+        char     bind_ip[16];
+    } nat;
+
     dev_counters_t c;
 } device_t;
 
@@ -104,6 +112,15 @@ void dev_session_end(device_t *d);
 void dev_session_rx(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_t *h, const struct sockaddr_in *src);
 void dev_session_timer(device_t *d);
 uint64_t dev_session_deadline(const device_t *d);
+
+/* natsim.c */
+bool     dev_nat_active(const device_t *d);
+void     dev_nat_init(device_t *d);
+int      dev_rebind(device_t *d, const char *ip, const char *why);
+int      dev_nat_before_send(device_t *d, const struct sockaddr_in *dst);   /* 1 = drop */
+bool     dev_nat_accept_rx(device_t *d);
+uint64_t dev_nat_deadline(const device_t *d);
+void     dev_nat_timer(device_t *d);
 
 /* fsm.c */
 int  dev_send(device_t *d, const uint8_t *frame, size_t len, const struct sockaddr_in *dst);
