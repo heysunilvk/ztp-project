@@ -2248,6 +2248,11 @@ Specifically: a lost HELLO or REGISTER is retransmitted with identical bytes and
 | *Bonus:* how duplicate packets are detected and ignored | §8.5–8.6 |
 | *Bonus:* how loss and reordering were simulated | §16 |
 | Required Q1–Q5 / bonus B1–B4 | §21.1 / §21.2 |
+| Configuration reference: each file in `conf/` and `conf/profiles/`, every key with type, default, range and effect | §11, §18 and the config loaders |
+| Folder structure: every folder and file with a one-line purpose and any limitation | the source tree |
+| Logs and DB dump: where `logs/` and `logs/appendix_a/` come from, the §9 dump, and the waived ZTP-84BC19 row | §14.5, §17, §19.3 |
+| Running the tests: the full regression, a single suite or case, on the Mac and on Linux; where each run writes `results/<date-time>/` | §19.4, QA §3 |
+| Evidence: the committed release run in `evidence/` and the CI record in `evidence/ci/` | QA §11 M7 row |
 | Logs (where to find them, how to read them) | §17 |
 | Why keepalives and session-timeout detection matter in real deployments (PDF §4: "Explain in your README…") | §9.6 (ZTP-DEL-12) |
 | Walkthrough of the Appendix A example with real logs | §4.5, Appendix A |
