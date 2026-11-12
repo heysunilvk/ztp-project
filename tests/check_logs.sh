@@ -24,8 +24,9 @@ for tag in $stags; do
     grep -q "Z \[$tag\] " "$SRVL" && ok || bad "TC-LOG-01: no [$tag] in the server log"
 done
 
-# TC-LOG-02: the PDF's bonus lines, generic sequence numbers (any log of the run)
-for re in 'Received packet seq=[0-9]+ \(out of order, expected=[0-9]+\)' 'Buffered packet seq=[0-9]+' \
+# TC-LOG-02: the PDF's bonus lines, generic sequence numbers (any log of the run). They need loss, reordering or
+# duplication, so an unimpaired run (QA §6 row M1) sets CHECK_BONUS=0.
+[ "${CHECK_BONUS:-1}" = 1 ] && for re in 'Received packet seq=[0-9]+ \(out of order, expected=[0-9]+\)' 'Buffered packet seq=[0-9]+' \
           'Retransmitting seq=[0-9]+ \(timeout\)' 'Duplicate packet seq=[0-9]+ ignored'; do
     cat "$@" "$SRVL" | grep -Eq "$re" && ok || bad "TC-LOG-02: no line matching '$re'"
 done

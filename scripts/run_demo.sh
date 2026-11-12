@@ -206,7 +206,8 @@ switches=$(echo "$sids" | awk 'prev != "" && $0 != prev { n++ } { prev = $0 } EN
 [ "$nd" -ge 3 ] && [ "$switches" -ge "$nd" ] && ok || bad "TC-SRV-09: $nd sessions, $switches switches: not interleaved"
 
 # TC-LOG-01..04 and the invariants (shared with the scale test)
-sh tests/check_logs.sh "$L" > "$L/check_logs.txt" 2>&1 && ok || { bad "check_logs.sh"; cat "$L/check_logs.txt"; }
+bonus=1; [ -z "$SRV_IMPAIR$DEV_IMPAIR" ] && bonus=0   # no impairment, no out-of-order or retransmission lines
+CHECK_BONUS=$bonus sh tests/check_logs.sh "$L" > "$L/check_logs.txt" 2>&1 && ok || { bad "check_logs.sh"; cat "$L/check_logs.txt"; }
 sh tests/check_invariants.sh "$L" "$S" artifacts > "$L/check_invariants.txt" 2>&1 && ok || { bad "check_invariants.sh"; cat "$L/check_invariants.txt"; }
 
 # TC-SRV-06: a restarted server rebuilds the same rows from the journal
