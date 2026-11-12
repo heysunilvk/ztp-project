@@ -58,7 +58,7 @@ jobs:
           done
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: results-build-test-${{ matrix.os }}-${{ matrix.cc }}
           path: results/
@@ -95,7 +95,7 @@ jobs:
           done
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: results-asan-${{ matrix.os }}
           path: results/
@@ -224,7 +224,7 @@ jobs:
           done
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: results-platform-linux
           path: results/
@@ -276,7 +276,7 @@ jobs:
           done
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: results-impair-matrix-${{ matrix.os }}
           path: results/
@@ -319,7 +319,7 @@ jobs:
           done
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: results-impair-netem
           path: results/
@@ -353,7 +353,7 @@ jobs:
           done
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: results-valgrind
           path: results/
@@ -402,7 +402,7 @@ jobs:
           cat "$f" >> "$GITHUB_STEP_SUMMARY"
           echo "REPORT=$f" >> "$GITHUB_ENV"
       - name: Upload the report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ci-evidence
           path: evidence/ci/
