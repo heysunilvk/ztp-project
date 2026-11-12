@@ -1,0 +1,42 @@
+2026-11-12T06:07:46.115Z [ERROR] TEST HOOK ACTIVE: --rebind-after
+2026-11-12T06:07:46.117Z [BOOT] Device starting (boot #1)
+2026-11-12T06:07:46.117Z [BOOT] Soft serial assigned (configuration)
+2026-11-12T06:07:46.117Z [BOOT] Soft serial: ZTP-55AC90
+2026-11-12T06:07:46.117Z [BOOT] Firmware version: v1.1
+2026-11-12T06:07:46.117Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
+2026-11-12T06:07:46.117Z [DISCOVERY] Using static server IP 127.0.0.1:5555
+2026-11-12T06:07:46.117Z [DISCOVERY] Provisioning server found 127.0.0.1:5555 (static)
+2026-11-12T06:07:46.117Z [UDP] HELLO sent (seq=1)
+2026-11-12T06:07:46.127Z [UDP] Session established (session_id=895869135)
+2026-11-12T06:07:46.127Z [NAT] Keepalive sent
+2026-11-12T06:07:46.132Z [UDP] Duplicate packet seq=1 ignored
+2026-11-12T06:07:46.135Z [NAT] Keepalive acknowledged (rtt=8 ms)
+2026-11-12T06:07:46.135Z [AUTH] REGISTER: session_id=895869135 soft_serial=ZTP-55AC90 model=EDGE-GW-100 firmware=v1.1 nonce=131537449405238192
+2026-11-12T06:07:46.173Z [AUTH] Registration successful
+2026-11-12T06:07:46.173Z [AUTH] Assigned tenant: cruise_ops
+2026-11-12T06:07:46.375Z [UDP] Retransmitting seq=4 (timeout)
+2026-11-12T06:07:46.385Z [PROVISION] Config manifest: v3, 2310 bytes, 3 chunks, sha256=aa1db15e2926b52b8e999cc3fd4d2d08a9a1b0235ecd2b08fd2ef614d14b6f8e
+2026-11-12T06:07:46.389Z [UDP] Received packet seq=5 (out of order, expected=4)
+2026-11-12T06:07:46.389Z [UDP] Buffered packet seq=5
+2026-11-12T06:07:46.390Z [PROVISION] Receiving config (chunk 1/3)
+2026-11-12T06:07:46.390Z [PROVISION] Receiving config (chunk 2/3)
+2026-11-12T06:07:46.390Z [UDP] Delivered seq=4..5 (drained 1 buffered)
+2026-11-12T06:07:46.390Z [PROVISION] Receiving config (chunk 3/3)
+2026-11-12T06:07:46.390Z [PROVISION] Config: 3 chunks written, 0 duplicates ignored
+2026-11-12T06:07:46.394Z [PROVISION] Config checksum verified
+2026-11-12T06:07:46.401Z [UPGRADE] Firmware v1.1 is current, no upgrade required
+2026-11-12T06:07:46.401Z [VALIDATION] Configuration present (v3, sha ok)
+2026-11-12T06:07:46.401Z [VALIDATION] Firmware v1.1 verified
+2026-11-12T06:07:46.401Z [NAT] Keepalive sent
+2026-11-12T06:07:46.435Z [NAT] Keepalive acknowledged (rtt=45 ms)
+2026-11-12T06:07:46.435Z [VALIDATION] Session healthy (rtt=45 ms)
+2026-11-12T06:07:46.448Z [STATE] Device is OPERATIONAL
+2026-11-12T06:07:48.466Z [NAT] Keepalive sent
+2026-11-12T06:07:48.470Z [NAT] Keepalive acknowledged (rtt=4 ms)
+2026-11-12T06:07:49.118Z [SIM] NAT: --rebind-after: new source address 0.0.0.0:56864
+2026-11-12T06:07:50.467Z [NAT] Keepalive sent
+2026-11-12T06:07:50.470Z [NAT] Keepalive acknowledged (rtt=3 ms)
+2026-11-12T06:07:51.444Z [STATE] Exiting after operational hold (run.exit_when_operational, 5 s)
+2026-11-12T06:07:51.444Z [UDP] Counters: tx=14 rx=8 retx_timeout=1 retx_fast=0 dup=1 ooo=1 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=12 frames=10
+2026-11-12T06:07:51.444Z [SIM] tx=14 dropped=0 (0.0%) reordered=2 duplicated=2 rx=13
+2026-11-12T06:07:51.444Z [SIM] NAT: blocked=0 inbound_dropped=0

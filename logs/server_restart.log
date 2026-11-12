@@ -1,0 +1,28 @@
+2026-11-12T06:07:54.405Z [CONFIG] profile=demo file=conf/server.json sha256=8b744a14daeeccef907752832f26e76810bec90e86eaf4441f8ab79edda168cc keepalive=2s grace=30s window=8 max_dgram=1200
+2026-11-12T06:07:54.406Z [PROVISION] Artifact 1: config v3, 2310 bytes, sha256=aa1db15e2926b52b…
+2026-11-12T06:07:54.406Z [PROVISION] Artifact 2: firmware v1.1, 65536 bytes, sha256=c6861e6d6f876733…
+2026-11-12T06:07:54.406Z [PROVISION] Artifact 3: config v2, 1800 bytes, sha256=1e6041a89ce447f2…
+2026-11-12T06:07:54.406Z [PROVISION] Artifact 4: firmware v1.0, 49152 bytes, sha256=2d1a937e3095f8a4…
+2026-11-12T06:07:54.407Z [DB] Journal ./state/db.jsonl replayed: 8 lines (0 skipped), 4 records, 4 sessions
+2026-11-12T06:07:54.407Z [BOOT] Server listening on 0.0.0.0:5555 (discovery 0.0.0.0:5556, group 239.255.90.90)
+2026-11-12T06:07:54.407Z [DB] Restored 4 journaled session(s) into IDLE_GRACE
+2026-11-12T06:07:55.409Z [BOOT] Server stopping
+Device Registration Details
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+| Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            |
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-12 06:07:46 | Legacy device    |
+| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-12 06:07:46 | —                |
+| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-12 06:07:46 | —                |
+| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-12 06:07:46 | —                |
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+Summary
+  Registered successfully : 4   ZTP-19FE77, ZTP-55AC90, ZTP-71DD08, ZTP-93AF21
+  Failed registration     : 0  
+  Firmware / config per device:
+    ZTP-19FE77  EDGE-GW-050  v0.9 -> v1.0     cfg v2  cruise_ops  Legacy device
+    ZTP-55AC90  EDGE-GW-100  v1.1 (current)   cfg v3  cruise_ops
+    ZTP-71DD08  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
+    ZTP-93AF21  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
+  Protocol counters: rx=0 tx=0 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 mac_fail=0 replay_rejected=0 rate_limited=0
+2026-11-12T06:07:55.423Z [UDP] Counters: tx=0 rx=0 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 replay_rejected=0 rate_limited=0 mtu_stepdowns=0 sessions_peak=4 srtt_ms=0 frames=0

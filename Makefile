@@ -35,7 +35,7 @@ SERVER_BIN := $(BUILD)/ztp-server
 DEVICE_BIN := $(BUILD)/ztp-device
 TEST_BIN   := $(BUILD)/unit-tests
 
-.PHONY: all server device test demo appendix-a matrix scale soak longrun asan debug clean clean-logs check-separation spike artifacts
+.PHONY: all server device test demo appendix-a release matrix scale soak longrun asan debug clean clean-logs check-separation spike artifacts
 
 # Deterministic mock artifacts and demo keys (tools/mkartifacts; links the device library for the
 # demo key derivation). `make artifacts` writes artifacts/ for conf/policy.json.
@@ -124,7 +124,7 @@ test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK) artifacts
 
 # The 5-device demo (DESIGN §19.3; QA TC-SRV-01, TC-E2E-02 with SEED=1..10): writes logs/ and state/.
 demo: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
-	BIN=$(BUILD) $(KEEP_AWAKE) sh scripts/run_demo.sh
+	BIN=$(BUILD) $(KEEP_AWAKE) $(SUITE) demo sh scripts/run_demo.sh
 
 # Timing-sensitive runs must not be frozen by the Mac's idle sleep (a sleeping process looks like a stalled
 # one: M6 traced an intermittent TC-REL-11 failure to it). caffeinate -i holds an idle-sleep assertion while
@@ -149,6 +149,11 @@ matrix: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 appendix-a: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	APX_SEEDS=0 APX_LOGS=logs/appendix_a $(SUITE) appendix_a sh tests/check_appendix_a.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS) 127.0.0.1 5555
 
+# The release regression (QA §11.2): test, asan, the whole matrix, PERF-01/02/04, longrun, demo and
+# appendix-a into one results folder (about 2.5 h; QUICK=1 skips the soak and longrun).
+release: all $(TEST_BIN) $(PEER_SIM) $(PCAPCHECK)
+	$(KEEP_AWAKE) sh scripts/run_release.sh
+
 # TC-NAT-07 (30 min) and TC-NAT-13 (10 min), in parallel: too long for every push.
 longrun: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	$(KEEP_AWAKE) sh tests/m5_longrun.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
@@ -172,7 +177,7 @@ spike: $(SPIKE_BIN)
 
 # Same build and tests with AddressSanitizer + UBSan (TC-DEL-08).
 asan:
-	$(MAKE) BUILD=build-asan RESULTS=results/$(RUN_ID)-asan OPT="-O1 -g -fno-omit-frame-pointer" \
+	$(MAKE) BUILD=build-asan RESULTS=$(RESULTS)/asan OPT="-O1 -g -fno-omit-frame-pointer" \
 	    SAN="-fsanitize=address,undefined -fno-sanitize-recover=undefined" test
 
 debug:
