@@ -1,6 +1,6 @@
 #!/bin/sh
 # TC-PDF-05: UDP only, "not a REST or API exercise", C, no UI. The repository holds C sources, shell scripts,
-# the Makefile, JSON configuration, the CI workflow and docs; the code has no HTTP or TCP; neither binary links
+# the Makefile, JSON configuration, the CI workflow, docs, and run outputs under logs/ and evidence/; the code has no HTTP or TCP; neither binary links
 # listen() or accept(); and at runtime neither process holds a TCP socket.
 # usage: tests/check_pdf05.sh path/to/ztp-server path/to/ztp-device   (from the repository root)
 set -u
@@ -12,7 +12,8 @@ ok()  { pass=$((pass + 1)); }
 bad() { echo "  FAIL: $1"; fail=$((fail + 1)); }
 
 if git rev-parse --git-dir > /dev/null 2>&1; then
-    others=$(git -c core.quotepath=off ls-files | grep -vE '\.(c|h|sh|md|pdf|json|yml)$|(^|/)Makefile$|(^|/)\.gitignore$')
+    # logs/ and evidence/ hold run outputs (logs, dumps, test summaries), committed as deliverables (TC-DEL-09)
+    others=$(git -c core.quotepath=off ls-files | grep -vE '^(logs|evidence)/|\.(c|h|sh|md|pdf|json|yml)$|(^|/)Makefile$|(^|/)\.gitignore$')
     [ -z "$others" ] && ok || bad "tracked files that are not C, shell, Makefile, config or docs: $others"
     git -c core.quotepath=off ls-files | grep -qiE '\.(py|js|ts|html|css|go|rs|java)$' && bad "another language's source is tracked" || ok
 else
