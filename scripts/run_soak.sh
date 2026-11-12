@@ -66,8 +66,18 @@ done
 # leaks in the live processes (macOS)
 if [ "$VALGRIND" != 1 ] && command -v leaks > /dev/null 2>&1; then
     for p in $SP $pids; do
-        leaks "$p" > "$L/leaks.$p.txt" 2>&1
-        grep -q ' 0 leaks for 0 total leaked bytes' "$L/leaks.$p.txt" && ok || bad "leaks in pid $p: $(grep -m1 'leaks for' "$L/leaks.$p.txt")"
+        # `leaks` itself sometimes cannot read a process's malloc zones ("unable to instantiate a memory
+        # scanner"): retry, and report a scan that never ran as inconclusive, not as a pass or a leak
+        try=1
+        while :; do
+            leaks "$p" > "$L/leaks.$p.txt" 2>&1
+            grep -q 'leaks for .* total leaked bytes' "$L/leaks.$p.txt" && break
+            [ $try -ge 3 ] && break
+            try=$((try + 1)); sleep 2
+        done
+        if grep -q ' 0 leaks for 0 total leaked bytes' "$L/leaks.$p.txt"; then ok
+        elif grep -q 'leaks for .* total leaked bytes' "$L/leaks.$p.txt"; then bad "leaks in pid $p: $(grep -m1 'leaks for' "$L/leaks.$p.txt")"
+        else bad "leaks could not scan pid $p after 3 tries (inconclusive): $(grep -m1 'fatal' "$L/leaks.$p.txt")"; fi
     done
 fi
 for p in $pids; do kill -INT "$p" 2>/dev/null; done
