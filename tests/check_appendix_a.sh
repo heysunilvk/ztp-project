@@ -110,9 +110,9 @@ run_apx ref
 if [ -n "${APX_PCAP:-}" ]; then   # TC-APX-02/03 on the wire
     PC=$(dirname "$0")/../build/pcapcheck
     "$PC" --dump-hdr "$APX_PCAP" "$PORT" > "$T/hdr.txt" 2>&1
-    grep -q "^$ADDR:$PORT\$\|-> $ADDR:$PORT " "$T/hdr.txt" && ok || bad "TC-APX-02: no datagram to $ADDR:$PORT in the capture"
-    grep -q "-> $ADDR:$PORT HELLO .*sid=0 .*seq=1 " "$T/hdr.txt" && ok || bad "TC-APX-03: no HELLO seq=1 to the server"
-    grep -q "^$ADDR:$PORT -> .* HELLO_ACK .*sid=7421 .*seq=1 " "$T/hdr.txt" && ok || bad "TC-APX-03: no HELLO_ACK seq=1 sid=7421"
+    grep -q -e "-> $ADDR:$PORT " "$T/hdr.txt" && ok || bad "TC-APX-02: no datagram to $ADDR:$PORT in the capture"
+    grep -q -e "-> $ADDR:$PORT HELLO .*sid=0 .*seq=1 " "$T/hdr.txt" && ok || bad "TC-APX-03: no HELLO seq=1 to the server"
+    grep -q -e "^$ADDR:$PORT -> .* HELLO_ACK .*sid=7421 .*seq=1 " "$T/hdr.txt" && ok || bad "TC-APX-03: no HELLO_ACK seq=1 sid=7421"
     LC_ALL=C grep -a -q 'ZTP-93AF21' "$APX_PCAP" && ok || bad "TC-APX-03: SERIAL TLV not in the capture"
 fi
 if [ "$ADDR" = 10.10.10.5 ] && [ "$PORT" = 5555 ]; then   # TC-PDF-04: the reference run on the PDF's address
