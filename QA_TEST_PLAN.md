@@ -3,8 +3,8 @@
 | Field | Value |
 |---|---|
 | Document | QA_TEST_PLAN.md (QA persona) |
-| Version | 0.1, Draft for review |
-| Date | 2026-11-10 |
+| Version | 1.0, as run (M7) |
+| Date | 2026-11-12 (first draft 2026-11-10) |
 | Owner | Sunil Vallamkonda (QA Lead) |
 | Companion documents | [PRD_ZTP.md](PRD_ZTP.md) (requirement IDs and acceptance criteria) · [DESIGN.md](DESIGN.md) (the behaviour under test; constants in Appendix B) |
 | Test basis | PRD v0.1 (requirement IDs), DESIGN v0.1 (§5 wire spec, §8 reliability, §10 auth, §19 demo) |
@@ -58,7 +58,7 @@ Real NAT hardware, real flash or power-loss rigs, IPv6, Windows, and production 
 | **Negative / security** | Bad MAC, replay, tampering, floods, fuzzing | §7 | Yes | QA | M3+ |
 | **Resilience / chaos** | Crash points, kill -9, SIGSTOP, rebinding, server restart | Test hooks (DESIGN §19.2) and signals | Yes | QA | M4+ |
 | **Performance / soak** | 50+ devices, timing, memory | `make scale`, `/usr/bin/time`, `leaks` or valgrind | Semi | QA | M6, M7 |
-| **Regression** | Everything above | CI script `tests/run_all.sh` | Yes | QA | M7 and every fix |
+| **Regression** | Everything above | `make test` (every push, CI) and `make release` (the release run, into `results/<…>-release/`) | Yes | QA | M7 and every fix |
 | **Documentation review** | README coverage | Checklist (§9) | Manual | QA + PM | M7 |
 
 **Principles**
@@ -74,12 +74,12 @@ Real NAT hardware, real flash or power-loss rigs, IPv6, Windows, and production 
 | Platforms | **Local:** macOS 14 on the developer's Mac (Apple clang 16, GNU Make 3.81). **CI:** GitHub Actions `ubuntu-latest` (gcc) and `macos-latest` (clang); see DESIGN §19.4. There is **no local Linux host**, so the Ubuntu runner is the Linux platform for the DEL-02 / NFR-01 sign-off |
 | Network | Loopback (`127.0.0.1`). The broadcast test TC-DISC-05 runs locally on the Mac's Wi-Fi/Ethernet interface (its directed broadcast address) and in CI on the Ubuntu runner |
 | Build variants | `make` (release, `-O2 -Wall -Wextra -Werror`); `make asan` (ASan + UBSan); `make debug` (`-O0 -g`) |
-| Impairment | In-code netsim (`--loss/--reorder/--dup/--delay/--seed`), everywhere; macOS dummynet (`scripts/dummynet.sh`), local, TC-SIM-04; Linux `tc netem` (`scripts/netem.sh`), CI Ubuntu runner only, TC-SIM-03 |
+| Impairment | In-code netsim (`--loss/--reorder/--dup/--delay/--seed`), everywhere; macOS dummynet (commands in DESIGN §16.2; not scripted, TC-SIM-04 waived); Linux `tc netem` (`scripts/netem.sh`), CI Ubuntu runner only, TC-SIM-03 |
 | Reduced MTU and real NAT | CI `mtu` job: Linux network namespaces joined by a veth pair at MTU 1280 and 576 (TC-PROV-12/13). Local: `--sim-mtu N:emsgsize` or `N:blackhole` (portable, no sudo). Optional CI `nat-real` job: iptables MASQUERADE with a short conntrack UDP timeout |
 | Capture | `tcpdump -i lo0 -w run.pcap udp` (macOS) or `-i lo` (Linux); Wireshark; `tests/pcapcheck/pcapcheck` (maximum datagram size, fragment filter) |
 | Memory | Locally: ASan + LeakSanitizer (`make asan`) and `leaks --atExit` (built into macOS). CI: valgrind on the Ubuntu runner |
 | Disk footprint (local) | Build outputs, logs, test artifacts and pcaps: < 100 MB in total. `make clean` and `make clean-logs` reclaim it. Large pcaps are limited with `tcpdump -c`. No VMs or containers locally |
-| Fuzzing | `tests/fuzz_decode` (a random and mutation-based datagram generator); libFuzzer if available (§14) |
+| Fuzzing | The server hook `--self-fuzz N` (`server/fuzz.c`: random and mutated datagrams on a virtual clock, `tests/m6_fuzz.sh`) and the JSON mutation fuzz in the unit tests; libFuzzer was not used |
 | Prerequisite | Xcode Command Line Tools on the macOS host: **verified on 2026-11-10** (Apple clang 16.0.0, GNU Make 3.81; PRD D-08) |
 
 **QA tools and their options.** These options belong to test tooling, not to the ZTP binaries; the binaries' flags are in DESIGN §19.2.
@@ -180,7 +180,7 @@ Each case gives its preconditions and steps in short form, followed by the expec
 ### 5.4 Reliability (REL)
 | TC ID | Title | Req | Pri | Steps / setup | Expected result |
 |---|---|---|---|---|---|
-| TC-REL-01 | Every frame carries a seq | FR-05, BON-02 | P1 | Decode the pcap of a full run (`pcapcheck.sh --dump-hdr`) | Every datagram has a valid header with seq; reliable seqs increase per direction and epoch |
+| TC-REL-01 | Every frame carries a seq | FR-05, BON-02 | P1 | Decode the pcap of a full run (`build/pcapcheck --dump-hdr`) | Every datagram has a valid header with seq; reliable seqs increase per direction and epoch |
 | TC-REL-02 | Retransmission on timeout | FR-06, FR-07, BON-03 | P1 | Drop one data frame (scripted) | `[UDP] Retransmitting seq=N (timeout)` once; delivered once; the ACK advances |
 | TC-REL-03 | The PDF scenario, reproduced verbatim: seq 2 lost, seq 3 buffered, duplicate of seq 2 | BON-04, BON-08 | P1 | **Component test (L2)** against the real server: `peer_sim` (holding the fleet test key) completes a fresh HELLO (device seq 1), then sends path-probe KEEPALIVE frames under K_boot in HALF_OPEN in the order seq 3, seq 2 (with the RETX flag), seq 2 again. This needs only the M2 handshake. (No end-to-end flow reaches this order naturally, because the path probe must be ACKed before REGISTER is sent (DESIGN §8.8.1).) | Server log, in order, **verbatim**: `[UDP] Received packet seq=3 (out of order, expected=2)`, `[UDP] Buffered packet seq=3`, `[UDP] Duplicate packet seq=2 ignored`. The sender-side line `[UDP] Retransmitting seq=2 (timeout)` is checked on the engine in the mirrored unit test (TC-UNIT-08 harness, a simulated clock and a dropped seq 2). Delivery order is 1, 2, 3, each delivered once |
 | TC-REL-04 | Lost ACK: data received | BON-07, BON-05 | P1 | Drop the ACK of REGISTER on the server's TX (scripted: server `--test-hooks --drop-seq tx:2` drops its first REGISTER_ACK, which carries the ACK; with a slower server RTO, `rel.rto_min_ms=rel.rto_initial_ms=1500`, so the device's retransmission arrives before the server's own) | The device retransmits REGISTER (device seq=3, after HELLO=1 and the path-probe KEEPALIVE=2); server logs `Duplicate packet seq=3 ignored`; **one** REGISTER processed (DB attempts = 1) |
@@ -289,8 +289,8 @@ Each case gives its preconditions and steps in short form, followed by the expec
 |---|---|---|---|---|---|
 | TC-SIM-01 | Observed loss rate, per direction and end to end | BON-06 | P1 | 10k datagrams each way, `--loss 0.15` on both processes | Each sender's `[SIM]` drop rate is 15% ± 2%, and the end-to-end loss per direction computed from both processes' counters (sent by A, received by B) is 15% ± 2%, not about 28% (TX-only rule, DESIGN §16.1) |
 | TC-SIM-02 | Reordering and duplication are observable | BON-06 | P1 | `--reorder 0.1 --dup 0.05` (the M2 run uses 0.5 / 0.5, because a handshake has few frames) | `[SIM]` counters non-zero; matching dup events in `[UDP]`. OOO events need two reliable frames in flight in one direction, which a handshake never has (HELLO and the path probe are sequential), so the OOO half is checked from M4 on, during transfers |
-| TC-SIM-03 | The netem alternative | BON-06 | P2 | CI `impair-netem` job (Ubuntu runner): `scripts/netem.sh on`, netsim off, run the demo | Same PASS result as with netsim. *If `sch_netem` can't be loaded on the hosted runner, this is waived (PRD R-11)* |
-| TC-SIM-04 | The macOS dummynet alternative | BON-06 | P2 | Locally: `sudo scripts/dummynet.sh on 0.15 5` (loss and delay only, **both directions**), netsim off, run the demo; then `scripts/dummynet.sh off` and check that the pf rules were restored | Same PASS result; retransmission counters show OS-level loss in **both** directions (device and server `retx_timeout` > 0); reordering and duplication aren't exercised (a dummynet limitation) |
+| TC-SIM-03 | The netem alternative | BON-06 | P2 | CI `impair-netem` job (Ubuntu runner): netem on `lo` (inline in the workflow), netsim off, run the demo | Same PASS result as with netsim. *If `sch_netem` can't be loaded on the hosted runner, this is waived (PRD R-11)* |
+| TC-SIM-04 | The macOS dummynet alternative | BON-06 | P2 | **Waived at M7** (needs `sudo` to replace the pf rules; not run; TC-SIM-03 and the in-code netsim cover BON-06). Planned: locally, `sudo scripts/dummynet.sh on 0.15 5` (loss and delay only, **both directions**), netsim off, run the demo; then `scripts/dummynet.sh off` and check that the pf rules were restored | Same PASS result; retransmission counters show OS-level loss in **both** directions (device and server `retx_timeout` > 0); reordering and duplication aren't exercised (a dummynet limitation) |
 
 ### 5.12 Performance (PERF)
 | TC ID | Title | Req | Pri | Steps / setup | Expected result |
@@ -348,7 +348,7 @@ flowchart LR
 |---|---|---|---|---|---|
 | TC-APX-01 | Step 1: Device boot (device information: ZTP-93AF21, EDGE-GW-100, v1.0) | FR-01, FR-33 | P1 | Device log | `[BOOT] Device starting` → `[BOOT] Soft serial: ZTP-93AF21` → `[BOOT] Firmware version: v1.0` |
 | TC-APX-02 | Step 2: Server discovery (static IP 10.10.10.5, UDP port 5555) | FR-02, FR-33 | P1 | Device log; pcap (`tcpdump -i lo0 udp and host 10.10.10.5`) | `[DISCOVERY] Using static server IP 10.10.10.5:5555`; the pcap shows the device's datagrams addressed to 10.10.10.5:5555 |
-| TC-APX-03 | Step 3: UDP session (HELLO seq=1 with soft_serial; HELLO_ACK seq=1 with session_id=7421) | FR-03, FR-04, FR-05, FR-33 | P1 | Device log + pcap header decode (`pcapcheck.sh --dump-hdr`) | `[UDP] HELLO sent (seq=1)` → `[UDP] Session established (session_id=7421)`. The pcap shows HELLO with seq=1 and the SERIAL TLV `ZTP-93AF21`, and HELLO_ACK with seq=1 and session_id=7421 |
+| TC-APX-03 | Step 3: UDP session (HELLO seq=1 with soft_serial; HELLO_ACK seq=1 with session_id=7421) | FR-03, FR-04, FR-05, FR-33 | P1 | Device log + pcap header decode (`build/pcapcheck --dump-hdr`) | `[UDP] HELLO sent (seq=1)` → `[UDP] Session established (session_id=7421)`. The pcap shows HELLO with seq=1 and the SERIAL TLV `ZTP-93AF21`, and HELLO_ACK with seq=1 and session_id=7421 |
 | TC-APX-04 | Step 4: NAT keepalive | FR-10, FR-33 | P1 | Device log order | `[NAT] Keepalive sent` → `[NAT] Keepalive acknowledged`, appearing **after** Step 3 and **before** Step 5 (the path probe); periodic keepalives continue after OPERATIONAL |
 | TC-APX-05 | Step 5: Secure registration (session_id=7421, soft_serial, model, firmware v1.0, nonce=984312) | FR-12, FR-13, FR-29, FR-33 | P1 | Device log, server log, DB | `[AUTH] REGISTER: session_id=7421 soft_serial=ZTP-93AF21 model=EDGE-GW-100 firmware=v1.0 nonce=984312`, then `[AUTH] Registration successful` → `[AUTH] Assigned tenant: cruise_ops`. The server logs the same; the DB row is Success |
 | TC-APX-06 | Step 6: Config provisioning (the example config, 3 chunks) | FR-15, FR-17, FR-18, FR-33 | P1 | Device log; saved config (with TC-PDF-03) | `[PROVISION] Receiving config (chunk 1/3)` → `(chunk 2/3)` → `(chunk 3/3)` → `[PROVISION] Config checksum verified` |

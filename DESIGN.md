@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | DESIGN.md (Architect persona) |
-| Version | 0.1, Draft for review |
-| Date | 2026-11-10 |
-| Status | For review by senior architects and developers |
+| Version | 1.0, as built (M7) |
+| Date | 2026-11-12 (first draft 2026-11-10) |
+| Status | Final for submission; describes the implementation as built. Sections written before the build that the build changed carry an *as built* note |
 | Owner | Sunil Vallamkonda (Architect) |
 | Implementation language | C11, POSIX sockets, no third-party libraries |
 | Companion documents | [PRD_ZTP.md](PRD_ZTP.md) (requirements: *what* and *why*) · [QA_TEST_PLAN.md](QA_TEST_PLAN.md) (verification: *how it is proven*) |
@@ -354,7 +354,7 @@ flowchart LR
 ### 4.2 Source tree and module responsibilities (ZTP-DEL-03)
 ```
 ztp/
-├── Makefile                 all, server, device, test, demo, demo-single, scale, asan, debug, clean, clean-logs
+├── Makefile                 all, server, device, test, release, demo, appendix-a, matrix, scale, soak, longrun, asan, debug, clean, clean-logs
 ├── README.md                submission README (built from §21)
 ├── PRD_ZTP.md  DESIGN.md  QA_TEST_PLAN.md
 ├── common/                  → libztpcommon.a  (no device- or server-specific logic)
@@ -393,10 +393,15 @@ ztp/
 ├── tests/peer_sim/, tests/pcapcheck/   QA protocol peer and pcap checker (QA §3)
 ├── conf/server.json device.json policy.json keys.json   runtime configuration (§25)
 ├── conf/profiles/{server,device}/  default, demo, strict-nat, cgnat, lan, metered overlays, one file per side (§25.7)
-├── scripts/run_demo.sh  run_scale.sh  netem.sh (Linux/CI)  dummynet.sh (macOS)  pcapcheck.sh
+├── scripts/run_demo.sh  run_matrix.sh  run_scale.sh  run_soak.sh  run_release.sh  ci_evidence.sh   (netem runs inline in CI; no dummynet script)
 ├── tests/                   unit tests (C) and integration scripts (sh)
 ├── .github/workflows/ci.yml GitHub Actions matrix: ubuntu-latest + macos-latest (§19.4)
-└── logs/                    produced by `make demo` and committed for the submission
+├── logs/                    produced by `make demo` (and logs/appendix_a/ by `make appendix-a`), committed for the submission
+├── evidence/                the release regression's results and the CI reports, committed
+└── results/                 one folder per test run (not committed)
+```
+*As built (M7).* README §3 lists every file with its purpose. The planned `fsm.h`, `session.h`, `scripts/netem.sh`, `dummynet.sh`, `pcapcheck.sh` and `tests/fuzz_decode.c` were not created: the device FSM shares `dev.h`, netem runs inline in the CI workflow, the pcap checker is the C tool `tests/pcapcheck/`, and the datagram fuzzer is the server hook `--self-fuzz` (`server/fuzz.c`).
+```
 ```
 
 **Separation rule.** `device/` and `server/` never include each other's headers. Both depend only on `common/`. The CI check is that `nm ztp-device` contains no `srv_*` symbols, and vice versa (TC-DEL-03). Everything except each `main.c` is built into `libztpserver.a` / `libztpdevice.a`, so the unit tests can link both sides. The rule applies to the binaries, not to the test runner.
@@ -1597,7 +1602,7 @@ Summary
 ### 14.6 Robustness and limits
 | Concern | Control |
 |---|---|
-| Malformed input | The ordered checks in §5.6; fuzz target `tests/fuzz_decode.c` (TC-SRV-07) |
+| Malformed input | The ordered checks in §5.6; the in-process fuzzer `--self-fuzz` (`server/fuzz.c`, TC-SRV-07) |
 | Memory | Fixed caps: 1024 sessions, 256 half-open, 64 queued frames per session, nonce cache of 4096. No allocation inside the per-datagram path after a session is created |
 | Floods | Per-IP token bucket (silent drop); half-open TTL of 10 s; `SERVER_BUSY`; Failed rows without a prior Success capped at `limits.max_failed_records` (§10.3) |
 | Slow or stuck devices | Idle → grace → delete; no unbounded queues |
@@ -1894,7 +1899,7 @@ Each decision is logged under `[SIM]` at debug level, and totals are printed at 
 ### 16.2 OS-level alternatives: Linux `tc netem` (on CI) and macOS dummynet (local)
 The project has no local Linux host (PRD D-09), so netem runs **only on the GitHub Actions Ubuntu runner**, and macOS's built-in **dummynet** is the local OS-level option.
 
-**Linux netem** (`scripts/netem.sh`, CI job `impair-netem`):
+**Linux netem** (inline in the CI job `impair-netem`; there is no `scripts/netem.sh`):
 ```sh
 sudo modprobe sch_netem 2>/dev/null || true      # check first; see PRD R-11
 sudo tc qdisc add dev lo root netem loss 15% 25% delay 5ms 2ms reorder 10% 50% duplicate 5%
@@ -1903,7 +1908,7 @@ sudo tc qdisc del dev lo root
 ```
 (`loss 15% 25%` adds correlation, which gives bursty loss, something the in-code shim doesn't model.)
 
-**macOS dummynet** (`scripts/dummynet.sh`, built in, needs sudo, no install):
+**macOS dummynet** (built in, needs sudo, no install; *as built: not scripted and not run, TC-SIM-04 is waived*):
 ```sh
 sudo dnctl pipe 1 config plr 0.15 delay 5          # 15% packet loss rate, 5 ms delay
 printf '%s\n' \
@@ -1923,7 +1928,7 @@ sudo pfctl -f /etc/pf.conf && sudo dnctl -q flush   # restore the default rules
 | Needs root | no | yes | yes |
 | Small MTU | ✅ `--sim-mtu` | ✅ (netns/veth with a low MTU, CI) | optional (`ifconfig lo0 mtu 1280`, sudo; restore afterwards) |
 
-> **Reviewer note.** The `pfctl` commands replace the active pf ruleset while the test runs. `dummynet.sh` saves and restores the rules. Run it only on a development machine, never on one that depends on custom pf rules.
+> **Reviewer note.** The `pfctl` commands replace the active pf ruleset while the test runs; the last line restores it. Run it only on a development machine, never on one that depends on custom pf rules.
 
 ### 16.3 Expected behaviour under loss (summary; the full answer is §21.1 Q5)
 At 20% loss per direction, the expected number of transmissions per reliable frame is ≤ 1/(0.8 × 0.8) = **1.56** (an upper bound, because cumulative ACKs repair lost ACKs). A device in the demo exchanges about 100 frames per direction, so it needs about 55 extra datagrams. Most losses in the middle of a window are repaired by fast retransmit within about 1 RTT. Tail losses cost one RTO (≥ 200 ms). The expected time to OPERATIONAL is a few seconds of transfer plus the restart and validation, well within the 60 s target (ZTP-NFR-04).
@@ -2068,16 +2073,22 @@ Assets: device identity, config integrity, firmware integrity, the integrity of 
 
 ### 19.1 Build
 ```sh
-make            # builds libztpcommon.a, ztp-server, ztp-device, mkartifacts (C11, -O2 -Wall -Wextra -Werror)
-make test       # unit tests (crypto vectors, codec, reliability engine, util)
-make demo       # generates artifacts, runs scripts/run_demo.sh, leaves logs/ populated
-make scale N=50 # scale test
-make asan       # the same with -fsanitize=address,undefined
-make demo-single # one device (ZTP-93AF21) against one server; used by CI jobs such as `mtu`
-make debug      # -O0 -g build
-make clean      # remove build outputs and state/
-make clean-logs # remove logs/ and pcaps (reclaims local disk)
+make             # libztpcommon.a, ztp-server, ztp-device, mkartifacts, artifacts/ (C11, -O2 -Wall -Wextra -Werror)
+make test        # every suite (unit, CLI, session, peer_sim, registration, provisioning, upgrade, M5 gate,
+                 # Appendix A, fuzz, server, one demo, PERF-03, PDF-05, separation) into results/<date-time>/
+make release     # the release regression: test, asan, the whole matrix, PERF-01/02/04, longrun, demo, appendix-a
+make demo        # the five-device demo (scripts/run_demo.sh); rewrites logs/
+make appendix-a  # the Appendix A journey on 127.0.0.1:5555; rewrites logs/appendix_a/
+make matrix ROWS="M1 M2 M3 M4" SEEDS=10   # the demo over QA §6 rows and seeds
+make scale N=50  # N devices at 15% loss (TC-PERF-01)
+make soak        # 5 devices for an hour (TC-PERF-04)
+make longrun     # TC-NAT-07 and TC-NAT-13
+make asan        # make test with -fsanitize=address,undefined (build-asan/, results in <run>/asan/)
+make debug       # -O0 -g build
+make clean       # remove build outputs and state/
+make clean-logs  # remove logs/ and pcaps
 ```
+*As built (M7).* The planned `make demo-single` became `make appendix-a`. Every test target records its run in `results/<date-time>/` through `tests/run_suite.sh` (`summary.txt`, each suite's output, logs and state); `RESULTS=DIR` chooses the folder.
 Toolchain: gcc ≥ 9 or clang ≥ 11, GNU make, POSIX sh. No other dependencies (ZTP-NFR-01).
 
 > **Reviewer note (environment verified on 2026-11-10).** The development Mac has Apple clang 16.0.0 (arm64) and **GNU Make 3.81**. The Makefile must therefore stay Make-3.81-compatible: no `.ONESHELL`, `$(file …)` or grouped targets. See PRD D-08 and R-10.
@@ -2149,24 +2160,26 @@ ztp-device --state-dir DIR [--model MODEL] [--fw VERSION] [--serial ZTP-XXXXXX]
 > **Note.** The demo sets the serials with `--serial`, so that the dump matches the PDF's example table; the boot log then says `Soft serial assigned (configuration)`. Without the flag, serials are generated (FR-01; TC-DISC-01, TC-PDF-01).
 
 ### 19.4 Continuous integration: the Linux environment (GitHub Actions)
-There is no local Linux host, and disk space on the development Mac is limited (PRD D-09), so **GitHub-hosted runners are the project's Linux platform**. Nothing extra is installed locally. Repository: **https://github.com/heysunilvk/ztp-project**. Planned `.github/workflows/ci.yml`:
+There is no local Linux host, and disk space on the development Mac is limited (PRD D-09), so **GitHub-hosted runners are the project's Linux platform**. Nothing extra is installed locally. Repository: **https://github.com/heysunilvk/ztp-project**. `.github/workflows/ci.yml` as built (M7):
 
 | Job | Runner | Steps | Covers |
 |---|---|---|---|
-| `build-test` | `ubuntu-latest`, `macos-latest` (matrix) | `make CC=gcc` / `make CC=clang` → `make test` → `make demo` → upload `logs/` as an artifact | DEL-02, NFR-01, NFR-11, TC-DEL-01/02 |
-| `asan` | both | `make asan test demo` | TC-DEL-08, TC-SRV-07 |
-| `impair-matrix` | both | Impairment rows M1–M4, 3 seeds each per push (all 10 seeds nightly or on demand) | TC-REL-09, QA §6 |
-| `impair-netem` | `ubuntu-latest` | `scripts/netem.sh on` → demo with netsim off → off | TC-SIM-03, QA matrix row M7 |
-| `broadcast` | `ubuntu-latest` | Server and device on the runner; `--discover bcast` to the runner's directed broadcast address | TC-DISC-05 (second platform) |
-| `valgrind` | `ubuntu-latest` | `apt-get install -y valgrind` → single-device demo under `valgrind --leak-check=full --error-exitcode=1` | TC-PERF-04 (Linux half) |
-| `mtu` | `ubuntu-latest` | Network namespace pair on a veth link at MTU 1280, then 576; server and device inside; `make demo-single` | TC-PROV-12 (1200 fits at 1280), TC-PROV-13 (fallback at 576) |
-| `nat-real` (optional, P2) | `ubuntu-latest` | Namespaces plus `iptables -t nat MASQUERADE` with `nf_conntrack_udp_timeout=5`; device behind the NAT | TC-NAT-08 on a real conntrack NAT |
+| `build-test` | `ubuntu-latest` (gcc, clang), `macos-latest` (clang) | `make` → `make test` (broadcast discovery on Ubuntu) | DEL-02, NFR-01, TC-DEL-01/03, every `make test` case |
+| `asan` | both | `make asan` with a 1M-input JSON fuzz and 3 × 334,000-datagram server fuzz | TC-DEL-08, TC-SRV-07, TC-UNIT-18 |
+| `platform-linux` | `ubuntu-latest` | Multicast/broadcast probes; a tcpdump capture of the session, provisioning and upgrade tests checked by `tests/pcapcheck`; Appendix A on 10.10.10.5:5555 with a capture; `lo` at MTU 1280; netem availability | TC-REL-01, TC-PROV-04/05/12, TC-APX-02/03, TC-PDF-04, TC-NAT-10 (strict) |
+| `impair-matrix` | both | The demo over rows M1–M4 (3 seeds per push, 10 nightly); 50 devices; TC-PERF-02 nightly | TC-REL-09, TC-E2E-02, TC-PERF-01/02 |
+| `impair-netem` | `ubuntu-latest` | netem on `lo`, the demo with netsim off | TC-SIM-03, row M7 |
+| `valgrind` | `ubuntu-latest` | 3-minute soak with the server and one device under memcheck | TC-PERF-04 (Linux) |
+| `platform-macos` | `macos-latest` | Multicast on lo0, broadcast probe | PRD R-03 |
+| `evidence` | `ubuntu-latest` | `scripts/ci_evidence.sh` renders the run (jobs, steps, notices) as Markdown; nightly and manual runs commit it to `evidence/ci/` | QA §11 M7 row item 7 |
+
+Every job keeps `results/` (`RESULTS` is set for the whole workflow), posts each suite summary as a notice and uploads `results/` as an artifact. The planned `broadcast`, `mtu` and `nat-real` jobs were folded into `build-test` and `platform-linux` or not created (below).
 
 - **Status (2026-11-11, M5).** Running on every push: `build-test` (Ubuntu gcc and clang, macOS clang; unit, CLI, session, `peer_sim`, registration, provisioning and upgrade tests (`tests/m5_upgrade.sh`), with broadcast TC-DISC-05 (b) on Ubuntu), `asan` (both platforms), `platform-linux` (multicast/broadcast probes, the netem availability check, the TC-REL-01 capture of the session, provisioning and upgrade tests checked by `tests/pcapcheck`, the strict TC-NAT-10 case, which needs 127.0.0.2, the Appendix A reference run on 10.10.10.5:5555 with a capture (`tests/check_appendix_a.sh`: TC-APX-01..10, TC-PDF-04), and TC-PROV-12 on `lo` with MTU 1280 instead of the planned veth `mtu` job) and `platform-macos`. `make test` also runs `tests/m5_gate.sh` and three Appendix A seeds on both platforms; `make longrun` runs TC-NAT-07/13 (40 min, not per push).
 - **Status (M6).** `make test` also runs the server fuzz (`tests/m6_fuzz.sh`, 3 × 100,000 datagrams; 3 × 334,000 in the `asan` job), `tests/m6_server.sh`, one demo (`tests/m6_demo.sh`), TC-PERF-03 and TC-PDF-05. New jobs: `impair-matrix` (both platforms: the demo over rows M1–M4, 3 seeds per push, 10 nightly, and TC-PERF-02 nightly), `impair-netem` (Ubuntu: row M7, the demo under netem on `lo`), and `valgrind` (Ubuntu: a 3-minute soak with the server and one device under memcheck). A nightly schedule (03:17 UTC) runs the 10-seed variants. Local: `make soak` (TC-PERF-04, 1 h with `leaks`) and `make longrun`; `make scale N=50` (TC-PERF-01) runs in CI too. On macOS the long local targets and `make test` hold a `caffeinate -i` assertion (`KEEP_AWAKE` in the Makefile), because the Mac's idle sleep freezes an unattended run. **Not created:** the optional `nat-real` job (a Linux conntrack MASQUERADE NAT); the NAT emulator and rebinding hooks cover the same behaviour (TC-NAT-05/08/09/10).
 - **Cost and footprint:** about 5–8 runner-minutes per push. Free for public repositories; 2,000 min/month on the free plan for private ones. Zero local disk.
 - **Triggers:** every push and pull request, plus `workflow_dispatch` to run the full matrix on demand.
-- **Evidence:** the CI artifacts (logs, `db_dump.txt`, the test report) back up the submission's claim that it works on Linux and macOS.
+- **Evidence (M7):** each job uploads its `results/` as an artifact (90 days); the `evidence` job's Markdown report is committed to `evidence/ci/` on nightly and manual runs, and the release regression run on the Mac is committed to `evidence/` (README §17).
 - **Make 3.81 / 4.x:** the same Makefile is used on both runners, which also enforces the Make 3.81 compatibility rule (§19.1).
 
 > **Reviewer note.** Hosted runners are shared VMs, so timing can be noisy. CI asserts on counts and states, not durations; the performance targets (TC-PERF-02) are measured on the Mac. Whether the `sch_netem` module loads on the hosted kernel is checked in M1 (PRD R-11). If it doesn't, TC-SIM-03 is waived, and the in-code netsim and dummynet cover the requirement.

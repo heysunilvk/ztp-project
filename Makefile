@@ -37,6 +37,9 @@ TEST_BIN   := $(BUILD)/unit-tests
 
 .PHONY: all server device test demo appendix-a release matrix scale soak longrun asan debug clean clean-logs check-separation spike artifacts
 
+# The default goal: a plain `make` builds both binaries and the artifacts (TC-DEL-01).
+all:
+
 # Deterministic mock artifacts and demo keys (tools/mkartifacts; links the device library for the
 # demo key derivation). `make artifacts` writes artifacts/ for conf/policy.json.
 MKARTIFACTS := $(BUILD)/mkartifacts
