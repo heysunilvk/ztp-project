@@ -122,10 +122,18 @@ jobs:
           sudo tcpdump -i lo -U -w apx.pcap 'udp and host 10.10.10.5' 2> /dev/null &
           sleep 2
           rc=0
-          APX_PCAP=apx.pcap sh tests/check_appendix_a.sh build/ztp-server build/ztp-device build/mkartifacts 10.10.10.5 5555 || rc=$?
+          APX_PCAP=apx.pcap sh tests/check_appendix_a.sh build/ztp-server build/ztp-device build/mkartifacts 10.10.10.5 5555 > apx.txt 2>&1 || rc=$?
+          cat apx.txt
           sudo pkill -INT tcpdump || true
           sudo ip addr del 10.10.10.5/32 dev lo
-          exit $rc
+          if [ $rc -ne 0 ]; then
+            grep -E 'FAIL' apx.txt | head -20 | sed 's/^/::error::/'
+            d=$(sed -n 's/.*(logs kept in \(.*\))/\1/p' apx.txt)
+            for f in "$d"/ref.d.log "$d"/ref.s.log "$d"/ref.s.out "$d"/ref.d.out "$d"/hdr.txt; do
+              [ -f "$f" ] && tail -12 "$f" | cut -c1-240 | sed "s|^|::error::$(basename "$f"): |"
+            done
+            exit $rc
+          fi
       - name: TC-PROV-12 - a 1280-byte MTU path (lo MTU 1280) needs no fallback and never fragments
         run: |
           sudo ip link set lo mtu 1280
