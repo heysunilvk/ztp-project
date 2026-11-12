@@ -342,6 +342,9 @@ int srv_policy_validate(const srv_policy_t *p, const cfg_t *cfg, const srv_keys_
     }
     for (size_t s = 0; s < p->nserials; s++) {   /* serials resolved with no model entry */
         srv_policy_resolve(p, cfg, "", p->serials[s].name, &a);
+        /* without a model entry the serial's own assignment may be incomplete: such a device is rejected
+         * (NO_POLICY), so its NAT values never apply and must not fail the whole file (M6, TC-SRV-02) */
+        if (!a.assigned) continue;
         snprintf(where, sizeof where, "policy:serial %s", p->serials[s].name);
         if ((rc = check_nat(&a, where, err, errsz))) return rc;
     }

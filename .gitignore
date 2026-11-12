@@ -13,3 +13,4 @@ ztp-assignment-analysis.md
 /build/
 /build-asan/
 /build-debug/
+/logs/

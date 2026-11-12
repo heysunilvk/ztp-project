@@ -12,6 +12,7 @@
 #include "config.h"
 #include "log.h"
 #include "logmsg.h"
+#include "fuzz.h"
 #include "srv.h"
 #include "timer.h"
 #include "util.h"
@@ -31,6 +32,7 @@ static void srv_usage(void)
     fputs("usage: ztp-server [--config FILE] [--profile NAME] [--set key=value]... [--print-config]\n"
           "                  [--config-lenient] [--demo-timers] [-v|-q] [--run-for SECS]\n"
           "                  [--test-hooks [--first-session-id N] [--drop-seq tx:N[,N]] [--dup-seq tx:N]\n"
+          "                                [--self-fuzz N [--fuzz-seed S]]\n"
           "                                [--no-discovery]]\n"
           "                  [flags from DESIGN §19.2]\n",
           stderr);
@@ -52,13 +54,14 @@ static void srv_log_counters(srv_t *s)
     LOGI(T_UDP,
          "Counters: tx=%llu rx=%llu retx_timeout=%llu retx_fast=%llu dup=%llu ooo=%llu out_of_window=%llu "
          "rx_malformed=%llu rx_unknown=%llu rx_stale=%llu mac_fail=%llu replay_rejected=%llu rate_limited=%llu "
-         "mtu_stepdowns=%llu sessions_peak=%llu srtt_ms=%u",
+         "mtu_stepdowns=%llu sessions_peak=%llu srtt_ms=%u frames=%llu",
          (unsigned long long)r.tx, (unsigned long long)r.rx, (unsigned long long)r.retx_timeout,
          (unsigned long long)r.retx_fast, (unsigned long long)r.dup, (unsigned long long)r.ooo,
          (unsigned long long)r.out_of_window, (unsigned long long)s->c.rx_malformed,
          (unsigned long long)s->c.rx_unknown, (unsigned long long)s->c.rx_stale, (unsigned long long)s->c.mac_fail,
          (unsigned long long)s->c.replay_rejected, (unsigned long long)s->c.rate_limited,
-         (unsigned long long)s->c.mtu_stepdowns, (unsigned long long)s->c.sessions_peak, (unsigned)r.srtt_ms);
+         (unsigned long long)s->c.mtu_stepdowns, (unsigned long long)s->c.sessions_peak, (unsigned)r.srtt_ms,
+         (unsigned long long)r.frames);
 }
 
 static void counters_str(srv_t *s, char *out, size_t n)
@@ -134,6 +137,8 @@ int main(int argc, char **argv)
     srv_t *s = &S;
     cfg_args_t args = {0};
     long run_for = 0;
+    uint64_t fuzz_n = 0, fuzz_seed = 1;
+    int fuzz_rc = 0;
     bool want_hooks = false, dump_on_exit = false;
     const char *hook_names[8];
     int nhooks = 0;
@@ -156,6 +161,12 @@ int main(int argc, char **argv)
             if (v <= 0 || v > 0xFFFFFFFFL) { fprintf(stderr, "--first-session-id: expected 1..4294967295\n"); return EX_USAGE_CODE; }
             s->hook_first_sid = (uint32_t)v;
             hook_names[nhooks++] = "--first-session-id";
+        } else if (!strcmp(f, "--self-fuzz") && i + 1 < argc) {
+            fuzz_n = strtoull(argv[++i], NULL, 10);
+            if (!fuzz_n) { fprintf(stderr, "--self-fuzz: expected N > 0\n"); return EX_USAGE_CODE; }
+            hook_names[nhooks++] = "--self-fuzz";
+        } else if (!strcmp(f, "--fuzz-seed") && i + 1 < argc) {
+            fuzz_seed = strtoull(argv[++i], NULL, 10);
         } else if (!strcmp(f, "--drop-seq") && i + 1 < argc) {
             if (hooks_parse_seq_list(argv[++i], s->hooks.drop_seq, HOOK_MAX_SEQ, &s->hooks.ndrop) != 0) {
                 fprintf(stderr, "--drop-seq: expected tx:N[,N...]\n");
@@ -225,6 +236,12 @@ int main(int argc, char **argv)
     }
     s->nonce_cap = (size_t)c->limits.nonce_cache_total;
     s->nonces = calloc(s->nonce_cap, sizeof *s->nonces);
+    s->nonce_link = calloc(s->nonce_cap, sizeof *s->nonce_link);
+    if (!s->nonces || !s->nonce_link) {
+        fprintf(stderr, "out of memory\n");
+        return 1;
+    }
+    for (size_t i = 0; i < SRV_NONCE_BUCKETS; i++) s->nonce_head[i] = -1;
 
     netsim_cfg_t nc = {c->sim.loss, c->sim.reorder, c->sim.dup, (uint32_t)c->sim.reorder_delay_ms,
                        (uint32_t)c->sim.delay_ms, (uint32_t)c->sim.jitter_ms, (uint32_t)c->sim.mtu,
@@ -260,9 +277,14 @@ int main(int argc, char **argv)
     signal(SIGPIPE, SIG_IGN);
     s->now = now_ms();
     srv_sess_restore(s);
+    if (fuzz_n) LOGI(T_BOOT, "[FUZZ] %llu inputs, seed %llu", (unsigned long long)fuzz_n, (unsigned long long)fuzz_seed);
 
     uint64_t start = now_ms(), stop_at = run_for ? start + (uint64_t)run_for * 1000u : UINT64_MAX;
     bool running = true, by_signal = false;
+    if (fuzz_n) {   /* TC-SRV-07: the generated inputs instead of the socket, then the normal shutdown */
+        fuzz_rc = srv_self_fuzz(s, fuzz_n, fuzz_seed);
+        running = false;
+    }
     while (running) {
         s->now = now_ms();
         uint64_t d = srv_sess_next_deadline(s);
@@ -298,11 +320,13 @@ int main(int argc, char **argv)
     db_close(&s->db, true);
     srv_artifacts_free(&s->artifacts);
     free(s->nonces);
+    free(s->nonce_link);
+    srv_timers_free(s);
     srv_policy_free(&s->policy);
     srv_keys_free(&s->keys);
     cfg_free(&s->cfg);
     close(s->ctl_fd);
     if (s->disc_fd >= 0) close(s->disc_fd);
     log_close();
-    return 0;
+    return fuzz_rc;
 }

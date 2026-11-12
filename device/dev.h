@@ -134,7 +134,8 @@ typedef struct {
     bool        cfg_refetched;
     bool        hook_no_refetch;     /* --no-refetch (test hook) */
     char        fw_approved[9];      /* running version the firmware decision accepted as current (§13) */
-    uint32_t    rr_echo;             /* last ECHO_SEQ a RESUME_REQUIRED was honoured for (one per seq, §5.6) */
+    uint32_t    rr_echo;
+    rel_stats_t rel_acc;             /* stats of this process's ended sessions (the exit counters) */             /* last ECHO_SEQ a RESUME_REQUIRED was honoured for (one per seq, §5.6) */
     /* fault-injection hooks (§19.2): each fires at most once per state directory (hooks.fired) */
     char        hook_crash_at[16];   /* download, downloaded, verified, committed, post-exec, resume-sent */
     int         hook_crash_after_chunks;
@@ -224,6 +225,8 @@ void     dev_nat_timer(device_t *d);
 
 /* Abort at a named §12.4 crash point if --crash-at names it (once per state directory). */
 void     dev_crash_point(device_t *d, const char *point);
+void     dev_rel_stats_add(rel_stats_t *a, const rel_stats_t *b);
+void     dev_log_counters(device_t *d);   /* "Counters: ..." for this process (at exit and before a restart) */
 uint64_t dev_validate_recovery_deadline(const device_t *d);
 void     dev_validate_recovery_timer(device_t *d);   /* val.deadline_s while the session is being recovered */
 

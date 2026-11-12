@@ -273,12 +273,12 @@ Each case gives its preconditions and steps in short form, followed by the expec
 | TC ID | Title | Req | Pri | Steps / setup | Expected result |
 |---|---|---|---|---|---|
 | TC-SRV-01 | 5-device concurrent demo | FR-28 | P1 | `make demo` | Every final DB row matches §4.1 |
-| TC-SRV-02 | Per-device assignment | FR-29 | P1 | Demo + `policy_override.json` | Each device gets the firmware and config of its model, or of its serial override |
+| TC-SRV-02 | Per-device assignment | FR-29 | P1 | `tests/m6_server.sh`: a policy whose serial entry for ZTP-55AC90 assigns cfg v2 and a 10 s keepalive under a tenant grace of 180 s, beside the model entries (the `tests/conf/policy_override.json` fixture overrides NAT values only) | Each device gets the firmware and config of its model, or of its serial override |
 | TC-SRV-03 | DB record fields | FR-30 | P1 | Inspect the dump and `db.jsonl` | Device ID, timestamp, firmware assigned, config version and outcome present for every row |
 | TC-SRV-04 | Dump on demand | FR-31, DEL-11 | P1 | `kill -USR1 <server>` during the demo; SIGINT at the end | The dump is printed both times, in the default PDF format (exact format checks in TC-PDF-02); `--dump-verbose` adds the extra columns **after** Notes only |
 | TC-SRV-05 | Summary | FR-32 | P1 | At the end of the demo | Lists 4 successes, 1 failure with reason, and firmware/config per device |
 | TC-SRV-06 | DB persists across a server restart | NFR-10 | P1 | Restart the server after the demo; dump | The same rows are rebuilt from the journal |
-| TC-SRV-07 | Fuzzing malformed datagrams | NFR-07 | P1 | 1M random and mutated datagrams at the control and discovery ports, ASan build | No crash, hang or sanitizer report; counters increase |
+| TC-SRV-07 | Fuzzing malformed datagrams | NFR-07 | P1 | 1M random and mutated datagrams into the control and discovery handlers, ASan build (`tests/m6_fuzz.sh`: the server hook `--self-fuzz`, in process on a virtual clock so the rate limiter does not discard most inputs and timers fire; 3 seeds × 334,000 in the CI `asan` job) | No crash, hang or sanitizer report; counters increase |
 | TC-SRV-08 | Session limits and half-open expiry | NFR-05, NFR-07 | P2 | 300 half-open HELLOs from `peer_sim` spread over 30 source addresses (127.0.0.10–39 on Linux; or `--set limits.hello_rate_per_ip=1000`) so the rate limit doesn't mask the cap | Capped at `max_half_open` (256); further HELLOs get terminal `SERVER_BUSY`; they expire after `half_open_ttl_s`; memory returns to baseline |
 | TC-SRV-09 | Interleaved progress | FR-28 | P1 | Server log of the demo | Lines from ≥ 3 different sids interleave during provisioning (not one device after another) |
 | TC-SRV-10 | Resume across a server restart mid-upgrade | FR-23, NFR-10 | P1 | ZTP-93AF21 with `--test-hooks --restart-mode exit --restart-delay 5` (a window while the server is in AWAIT_RESUME); during that window, SIGKILL the server and restart it | Server log: session 7421 restored into IDLE_GRACE from the journal; the device resumes with `[UDP] Session resumed (session_id=7421) epoch=1`; no second REGISTER; DB row unchanged |
@@ -295,10 +295,10 @@ Each case gives its preconditions and steps in short form, followed by the expec
 ### 5.12 Performance (PERF)
 | TC ID | Title | Req | Pri | Steps / setup | Expected result |
 |---|---|---|---|---|---|
-| TC-PERF-01 | 50 concurrent devices | NFR-05, FR-28 | P1 | `make scale N=50`, 15% loss | All valid devices OPERATIONAL; all done ≤ 120 s; server peak RSS ≤ 64 MB |
+| TC-PERF-01 | 50 concurrent devices | NFR-05, FR-28 | P1 | `make scale N=50` (`scripts/run_scale.sh`: 4 in 5 devices EDGE-GW-100 upgrading, 1 in 5 legacy), 15% loss; also in the CI `impair-matrix` job | All valid devices OPERATIONAL; all done ≤ 120 s; server peak RSS ≤ 64 MB |
 | TC-PERF-02 | Time to OPERATIONAL | NFR-04 | P1 | 20 runs × the 5-device demo at 20% loss | Median ≤ 60 s, p95 ≤ 90 s |
 | TC-PERF-03 | Retransmission overhead against the model | FR-09 | P3 | Counters at 10/20/30% loss | Ratio of transmissions to frames ≤ DESIGN §21.1 Q5 bounds (+10%) |
-| TC-PERF-04 | Soak with no leaks | NFR-07 | P2 | 5 OPERATIONAL devices for 1 h; `leaks` or valgrind | No leaks; RSS stable (± 5%) |
+| TC-PERF-04 | Soak with no leaks | NFR-07 | P2 | 5 OPERATIONAL devices for 1 h (`make soak`, `scripts/run_soak.sh`; `leaks` on the live processes on macOS; the CI `valgrind` job runs 3 min under memcheck) | No leaks; RSS stable (± 5%). On macOS the check is growth of at most 5%: the kernel compresses an idle process's pages, so resident size *falls* over a soak (seen: 30–60%), and a fall is not a leak |
 
 ### 5.13 Logs (LOG)
 | TC ID | Title | Req | Pri | Steps / setup | Expected result |
@@ -638,6 +638,7 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 | A test hook masks real behaviour | Hooks are reviewed; at least one kill -9 is a *real* external kill (TC-PROV-08) |
 | Platform-specific socket behaviour (broadcast, DF) | Run both platforms; known platform differences documented (DESIGN §6.2) |
 | Limited test time at M7 | Most cases are automated and run from M2 onward, so M7 is mainly regression |
+| The Mac's idle sleep freezes an unattended local run (found in M6: an intermittent TC-REL-11 failure, "idle device sent 0 keepalives", matched `pmset` sleep entries to the second) | `make test`, `demo`, `scale`, `soak` and `longrun` hold a `caffeinate -i` assertion while they run; wrap a hand-started run the same way |
 
 ---
 
@@ -663,7 +664,7 @@ The M3 code these tests exercise is built and passes its other tests, and the lo
 | `peer_sim` replay of captured terminal ERRORs to another device (M5) | TC-AUTH-15 | The device accepts a terminal ERROR only if it echoes the Nd/Nd′ of its pending HELLO or resume, and RESUME_REQUIRED only for a seq it sent in the current epoch, once per seq (code review) |
 
 **Other QA tooling not yet built under its planned name** (no gate case is blocked by it):
-- `tests/check_logs.sh` and `check_invariants.sh` (planned for M2, §12.1; `check_appendix_a.sh` was built at M5). So far each test script (`tests/m2_session.sh`, `m2_peer.sh`, `m3_register.sh`, `m4_provision.sh`) checks its log lines inline, including the server matching rule (the `[sid=… …]` tag). `tests/m5_upgrade.sh` does the same for M5. The dedicated checkers are built with M6, together with the Appendix A run (TC-APX-*) and the demo.
+- The log checkers: `tests/check_appendix_a.sh` (built at M5), `tests/check_logs.sh` and `tests/check_invariants.sh` (built at M6, run by `scripts/run_demo.sh` on every demo and matrix run). The milestone test scripts keep checking their own lines inline.
 - The CI jobs `impair-matrix`, `impair-netem`, `valgrind`, `mtu` and `nat-real` (DESIGN §19.4 status): M6, with the demo.
 
 When a tool lands, its cases move back into the gate and run in CI like the others. Anything still open at M7 is listed in the README's "Test coverage and known gaps" section (DESIGN §21.3).

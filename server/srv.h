@@ -50,7 +50,18 @@ typedef struct srv_session {
     uint16_t cached_hello_ack_len;
     uint8_t  cur_key_id;              /* key of the frame being delivered (KEEPALIVE_ACK uses it) */
     const uint8_t *cur_key;
+    /* §14.2 indexes: the serial chain (all sessions of a bucket) and the timer heap's generation */
+    struct srv_session *ser_next;
+    uint32_t tgen;                    /* bumped on every reschedule: older heap entries are stale */
+    bool     dirty;                   /* touched since the last reschedule */
 } srv_session_t;
+
+typedef struct {
+    uint64_t deadline;
+    uint32_t sid, gen;
+} srv_timer_t;
+
+#define SRV_NONCE_BUCKETS 4096
 
 #define SRV_TABLE_SLOTS 2048
 #define SRV_NONCE_CACHE_MAX 65536          /* open addressing; load <= 0.5 at the 1024 cap (§14.2) */
@@ -98,13 +109,20 @@ struct srv {
     rel_cfg_t    relcfg;
 
     srv_session_t *table[SRV_TABLE_SLOTS];   /* NULL = empty, SRV_DELETED = tombstone slot */
-    int            nsessions, nhalf_open;
+    int            nsessions, nhalf_open, ndeleted;
+    srv_session_t *ser_bucket[SRV_TABLE_SLOTS];   /* serial -> sessions (§14.2 secondary index) */
+    uint32_t       dirty[SRV_TABLE_SLOTS];        /* session ids to reschedule */
+    int            ndirty;
+    srv_timer_t   *heap;                          /* min-heap on deadline, lazily invalidated (§14.2) */
+    size_t         hlen, hcap;
 
     srv_tombstone_t tomb[SRV_TOMBSTONES];
     int             tomb_next;
     srv_rate_t      rate[SRV_RATE_IPS];
     srv_nonce_t    *nonces;           /* REGISTER nonce cache (§10.4 mechanism 3), ring */
     size_t          nonce_cap, nonce_next;
+    int32_t         nonce_head[SRV_NONCE_BUCKETS];   /* per-serial chains of ring slots (-1 = end) */
+    int32_t        *nonce_link;
     srv_db_t        db;
     srv_artifacts_t artifacts;
 
@@ -126,6 +144,9 @@ void           srv_sess_free(srv_t *s, srv_session_t *ss, const char *why);
 uint64_t       srv_sess_next_deadline(srv_t *s);
 void           srv_sess_run_timers(srv_t *s);
 void           srv_sess_free_all(srv_t *s);
+void           srv_sess_touch(srv_t *s, srv_session_t *ss);   /* reschedule after the current event */
+void           srv_timers_free(srv_t *s);
+uint32_t       srv_serial_hash(const char *serial);
 
 /* handlers.c */
 void srv_sess_deliver(void *ctx, uint8_t type, uint8_t flags, uint32_t seq, const uint8_t *p, uint16_t n);

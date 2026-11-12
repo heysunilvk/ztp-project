@@ -139,28 +139,42 @@ static void terminal_error(srv_t *s, uint32_t sid, uint16_t epoch, const char *s
 /* ---- REGISTER nonce cache (§10.4 mechanism 3): per serial at most nonce_cache_per_serial entries,
  * TTL nonce_ttl_s, nonce_cache_total overall (a ring: the oldest entry is overwritten) ---- */
 
+/* Ring slots are chained per serial bucket (§14.2: no scan of the whole cache per REGISTER). */
+static void nonce_unlink(srv_t *s, int32_t i)
+{
+    int32_t *pp = &s->nonce_head[srv_serial_hash(s->nonces[i].serial) % SRV_NONCE_BUCKETS];
+    while (*pp >= 0 && *pp != i) pp = &s->nonce_link[*pp];
+    if (*pp == i) *pp = s->nonce_link[i];
+}
+
 bool srv_nonce_seen(srv_t *s, const char *serial, uint64_t nonce)
 {
     const ztp_config_t *c = &s->cfg.c;
     uint64_t ttl = (uint64_t)c->limits.nonce_ttl_s * 1000u;
-    size_t per = 0, oldest = SIZE_MAX;
-    for (size_t i = 0; i < s->nonce_cap; i++) {
+    size_t per = 0;
+    int32_t oldest = -1;
+    uint32_t b = srv_serial_hash(serial) % SRV_NONCE_BUCKETS;
+    for (int32_t i = s->nonce_head[b]; i >= 0; i = s->nonce_link[i]) {
         srv_nonce_t *e = &s->nonces[i];
         if (!e->used || s->now - e->ts_ms > ttl || strcmp(e->serial, serial) != 0) continue;
         if (e->nonce == nonce) return true;
         per++;
-        if (oldest == SIZE_MAX || e->ts_ms < s->nonces[oldest].ts_ms) oldest = i;
+        if (oldest < 0 || e->ts_ms < s->nonces[oldest].ts_ms) oldest = i;
     }
-    srv_nonce_t *slot;
-    if (per >= (size_t)c->limits.nonce_cache_per_serial && oldest != SIZE_MAX) slot = &s->nonces[oldest];
+    int32_t slot;
+    if (per >= (size_t)c->limits.nonce_cache_per_serial && oldest >= 0) slot = oldest;
     else {
-        slot = &s->nonces[s->nonce_next];
+        slot = (int32_t)s->nonce_next;
         s->nonce_next = (s->nonce_next + 1) % s->nonce_cap;
     }
-    slot->used = true;
-    slot->nonce = nonce;
-    slot->ts_ms = s->now;
-    snprintf(slot->serial, sizeof slot->serial, "%s", serial);
+    if (s->nonces[slot].used) nonce_unlink(s, slot);
+    srv_nonce_t *e = &s->nonces[slot];
+    e->used = true;
+    e->nonce = nonce;
+    e->ts_ms = s->now;
+    snprintf(e->serial, sizeof e->serial, "%s", serial);
+    s->nonce_link[slot] = s->nonce_head[b];
+    s->nonce_head[b] = slot;
     return false;
 }
 
@@ -710,6 +724,8 @@ static void resume_accept(srv_t *s, srv_session_t *ss, const ztp_hdr_t *h, const
                                                               : SS_PROVISIONING;
         srv_sess_set_state(s, ss, to);
     }
+    if (fresh && (ss->db_stage == SST_CONFIG_SENT || ss->db_stage == SST_FW_SENT))
+        db_prov_note(&s->db, ss->serial, "Transfer resumed", wall_ms());   /* back mid-download (QA §4.1, S3) */
     if (fresh) srv_sess_journal(s, ss);   /* fsynced before the HELLO_ACK can leave (§12.3 rule 2) */
     /* the new epoch: a fresh reliability state; the old epoch's TX state is discarded */
     rel_reset(ss->rel, ss->epoch);

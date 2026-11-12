@@ -225,6 +225,7 @@ static int transmit_new(rel_t *r, uint8_t type, uint8_t flags, bool keepalive, c
 {
     uint32_t seq = r->next_seq++;
     tx_slot_t *s = slot_of(r, seq);
+    r->st.frames++;
     memset(s, 0, offsetof(tx_slot_t, payload));
     s->in_use = true;
     s->seq = seq;

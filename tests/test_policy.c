@@ -175,6 +175,24 @@ static void test_nat_override(void)
     CHECK(strstr(err, "nat.grace_s") != NULL);
     srv_policy_free(&p);
 
+    /* M6 regression (TC-SRV-02): a serial that overrides only its keepalive is valid when its tenant's grace
+     * covers it, although the server's own grace (demo profile, 30 s) alone would not: the serial-only check
+     * must not judge a combination that is never assigned */
+    {
+        cfg_t dc;
+        server_cfg(&dc, "demo");
+        snprintf(text, sizeof text,
+                 "{\"default\": {\"action\": \"reject\"}, \"tenants\": {\"cruise_ops\": {\"nat\": {\"grace_s\": 180}}}, %s,"
+                 " \"serials\": {\"ZTP-55AC90\": {\"config_version\": 2, \"config_file\": \"cfg2\","
+                 " \"nat\": {\"keepalive_interval_s\": 10}}}}", MODELS);
+        CHECK_EQ_INT(load_text(text, &p, err, sizeof err), 0);
+        CHECK_EQ_INT(srv_policy_validate(&p, &dc, NULL, err, sizeof err), 0);
+        srv_policy_resolve(&p, &dc, "EDGE-GW-100", "ZTP-55AC90", &a);
+        CHECK(a.assigned && a.config_version == 2 && a.nat.keepalive_interval_s == 10 && a.nat.grace_s == 180);
+        srv_policy_free(&p);
+        cfg_free(&dc);
+    }
+
     /* an undefined tenant is rejected */
     snprintf(text, sizeof text, "{\"default\": {\"action\": \"reject\"}, \"tenants\": {}, %s}", MODELS);
     CHECK_EQ_INT(load_text(text, &p, err, sizeof err), 0);

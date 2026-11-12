@@ -56,6 +56,7 @@ typedef enum {
 
 typedef struct {
     uint64_t tx, rx, retx_timeout, retx_fast, dup, ooo, out_of_window, acks_sent;
+    uint64_t frames;   /* first transmissions of reliable frames (transmissions per frame, TC-PERF-03) */
     uint32_t srtt_ms;
 } rel_stats_t;
 

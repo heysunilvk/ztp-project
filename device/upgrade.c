@@ -167,6 +167,7 @@ void dev_restart(device_t *d)
         LOGI(T_UPGRADE, "Restart delayed by %d s (test hook)", d->hook_restart_delay_s);
         sleep((unsigned)d->hook_restart_delay_s);
     }
+    dev_log_counters(d);   /* this process's share: the restarted one starts from zero (TC-PERF-03) */
     log_close();   /* flushed; the new process reopens it in append mode */
     fflush(NULL);
     if (d->restart_exit) exit(75);

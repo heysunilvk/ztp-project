@@ -35,7 +35,7 @@ SERVER_BIN := $(BUILD)/ztp-server
 DEVICE_BIN := $(BUILD)/ztp-device
 TEST_BIN   := $(BUILD)/unit-tests
 
-.PHONY: all server device test longrun asan debug clean clean-logs check-separation spike artifacts
+.PHONY: all server device test demo scale soak longrun asan debug clean clean-logs check-separation spike artifacts
 
 # Deterministic mock artifacts and demo keys (tools/mkartifacts; links the device library for the
 # demo key derivation). `make artifacts` writes artifacts/ for conf/policy.json.
@@ -95,6 +95,7 @@ $(PCAPCHECK): tests/pcapcheck/pcapcheck.c $(LIB)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB) $(LDFLAGS) $(LDLIBS)
 
 test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK) artifacts
+	@if [ -n "$(KEEP_AWAKE)" ]; then ( $(KEEP_AWAKE) -w $$PPID & ); fi   # awake until make exits
 	@chmod 600 conf/keys.json
 	$(TEST_BIN)
 	@mkdir -p $(BUILD)/selftest && $(PCAPCHECK) --selftest $(BUILD)/selftest
@@ -106,11 +107,32 @@ test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK) artifacts
 	sh tests/m5_upgrade.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	sh tests/m5_gate.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	APX_SEEDS=3 sh tests/check_appendix_a.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	sh tests/m6_fuzz.sh $(SERVER_BIN) $(MKARTIFACTS)
+	sh tests/m6_server.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	sh tests/m6_demo.sh $(BUILD)
+	sh tests/m6_perf03.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	sh tests/check_pdf05.sh $(SERVER_BIN) $(DEVICE_BIN)
 	@$(MAKE) --no-print-directory check-separation BUILD=$(BUILD)
+
+# The 5-device demo (DESIGN §19.3; QA TC-SRV-01, TC-E2E-02 with SEED=1..10): writes logs/ and state/.
+demo: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	BIN=$(BUILD) $(KEEP_AWAKE) sh scripts/run_demo.sh
+
+# Timing-sensitive runs must not be frozen by the Mac's idle sleep (a sleeping process looks like a stalled
+# one: M6 traced an intermittent TC-REL-11 failure to it). caffeinate -i holds an idle-sleep assertion while
+# the command runs; elsewhere it is empty.
+KEEP_AWAKE := $(shell command -v caffeinate > /dev/null 2>&1 && echo "caffeinate -i")
+
+# TC-PERF-01: N devices at 15% loss (make scale N=50); TC-PERF-04: 5 devices for an hour, RSS and leaks.
+N ?= 50
+scale: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	BIN=$(BUILD) $(KEEP_AWAKE) sh scripts/run_scale.sh $(N)
+soak: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	BIN=$(BUILD) $(KEEP_AWAKE) sh scripts/run_soak.sh
 
 # TC-NAT-07 (30 min) and TC-NAT-13 (10 min), in parallel: too long for every push.
 longrun: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
-	sh tests/m5_longrun.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	$(KEEP_AWAKE) sh tests/m5_longrun.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 
 # TC-DEL-03: device and server share only common/.
 check-separation: $(SERVER_BIN) $(DEVICE_BIN)

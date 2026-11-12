@@ -338,6 +338,7 @@ void dev_resume_start(device_t *d)
 void dev_session_end(device_t *d)
 {
     dev_xfer_suspend(d);
+    if (d->rel) dev_rel_stats_add(&d->rel_acc, rel_stats(d->rel));
     rel_free(d->rel);
     d->rel = NULL;
     d->sid = 0;

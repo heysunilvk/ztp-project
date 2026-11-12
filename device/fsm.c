@@ -89,18 +89,28 @@ static void on_signal(int sig)
     errno = e;
 }
 
-static void log_counters(device_t *d)
+void dev_rel_stats_add(rel_stats_t *a, const rel_stats_t *b)
 {
-    rel_stats_t z = {0};
-    const rel_stats_t *r = d->rel ? rel_stats(d->rel) : &z;
+    a->tx += b->tx; a->rx += b->rx; a->retx_timeout += b->retx_timeout; a->retx_fast += b->retx_fast;
+    a->dup += b->dup; a->ooo += b->ooo; a->out_of_window += b->out_of_window; a->acks_sent += b->acks_sent;
+    a->frames += b->frames;
+    if (b->srtt_ms) a->srtt_ms = b->srtt_ms;
+}
+
+/* This process's totals: every session it has had (accumulated when each ends) plus the current one. */
+void dev_log_counters(device_t *d)
+{
+    rel_stats_t sum = d->rel_acc;
+    if (d->rel) dev_rel_stats_add(&sum, rel_stats(d->rel));
+    const rel_stats_t *r = &sum;
     LOGI(T_UDP,
          "Counters: tx=%llu rx=%llu retx_timeout=%llu retx_fast=%llu dup=%llu ooo=%llu out_of_window=%llu "
-         "rx_malformed=%llu rx_unknown=%llu rx_stale=%llu mac_fail=%llu timeouts=%llu srtt_ms=%u",
+         "rx_malformed=%llu rx_unknown=%llu rx_stale=%llu mac_fail=%llu timeouts=%llu srtt_ms=%u frames=%llu",
          (unsigned long long)r->tx, (unsigned long long)r->rx, (unsigned long long)r->retx_timeout,
          (unsigned long long)r->retx_fast, (unsigned long long)r->dup, (unsigned long long)r->ooo,
          (unsigned long long)r->out_of_window, (unsigned long long)d->c.rx_malformed,
          (unsigned long long)d->c.rx_unknown, (unsigned long long)d->c.rx_stale, (unsigned long long)d->c.mac_fail,
-         (unsigned long long)d->c.timeouts, (unsigned)r->srtt_ms);
+         (unsigned long long)d->c.timeouts, (unsigned)r->srtt_ms, (unsigned long long)r->frames);
 }
 
 static void on_datagram(device_t *d, const uint8_t *buf, size_t len, const struct sockaddr_in *src)
@@ -184,7 +194,7 @@ int dev_run(device_t *d)
         else if (d->fsm != DS_EXIT && d->fsm != DS_FAILED) dev_session_timer(d);
         netsim_flush(&d->ns, d->now);
     }
-    log_counters(d);
+    dev_log_counters(d);
     netsim_log_totals(&d->ns);
     if (dev_nat_active(d))
         LOGI(T_SIM, "NAT: blocked=%llu inbound_dropped=%llu", (unsigned long long)d->nat.blocked,
