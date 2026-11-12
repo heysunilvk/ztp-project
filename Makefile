@@ -35,7 +35,7 @@ SERVER_BIN := $(BUILD)/ztp-server
 DEVICE_BIN := $(BUILD)/ztp-device
 TEST_BIN   := $(BUILD)/unit-tests
 
-.PHONY: all server device test asan debug clean clean-logs check-separation spike artifacts
+.PHONY: all server device test longrun asan debug clean clean-logs check-separation spike artifacts
 
 # Deterministic mock artifacts and demo keys (tools/mkartifacts; links the device library for the
 # demo key derivation). `make artifacts` writes artifacts/ for conf/policy.json.
@@ -104,7 +104,13 @@ test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK) artifacts
 	sh tests/m3_register.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS) $(PEER_SIM)
 	sh tests/m4_provision.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	sh tests/m5_upgrade.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	sh tests/m5_gate.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	APX_SEEDS=3 sh tests/check_appendix_a.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	@$(MAKE) --no-print-directory check-separation BUILD=$(BUILD)
+
+# TC-NAT-07 (30 min) and TC-NAT-13 (10 min), in parallel: too long for every push.
+longrun: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	sh tests/m5_longrun.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 
 # TC-DEL-03: device and server share only common/.
 check-separation: $(SERVER_BIN) $(DEVICE_BIN)

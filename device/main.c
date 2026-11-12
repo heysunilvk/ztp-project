@@ -20,7 +20,7 @@ static void dev_usage(void)
           "                  [--test-hooks [--drop-seq tx:N[,N]] [--dup-seq tx:N] [--rebind-after S]\n"
           "                                [--crash-at POINT] [--crash-after-chunks N] [--restart-mode exec|exit]\n"
           "                                [--restart-delay S] [--fail-validate] [--hook-delete-config] [--no-refetch]\n"
-          "                                [--hook-bad-fw-version V]]\n"
+          "                                [--hook-bad-fw-version V] [--hook-hold-health-probe S]]\n"
           "                  [flags from DESIGN §19.2]\n",
           stderr);
 }
@@ -107,6 +107,10 @@ int main(int argc, char **argv)
         } else if (!strcmp(f, "--no-refetch")) {
             d->hook_no_refetch = true;
             hook_names[nhooks++] = "--no-refetch";
+        } else if (!strcmp(f, "--hook-hold-health-probe") && i + 1 < argc) {
+            d->hook_hold_probe_s = atoi(argv[++i]);
+            if (d->hook_hold_probe_s <= 0) { fprintf(stderr, "--hook-hold-health-probe: expected seconds > 0\n"); return EX_USAGE_CODE; }
+            hook_names[nhooks++] = "--hook-hold-health-probe";
         } else if (!strcmp(f, "--hook-bad-fw-version") && i + 1 < argc) {
             snprintf(d->hook_bad_fw_version, sizeof d->hook_bad_fw_version, "%s", argv[++i]);
             hook_names[nhooks++] = "--hook-bad-fw-version";

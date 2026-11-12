@@ -145,6 +145,7 @@ int dev_run(device_t *d)
         uint64_t nd = netsim_next_deadline(&d->ns);
         if (nd < t) t = nd;
         if ((nd = dev_nat_deadline(d)) < t) t = nd;
+        if ((nd = dev_validate_recovery_deadline(d)) < t) t = nd;
         int timeout = t == UINT64_MAX ? 1000 : (t <= d->now ? 0 : (int)(t - d->now > 1000 ? 1000 : t - d->now));
         struct pollfd p[2] = {{d->fd, POLLIN, 0}, {g_sigpipe[0], POLLIN, 0}};
         if (poll(p, 2, timeout) < 0 && errno != EINTR) break;
@@ -171,6 +172,8 @@ int dev_run(device_t *d)
             }
         d->now = now_ms();
         dev_nat_timer(d);
+        dev_validate_recovery_timer(d);
+        if (d->fsm == DS_FAILED) break;
         if (d->fsm == DS_DISCOVERY) dev_discovery_timer(d);
         else if (d->fsm == DS_BACKOFF) {
             if (d->now >= d->backoff_until) {

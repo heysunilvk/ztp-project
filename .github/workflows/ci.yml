@@ -116,6 +116,30 @@ jobs:
             echo "::error::TC-REL-01: $(cat rel01.txt)"
             exit 1
           fi
+      - name: TC-APX-01..10, TC-PDF-04 - Appendix A on the PDF's address 10.10.10.5:5555
+        run: |
+          sudo ip addr add 10.10.10.5/32 dev lo
+          sudo tcpdump -i lo -U -w apx.pcap 'udp and host 10.10.10.5' 2> /dev/null &
+          sleep 2
+          rc=0
+          APX_PCAP=apx.pcap sh tests/check_appendix_a.sh build/ztp-server build/ztp-device build/mkartifacts 10.10.10.5 5555 || rc=$?
+          sudo pkill -INT tcpdump || true
+          sudo ip addr del 10.10.10.5/32 dev lo
+          exit $rc
+      - name: TC-PROV-12 - a 1280-byte MTU path (lo MTU 1280) needs no fallback and never fragments
+        run: |
+          sudo ip link set lo mtu 1280
+          sudo tcpdump -i lo -U -w mtu.pcap 'udp port 37555' 2> /dev/null &
+          sleep 2
+          rc=0
+          APX_SEEDS=0 APX_NO_STEPDOWN=1 sh tests/check_appendix_a.sh build/ztp-server build/ztp-device build/mkartifacts 127.0.0.1 37555 || rc=$?
+          sleep 1
+          sudo pkill -INT tcpdump || true
+          sleep 1
+          sudo ip link set lo mtu 65536
+          [ $rc -eq 0 ] || exit $rc
+          if build/pcapcheck --max-size 1200 mtu.pcap 37555 > mtu.txt; then echo "::notice::TC-PROV-12: $(cat mtu.txt)"
+          else echo "::error::TC-PROV-12: $(cat mtu.txt)"; exit 1; fi
       - name: netem availability (R-11; failure waives TC-SIM-03)
         id: netem
         continue-on-error: true

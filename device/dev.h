@@ -142,6 +142,8 @@ typedef struct {
     bool        hook_fail_validate, hook_delete_config;
     char        hook_bad_fw_version[9];
     bool        hook_fw_override;
+    int         hook_hold_probe_s;   /* --hook-hold-health-probe: delay the first health probe (TC-VAL-04) */
+    uint64_t    probe_hold_until;
     uint32_t    fw_chunks_this_process;
     uint64_t    val_deadline;
     uint32_t    health_seq;
@@ -222,6 +224,8 @@ void     dev_nat_timer(device_t *d);
 
 /* Abort at a named §12.4 crash point if --crash-at names it (once per state directory). */
 void     dev_crash_point(device_t *d, const char *point);
+uint64_t dev_validate_recovery_deadline(const device_t *d);
+void     dev_validate_recovery_timer(device_t *d);   /* val.deadline_s while the session is being recovered */
 
 /* fsm.c */
 int  dev_send(device_t *d, const uint8_t *frame, size_t len, const struct sockaddr_in *dst);

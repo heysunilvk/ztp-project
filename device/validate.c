@@ -166,12 +166,23 @@ void dev_validate_begin(device_t *d)
     LOGI(T_VALIDATION, LM_VAL_FW_VERIFIED, running);
 
     /* Check 3: a fresh round trip (HEALTH_PROBE), retransmitted on the RTO schedule until the deadline */
+    if (d->hooks.enabled && d->hook_hold_probe_s > 0 && hooks_fire_once(&d->hooks, "hook-hold-health-probe")) {
+        d->probe_hold_until = d->now + (uint64_t)d->hook_hold_probe_s * 1000u;
+        LOGI(T_VALIDATION, "Health probe held for %d s (test hook)", d->hook_hold_probe_s);
+        return;
+    }
     dev_send_keepalive(d, KA_HEALTH_PROBE);
 }
 
 void dev_validate_timer(device_t *d)
 {
     if (d->fsm != DS_VALIDATING || !d->rel || d->report_pending) return;
+    if (d->probe_hold_until) {
+        if (d->now < d->probe_hold_until) return;
+        d->probe_hold_until = 0;
+        dev_send_keepalive(d, KA_HEALTH_PROBE);
+        return;
+    }
     if (d->health_seq && rel_acked_through(d->rel) >= d->health_seq) {
         uint32_t rtt = (uint32_t)(d->now - d->health_sent), srtt = rel_stats(d->rel)->srtt_ms;
         d->health_seq = 0;
@@ -191,7 +202,28 @@ void dev_validate_timer(device_t *d)
 
 uint64_t dev_validate_deadline(const device_t *d)
 {
-    return d->fsm == DS_VALIDATING && !d->report_pending ? d->val_deadline : UINT64_MAX;
+    if (d->fsm != DS_VALIDATING || d->report_pending) return UINT64_MAX;
+    return d->probe_hold_until && d->probe_hold_until < d->val_deadline ? d->probe_hold_until : d->val_deadline;
+}
+
+/* §13: the session was lost during VALIDATE, so the device is recovering (backoff, discovery, resume or a
+ * fresh session). The validation deadline still holds: past it, FAILED (no session to report it on). */
+static bool recovering(const device_t *d)
+{
+    return d->val_deadline && d->st.stage != ST_OPERATIONAL && d->fsm != DS_VALIDATING && d->fsm != DS_OPERATIONAL &&
+           d->fsm != DS_FAILED && d->fsm != DS_EXIT;
+}
+
+uint64_t dev_validate_recovery_deadline(const device_t *d)
+{
+    return recovering(d) ? d->val_deadline : UINT64_MAX;
+}
+
+void dev_validate_recovery_timer(device_t *d)
+{
+    if (!recovering(d) || d->now < d->val_deadline) return;
+    LOGI(T_VALIDATION, "Session not healthy within val.deadline_s (%d s)", d->cfg.c.val.deadline_s);
+    dev_fail(d, "session unhealthy");
 }
 
 /* E19: STATUS_ACK for OPERATIONAL. */

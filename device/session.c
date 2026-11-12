@@ -23,7 +23,10 @@ void dev_send_keepalive(device_t *d, int kind)
     if (kind == KA_PATH_PROBE) tlv_put_u8(&w, TAG_PATH_PROBE, 1);
     if (kind == KA_HEALTH_PROBE) tlv_put_u8(&w, TAG_HEALTH_PROBE, 1);
     /* K_boot for the path probe (half-open); K_s once REGISTER has been sent or the session resumed (§5.3) */
-    rel_msg_t m = {ZT_KEEPALIVE, 0, true, d->reg_sent ? d->k_s : d->k_boot, d->reg_sent ? ZK_SESSION : ZK_BOOT};
+    /* periodic and health probes are liveness traffic, exempt from rel.max_retries (§8.3); the path probe is a
+     * setup step that REGISTER waits for, so it has the HELLO's retry budget (E6a) instead of the dead interval,
+     * which with production timers (60 s) would outlast the server's half-open TTL (10 s) */
+    rel_msg_t m = {ZT_KEEPALIVE, 0, kind != KA_PATH_PROBE, d->reg_sent ? d->k_s : d->k_boot, d->reg_sent ? ZK_SESSION : ZK_BOOT};
     int seq = rel_send(d->rel, &m, pl, (uint16_t)w.len, d->now);
     if (seq > 0) {
         d->ka_seq = (uint32_t)seq;
