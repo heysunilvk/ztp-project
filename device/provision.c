@@ -411,6 +411,17 @@ void dev_xfer_suspend(device_t *d)
     x->active = false;
 }
 
+/* §5.8: any large CHUNK_DATA that arrives (delivered, buffered out of order, or a duplicate) restarts the
+ * black-hole interval. Only delivered chunks were counted before, so a lost head chunk with the later
+ * chunks waiting in the receive buffer looked like silence (release run, perf02 M4 seed 8). */
+void dev_xfer_on_large_rx(device_t *d)
+{
+    dev_xfer_t *x = &d->x;
+    if (!x->active) return;
+    x->req_acked_ms = d->now;
+    x->probed = x->bh_rerequested = false;
+}
+
 /* §5.8 black-hole detection: the CHUNK_REQ was ACKed but no CHUNK_DATA arrives. After half of
  * net.pmtu_blackhole_s, a small liveness KEEPALIVE; if it is ACKed and still nothing has arrived by
  * the full interval, the device re-requests the missing chunks (the server sends them again at once, as new

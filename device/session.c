@@ -460,6 +460,9 @@ void dev_session_rx(device_t *d, const uint8_t *buf, size_t len, const ztp_hdr_t
     }
     d->last_auth_rx = d->now;
     if (tinfo->cls == ZC_RELIABLE) {
+        /* §5.8: an authenticated CHUNK_DATA larger than 508 B proves large frames pass, even when it is only
+         * buffered behind a gap or is a duplicate and never reaches the transfer */
+        if (h->type == ZT_CHUNK_DATA && len > ZTP_MIN_DGRAM) dev_xfer_on_large_rx(d);
         d->in_rx = true;
         rel_on_rx(d->rel, h, buf + ZTP_HDR_LEN, d->now);
         d->in_rx = false;

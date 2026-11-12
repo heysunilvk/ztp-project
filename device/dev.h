@@ -208,6 +208,7 @@ void     dev_report_failed(device_t *d, uint16_t reason, const char *why);
 void     dev_provision_next(device_t *d);   /* after REGISTER_ACK: config, then firmware, by persisted stage */
 void     dev_xfer_on_manifest(device_t *d, const uint8_t *p, uint16_t n);
 void     dev_xfer_on_chunk(device_t *d, const uint8_t *p, uint16_t n);
+void     dev_xfer_on_large_rx(device_t *d);
 void     dev_xfer_on_status_ack(device_t *d);
 void     dev_xfer_timer(device_t *d);
 uint64_t dev_xfer_deadline(const device_t *d);
