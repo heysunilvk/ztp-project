@@ -27,7 +27,7 @@ for b in "$SRV" "$DEV"; do
     nm -u "$b" 2>/dev/null | grep -qE '^_?(listen|accept|accept4)$' && bad "$(basename "$b") links listen()/accept()" || ok
 done
 # at runtime: no TCP sockets (the binaries open UDP only)
-T=${RESULTS:+$RESULTS/check_pdf05}; T=${T:-${TMPDIR:-/tmp}/ztp-pdf05.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/check_pdf05}}; T=${T:-${TMPDIR:-/tmp}/ztp-pdf05.$$}   # kept under RESULTS (make test)
 mkdir -p "$T"
 "$SRV" --profile demo --set net.server_port=48555 --set net.discovery_port=48556 --set paths.log="$T/s.log" \
     --set paths.db="$T/db" --set paths.dump="$T/dump" > /dev/null 2>&1 &

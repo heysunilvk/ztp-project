@@ -15,7 +15,7 @@ MKA=$3
 ADDR=${4:-127.0.0.1}
 PORT=${5:-36555}
 SEEDS=${APX_SEEDS:-10}
-T=${RESULTS:+$RESULTS/check_appendix_a}; T=${T:-${TMPDIR:-/tmp}/ztp-apx.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/check_appendix_a}}; T=${T:-${TMPDIR:-/tmp}/ztp-apx.$$}   # kept under RESULTS (make test)
 mkdir -p "$T/art"
 pass=0
 fail=0

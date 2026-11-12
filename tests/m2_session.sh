@@ -7,7 +7,7 @@ SRV=$1
 DEV=$2
 PORT=${ZTP_PORT:-25555}
 DPORT=$((PORT + 1))
-T=${RESULTS:+$RESULTS/m2_session}; T=${T:-${TMPDIR:-/tmp}/ztp-m2.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/m2_session}}; T=${T:-${TMPDIR:-/tmp}/ztp-m2.$$}   # kept under RESULTS (make test)
 mkdir -p "$T"
 pass=0
 fail=0

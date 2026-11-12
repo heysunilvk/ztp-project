@@ -51,7 +51,7 @@ static void request_manifest(device_t *d, uint8_t kind)
     dev_xfer_t *x = &d->x;
     x->active = true;
     x->kind = kind;
-    x->req_out = x->req_acked = x->probed = false;
+    x->req_out = x->req_acked = x->probed = x->bh_rerequested = false;
     snprintf(x->part, sizeof x->part, "%s/xfer_%u.part", d->cfg.c.paths.state_dir, (unsigned)kind);
     snprintf(x->mappath, sizeof x->mappath, "%s/xfer_%u.map", d->cfg.c.paths.state_dir, (unsigned)kind);
     uint8_t pl[16];
@@ -365,7 +365,7 @@ void dev_xfer_on_chunk(device_t *d, const uint8_t *p, uint16_t n)
             return;
         }
         x->req_acked_ms = d->now;   /* data is flowing: no black hole */
-        x->probed = false;
+        x->probed = x->bh_rerequested = false;
         if (dev_xfermap_has(&x->map, i)) {
             x->dups++;              /* idempotent: a chunk already present is ignored, not rewritten */
             return;
@@ -413,7 +413,11 @@ void dev_xfer_suspend(device_t *d)
 
 /* §5.8 black-hole detection: the CHUNK_REQ was ACKed but no CHUNK_DATA arrives. After half of
  * net.pmtu_blackhole_s, a small liveness KEEPALIVE; if it is ACKed and still nothing has arrived by
- * the full interval, the large frames are being dropped: step down to 508. */
+ * the full interval, the device re-requests the missing chunks (the server sends them again at once, as new
+ * frames, instead of waiting out its retransmission backoff) and runs a second interval. Only if that one is
+ * silent too are the large frames being dropped: step down to 508. One interval alone is not enough at the
+ * tail of a transfer, where a single frame is in flight and the backoff fits only about four tries into it
+ * (a false step-down at 15% loss in matrix M3, seed 3). */
 uint64_t dev_xfer_deadline(const device_t *d)
 {
     const dev_xfer_t *x = &d->x;
@@ -444,6 +448,13 @@ void dev_xfer_timer(device_t *d)
         dev_send_keepalive(d, KA_PERIODIC);
         x->probed = true;
     } else if (x->probed && quiet >= full && d->ka_seq == 0) {   /* the probe was ACKed: small frames pass */
+        if (!x->bh_rerequested) {
+            LOGI(T_UDP, LM_UDP_MTU_REREQUEST, (unsigned)(quiet / 1000u));
+            request_next(d);          /* resets the probe; the interval restarts once this CHUNK_REQ is ACKed */
+            x->bh_rerequested = true;
+            return;
+        }
+        x->bh_rerequested = false;
         LOGI(T_UDP, LM_UDP_MTU_BLACKHOLE);
         step_down(d, "PMTU black hole");
     }

@@ -8,7 +8,7 @@ DEV=$2
 MKA=$3
 PORT=${ZTP_PORT:-29555}
 DPORT=$((PORT + 1))
-T=${RESULTS:+$RESULTS/m4_provision}; T=${T:-${TMPDIR:-/tmp}/ztp-m4.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/m4_provision}}; T=${T:-${TMPDIR:-/tmp}/ztp-m4.$$}   # kept under RESULTS (make test)
 mkdir -p "$T/art"
 pass=0
 fail=0
@@ -210,6 +210,8 @@ for mode in emsgsize blackhole; do
     if [ "$mode" = emsgsize ]; then
         expect_line "$T/ms_$mode.log" "Path MTU too small for 1200 B (EMSGSIZE): datagram limit now 508" "TC-PROV-13 (b)"
     else
+        # §5.8: one silent interval only re-requests; the second one declares the black hole
+        expect_line "$T/m_$mode.log" "chunks re-requested before a black hole is declared" "TC-PROV-13 (c) re-request"
         expect_line "$T/m_$mode.log" "[UDP] Suspected PMTU black hole: datagram limit now 508" "TC-PROV-13 (c)"
     fi
     expect_line "$T/m_$mode.log" "Firmware manifest: v1.1, 65536 bytes, 256 chunks" "TC-PROV-13 $mode"

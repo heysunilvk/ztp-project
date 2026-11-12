@@ -11,7 +11,7 @@ ROWS=${ROWS:-M2 M3 M4}
 SEEDS=${SEEDS:-10}
 PORT=${PORT:-42555}
 BIN=${BIN:-build}
-OUT=${OUT:-${RESULTS:+$RESULTS/run_matrix}}; OUT=${OUT:-${TMPDIR:-/tmp}/ztp-matrix.$$}   # kept under RESULTS
+OUT=${OUT:-${SUITE_DIR:-${RESULTS:+$RESULTS/run_matrix}}}; OUT=${OUT:-${TMPDIR:-/tmp}/ztp-matrix.$$}   # kept under RESULTS
 MEDIAN_MAX=${MEDIAN_MAX:-60}
 P95_MAX=${P95_MAX:-90}
 mkdir -p "$OUT"

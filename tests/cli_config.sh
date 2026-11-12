@@ -22,7 +22,7 @@ check_eq() {
 }
 
 ROOT=$(pwd)
-T=${RESULTS:+$RESULTS/cli_config}; T=${T:-${TMPDIR:-/tmp}/ztp-cli.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/cli_config}}; T=${T:-${TMPDIR:-/tmp}/ztp-cli.$$}   # kept under RESULTS (make test)
 mkdir -p "$T"
 trap '[ -n "${RESULTS:-}" ] || rm -rf "$T"' EXIT
 

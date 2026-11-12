@@ -43,6 +43,7 @@
 #define LM_UDP_DELIVERED           "Delivered seq=%u..%u (drained %u buffered)"
 #define LM_UDP_MTU_EMSGSIZE        "Path MTU too small for 1200 B (EMSGSIZE): datagram limit now 508"
 #define LM_UDP_MTU_BLACKHOLE       "Suspected PMTU black hole: datagram limit now 508"
+#define LM_UDP_MTU_REREQUEST       "No chunk data for %u s: chunks re-requested before a black hole is declared"
 #define LM_UDP_SUPERSEDED          "Session %u superseded by %u"
 #define LM_UDP_RESUME_REQUIRED     "Resume required by server (IP change)"
 #define LM_UDP_SRV_HELLO           "HELLO seq=1 received (serial %s, %s, %s), HELLO_ACK seq=1 sent"

@@ -11,7 +11,7 @@ SOAK_S=${SOAK_S:-3600}
 WARMUP_S=${WARMUP_S:-60}
 PORT=${PORT:-47555}
 BIN=${BIN:-build}
-OUT=${OUT:-${RESULTS:+$RESULTS/run_soak}}; OUT=${OUT:-${TMPDIR:-/tmp}/ztp-soak.$$}   # kept under RESULTS
+OUT=${OUT:-${SUITE_DIR:-${RESULTS:+$RESULTS/run_soak}}}; OUT=${OUT:-${TMPDIR:-/tmp}/ztp-soak.$$}   # kept under RESULTS
 VALGRIND=${VALGRIND:-0}
 L="$OUT/logs"
 S="$OUT/state"

@@ -12,7 +12,7 @@ IMPAIR=${IMPAIR-"--loss 0.15 --reorder 0.10 --dup 0.05 --delay 2 --jitter 1"}
 SEED=${SEED:-1}
 PORT=${PORT:-45555}
 BIN=${BIN:-build}
-OUT=${OUT:-${RESULTS:+$RESULTS/run_scale}}; OUT=${OUT:-${TMPDIR:-/tmp}/ztp-scale.$$}   # kept under RESULTS
+OUT=${OUT:-${SUITE_DIR:-${RESULTS:+$RESULTS/run_scale}}}; OUT=${OUT:-${TMPDIR:-/tmp}/ztp-scale.$$}   # kept under RESULTS
 LIMIT_S=${LIMIT_S:-120}
 RSS_MB=${RSS_MB:-64}
 L="$OUT/logs"

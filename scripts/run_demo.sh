@@ -78,7 +78,10 @@ if [ $HAVE_BAD_KEY = 1 ]; then dev 2 ZTP-84BC19 --model EDGE-GW-100 --fw v1.0 $S
 REPLAY=; [ $HAVE_REPLAY = 1 ] && REPLAY=--replay-test
 dev 3 ZTP-71DD08 --model EDGE-GW-100 --fw v1.0 $STATIC --test-hooks --crash-after-chunks 40 $REPLAY &
 P3=$!
-dev 4 ZTP-55AC90 --model EDGE-GW-100 --fw v1.1 $STATIC --test-hooks --rebind-after 3 &
+# S4: the server moves the peer only on a new frame, never on a duplicate (DESIGN §9.4), so the rebinding shows
+# only once a new frame from the new port gets through. A 15 s hold leaves several keepalive rounds after the
+# rebind at 3 s; with the default 5 s hold, a lossy seed could exit first (M3 seeds 4 and 10, M9 seed 1).
+dev 4 ZTP-55AC90 --model EDGE-GW-100 --fw v1.1 $STATIC --test-hooks --rebind-after 3 --set run.operational_hold_s=15 &
 P4=$!
 dev 5 ZTP-19FE77 --model EDGE-GW-050 --fw v0.9 $STATIC &
 P5=$!
@@ -206,7 +209,11 @@ switches=$(echo "$sids" | awk 'prev != "" && $0 != prev { n++ } { prev = $0 } EN
 [ "$nd" -ge 3 ] && [ "$switches" -ge "$nd" ] && ok || bad "TC-SRV-09: $nd sessions, $switches switches: not interleaved"
 
 # TC-LOG-01..04 and the invariants (shared with the scale test)
-bonus=1; [ -z "$SRV_IMPAIR$DEV_IMPAIR" ] && bonus=0   # no impairment, no out-of-order or retransmission lines
+# TC-LOG-02 bonus lines: retransmissions need loss; out-of-order and buffered lines are certain only with
+# reordering (a loss-only row such as M8 or M9 can finish a seed without a gap in the sequence)
+bonus=1
+case "$SRV_IMPAIR $DEV_IMPAIR" in *--reorder*) ;; *) bonus=retx ;; esac
+[ -z "$SRV_IMPAIR$DEV_IMPAIR" ] && bonus=0   # no impairment, none of them
 CHECK_BONUS=$bonus sh tests/check_logs.sh "$L" > "$L/check_logs.txt" 2>&1 && ok || { bad "check_logs.sh"; cat "$L/check_logs.txt"; }
 sh tests/check_invariants.sh "$L" "$S" artifacts > "$L/check_invariants.txt" 2>&1 && ok || { bad "check_invariants.sh"; cat "$L/check_invariants.txt"; }
 

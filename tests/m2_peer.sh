@@ -9,7 +9,7 @@ SIM=$3
 PORT=${ZTP_PORT:-26555}
 DPORT=$((PORT + 1))
 DPORT2=$((PORT + 2))
-T=${RESULTS:+$RESULTS/m2_peer}; T=${T:-${TMPDIR:-/tmp}/ztp-peer.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/m2_peer}}; T=${T:-${TMPDIR:-/tmp}/ztp-peer.$$}   # kept under RESULTS (make test)
 mkdir -p "$T"
 pass=0
 fail=0

@@ -10,7 +10,7 @@ MKA=$2
 N=${FUZZ_DGRAMS:-100000}
 SEEDS=${FUZZ_SEEDS:-1 2 3}
 PORT=${ZTP_PORT:-39555}   # the sockets are opened (normal startup) but no traffic is read from them
-T=${RESULTS:+$RESULTS/m6_fuzz}; T=${T:-${TMPDIR:-/tmp}/ztp-fuzz.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/m6_fuzz}}; T=${T:-${TMPDIR:-/tmp}/ztp-fuzz.$$}   # kept under RESULTS (make test)
 mkdir -p "$T/art"
 pass=0
 fail=0

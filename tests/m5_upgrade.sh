@@ -8,7 +8,7 @@ DEV=$2
 MKA=$3
 PORT=${ZTP_PORT:-30555}
 DPORT=$((PORT + 1))
-T=${RESULTS:+$RESULTS/m5_upgrade}; T=${T:-${TMPDIR:-/tmp}/ztp-m5.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/m5_upgrade}}; T=${T:-${TMPDIR:-/tmp}/ztp-m5.$$}   # kept under RESULTS (make test)
 mkdir -p "$T/art"
 pass=0
 fail=0

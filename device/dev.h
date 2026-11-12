@@ -75,6 +75,7 @@ typedef struct {
     uint32_t      req_start, req_num, req_seq;
     uint64_t      req_acked_ms;   /* when the CHUNK_REQ was ACKed, or the last chunk arrived */
     bool          probed;         /* black-hole liveness probe sent (§5.8) */
+    bool          bh_rerequested; /* one silent interval passed: chunks re-requested, the next confirms (§5.8) */
     uint32_t      since_persist, writes, dups;
     int           hash_attempt;
 } dev_xfer_t;

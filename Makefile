@@ -102,7 +102,7 @@ $(PCAPCHECK): tests/pcapcheck/pcapcheck.c $(LIB)
 RUN_ID  := $(shell date +%Y%m%d-%H%M%S)
 RESULTS ?= results/$(RUN_ID)
 export RESULTS
-SUITE   := BUILD=$(BUILD) sh tests/run_suite.sh
+SUITE   := env BUILD=$(BUILD) sh tests/run_suite.sh
 
 test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK) artifacts
 	@if [ -n "$(KEEP_AWAKE)" ]; then ( $(KEEP_AWAKE) -w $$PPID & ); fi   # awake until make exits
@@ -154,8 +154,11 @@ appendix-a: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 
 # The release regression (QA §11.2): test, asan, the whole matrix, PERF-01/02/04, longrun, demo and
 # appendix-a into one results folder (about 2.5 h; QUICK=1 skips the soak and longrun).
+# The release run's default folder is results/<date-time>-release; RESULTS=... on the command line or in the
+# environment is used as given.
+RELEASE_RESULTS := $(if $(filter file,$(origin RESULTS)),$(RESULTS)-release,$(RESULTS))
 release: all $(TEST_BIN) $(PEER_SIM) $(PCAPCHECK)
-	$(KEEP_AWAKE) sh scripts/run_release.sh
+	RESULTS=$(RELEASE_RESULTS) $(KEEP_AWAKE) sh scripts/run_release.sh
 
 # TC-NAT-07 (30 min) and TC-NAT-13 (10 min), in parallel: too long for every push.
 longrun: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)

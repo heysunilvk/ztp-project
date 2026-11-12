@@ -10,7 +10,7 @@ MKA=$3
 PORT=${ZTP_PORT:-33555}
 NAT07_S=${NAT07_S:-1800}
 NAT13_S=${NAT13_S:-600}
-T=${RESULTS:+$RESULTS/m5_longrun}; T=${T:-${TMPDIR:-/tmp}/ztp-m5l.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/m5_longrun}}; T=${T:-${TMPDIR:-/tmp}/ztp-m5l.$$}   # kept under RESULTS (make test)
 mkdir -p "$T/art"
 pass=0
 fail=0

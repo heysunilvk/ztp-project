@@ -9,7 +9,7 @@ MKA=$3
 SIM=$4
 PORT=${ZTP_PORT:-27555}
 DPORT=$((PORT + 1))
-T=${RESULTS:+$RESULTS/m3_register}; T=${T:-${TMPDIR:-/tmp}/ztp-m3.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/m3_register}}; T=${T:-${TMPDIR:-/tmp}/ztp-m3.$$}   # kept under RESULTS (make test)
 mkdir -p "$T"
 pass=0
 fail=0

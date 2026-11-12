@@ -12,7 +12,7 @@ DEV=$2
 MKA=$3
 SEEDS=${PERF_SEEDS:-3}
 PORT=${ZTP_PORT:-46555}
-T=${RESULTS:+$RESULTS/m6_perf03}; T=${T:-${TMPDIR:-/tmp}/ztp-perf03.$$}   # kept under RESULTS (make test)
+T=${SUITE_DIR:-${RESULTS:+$RESULTS/m6_perf03}}; T=${T:-${TMPDIR:-/tmp}/ztp-perf03.$$}   # kept under RESULTS (make test)
 mkdir -p "$T/art"
 pass=0
 fail=0

@@ -656,7 +656,7 @@ message naming the key and file (`--config-lenient` turns unknown keys into warn
 | `net.mtu_fallback` | S D | bool | true | — | Allow the step-down to 508-byte datagrams |
 | `net.reconnect_min_s` / `reconnect_max_s` | D | number | 1 / 60 | 0.1–3600 | Backoff between reconnect attempts |
 | `net.resume_cycles` | D | int | 10 | 1–100 | Resume attempts before starting a fresh session |
-| `net.pmtu_blackhole_s` | D | int | 8 | 2–60 | Silence after which large frames are assumed lost (step down) |
+| `net.pmtu_blackhole_s` | D | int | 8 | 2–60 | Silent interval with no chunk data: the first re-requests the chunks, a second one in a row means large frames are lost (step down to 508 B); detection ≈ 2 × this |
 | `nat.keepalive_interval_s` | S D | int | 20 | 1–300 † (< 5 warns) | Idle time before a keepalive; the server's value is advertised |
 | `nat.dead_intervals` | S D | int | 3 | 2–10 † | Missed intervals before a session is dead |
 | `nat.server_idle_intervals` | S | int | 3 | 2–10 † (≥ dead_intervals) | Server-side idle limit, in intervals |

@@ -25,11 +25,16 @@ for tag in $stags; do
 done
 
 # TC-LOG-02: the PDF's bonus lines, generic sequence numbers (any log of the run). They need loss, reordering or
-# duplication, so an unimpaired run (QA §6 row M1) sets CHECK_BONUS=0.
-[ "${CHECK_BONUS:-1}" = 1 ] && for re in 'Received packet seq=[0-9]+ \(out of order, expected=[0-9]+\)' 'Buffered packet seq=[0-9]+' \
-          'Retransmitting seq=[0-9]+ \(timeout\)' 'Duplicate packet seq=[0-9]+ ignored'; do
+# duplication, so an unimpaired run (QA §6 row M1) sets CHECK_BONUS=0, and a loss-only run (rows M8, M9)
+# CHECK_BONUS=retx: only the retransmission line is certain there.
+case "${CHECK_BONUS:-1}" in
+1)    bonus_res='Received packet seq=[0-9]+ \(out of order, expected=[0-9]+\)|Buffered packet seq=[0-9]+|Retransmitting seq=[0-9]+ \(timeout\)|Duplicate packet seq=[0-9]+ ignored' ;;
+retx) bonus_res='Retransmitting seq=[0-9]+ \(timeout\)' ;;
+*)    bonus_res= ;;
+esac
+[ -n "$bonus_res" ] && { IFS='|'; set -f; for re in $bonus_res; do unset IFS;
     cat "$@" "$SRVL" | grep -Eq "$re" && ok || bad "TC-LOG-02: no line matching '$re'"
-done
+done; unset IFS; set +f; }
 
 # TC-LOG-03: ISO-8601 UTC timestamps with milliseconds, never going backwards within a file. Device logs are
 # all log lines; the server log also carries the dump table and summary, which are not log lines.
