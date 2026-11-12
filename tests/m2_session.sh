@@ -7,7 +7,7 @@ SRV=$1
 DEV=$2
 PORT=${ZTP_PORT:-25555}
 DPORT=$((PORT + 1))
-T=${TMPDIR:-/tmp}/ztp-m2.$$
+T=${RESULTS:+$RESULTS/m2_session}; T=${T:-${TMPDIR:-/tmp}/ztp-m2.$$}   # kept under RESULTS (make test)
 mkdir -p "$T"
 pass=0
 fail=0
@@ -15,7 +15,7 @@ SRV_PID=
 
 cleanup() {
     [ -n "$SRV_PID" ] && kill "$SRV_PID" 2>/dev/null
-    if [ "$fail" -eq 0 ]; then rm -rf "$T"; else echo "  (logs kept in $T)"; fi
+    if [ "$fail" -ne 0 ]; then echo "  (logs kept in $T)"; elif [ -z "${RESULTS:-}" ]; then rm -rf "$T"; fi
 }
 trap cleanup EXIT
 

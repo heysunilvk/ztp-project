@@ -12,7 +12,7 @@ IMPAIR=${IMPAIR-"--loss 0.15 --reorder 0.10 --dup 0.05 --delay 2 --jitter 1"}
 SEED=${SEED:-1}
 PORT=${PORT:-45555}
 BIN=${BIN:-build}
-OUT=${OUT:-${TMPDIR:-/tmp}/ztp-scale.$$}
+OUT=${OUT:-${RESULTS:+$RESULTS/run_scale}}; OUT=${OUT:-${TMPDIR:-/tmp}/ztp-scale.$$}   # kept under RESULTS
 LIMIT_S=${LIMIT_S:-120}
 RSS_MB=${RSS_MB:-64}
 L="$OUT/logs"
@@ -68,6 +68,6 @@ sh tests/check_invariants.sh "$L" "$S" artifacts > "$L/check_invariants.txt" 2>&
 sh tests/check_logs.sh "$L" > "$L/check_logs.txt" 2>&1 && ok || { bad "check_logs.sh"; grep FAIL "$L/check_logs.txt" | head -5; }
 peak=$(sed -n 's/.*sessions_peak=\([0-9]*\).*/\1/p' "$L/server.log" | tail -1)
 echo "scale: $N devices, $opn OPERATIONAL in ${el} s, server peak RSS ${rss:-?} MB, peak ${peak:-?} sessions"
-if [ "$fail" -eq 0 ]; then echo "scale PASS"; rm -rf "$OUT"; exit 0; fi
+if [ "$fail" -eq 0 ]; then echo "scale PASS"; [ -n "${RESULTS:-}" ] || rm -rf "$OUT"; exit 0; fi
 echo "scale FAIL (logs in $L)"
 exit 1

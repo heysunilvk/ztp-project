@@ -22,9 +22,9 @@ check_eq() {
 }
 
 ROOT=$(pwd)
-T=${TMPDIR:-/tmp}/ztp-cli.$$
+T=${RESULTS:+$RESULTS/cli_config}; T=${T:-${TMPDIR:-/tmp}/ztp-cli.$$}   # kept under RESULTS (make test)
 mkdir -p "$T"
-trap 'rm -rf "$T"' EXIT
+trap '[ -n "${RESULTS:-}" ] || rm -rf "$T"' EXIT
 
 # TC-CFG-01: built-in defaults when no config file is present
 check_eq "defaults keepalive (cwd)" "$(cd "$T" && src_of "$ROOT/$SRV" nat keepalive_interval_s)" "20|default"

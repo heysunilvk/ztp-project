@@ -12,11 +12,11 @@ DEV=$2
 MKA=$3
 SEEDS=${PERF_SEEDS:-3}
 PORT=${ZTP_PORT:-46555}
-T=${TMPDIR:-/tmp}/ztp-perf03.$$
+T=${RESULTS:+$RESULTS/m6_perf03}; T=${T:-${TMPDIR:-/tmp}/ztp-perf03.$$}   # kept under RESULTS (make test)
 mkdir -p "$T/art"
 pass=0
 fail=0
-cleanup() { if [ "$fail" -eq 0 ]; then rm -rf "$T"; else echo "  (logs kept in $T)"; fi; }
+cleanup() { if [ "$fail" -ne 0 ]; then echo "  (logs kept in $T)"; elif [ -z "${RESULTS:-}" ]; then rm -rf "$T"; fi; }
 trap cleanup EXIT
 ok()  { pass=$((pass + 1)); }
 bad() { echo "  FAIL: $1"; fail=$((fail + 1)); }

@@ -9,7 +9,7 @@ MKA=$3
 SIM=$4
 PORT=${ZTP_PORT:-27555}
 DPORT=$((PORT + 1))
-T=${TMPDIR:-/tmp}/ztp-m3.$$
+T=${RESULTS:+$RESULTS/m3_register}; T=${T:-${TMPDIR:-/tmp}/ztp-m3.$$}   # kept under RESULTS (make test)
 mkdir -p "$T"
 pass=0
 fail=0
@@ -17,7 +17,7 @@ SRV_PID=
 
 cleanup() {
     [ -n "$SRV_PID" ] && kill "$SRV_PID" 2>/dev/null
-    if [ "$fail" -eq 0 ]; then rm -rf "$T"; else echo "  (logs kept in $T)"; fi
+    if [ "$fail" -ne 0 ]; then echo "  (logs kept in $T)"; elif [ -z "${RESULTS:-}" ]; then rm -rf "$T"; fi
 }
 trap cleanup EXIT
 ok()  { pass=$((pass + 1)); }

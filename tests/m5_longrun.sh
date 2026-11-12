@@ -10,14 +10,14 @@ MKA=$3
 PORT=${ZTP_PORT:-33555}
 NAT07_S=${NAT07_S:-1800}
 NAT13_S=${NAT13_S:-600}
-T=${TMPDIR:-/tmp}/ztp-m5l.$$
+T=${RESULTS:+$RESULTS/m5_longrun}; T=${T:-${TMPDIR:-/tmp}/ztp-m5l.$$}   # kept under RESULTS (make test)
 mkdir -p "$T/art"
 pass=0
 fail=0
 PIDS=
 cleanup() {
     for p in $PIDS; do kill "$p" 2>/dev/null; done
-    if [ "$fail" -eq 0 ]; then rm -rf "$T"; else echo "  (logs kept in $T)"; fi
+    if [ "$fail" -ne 0 ]; then echo "  (logs kept in $T)"; elif [ -z "${RESULTS:-}" ]; then rm -rf "$T"; fi
 }
 trap cleanup EXIT
 ok()  { pass=$((pass + 1)); }

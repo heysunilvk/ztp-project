@@ -4,7 +4,8 @@
 # run under impairment (15% loss, 10% reorder, 5% duplication) with a fresh server and state per seed.
 # usage: tests/check_appendix_a.sh path/to/ztp-server path/to/ztp-device path/to/mkartifacts [ADDR [PORT]]
 # Env: APX_SEEDS (default 10; 0 skips TC-APX-10), APX_NO_STEPDOWN=1 (TC-PROV-12: no §5.8 step-down), APX_PCAP (a live capture of the reference run, written by
-# `tcpdump -U`: checks TC-APX-02/03 on the wire; needs pcapcheck at build/pcapcheck).
+# `tcpdump -U`: checks TC-APX-02/03 on the wire; needs pcapcheck at build/pcapcheck), APX_LOGS=DIR (`make appendix-a`:
+# when every check passes, the reference run's server.log, device_ZTP-93AF21.log and dumps are copied to DIR).
 # The literal nonce=984312 of Step 5 needs the --nonce hook, which is open tooling (QA §12.5): the REGISTER
 # line is checked up to "nonce=".
 set -u
@@ -14,14 +15,14 @@ MKA=$3
 ADDR=${4:-127.0.0.1}
 PORT=${5:-36555}
 SEEDS=${APX_SEEDS:-10}
-T=${TMPDIR:-/tmp}/ztp-apx.$$
+T=${RESULTS:+$RESULTS/check_appendix_a}; T=${T:-${TMPDIR:-/tmp}/ztp-apx.$$}   # kept under RESULTS (make test)
 mkdir -p "$T/art"
 pass=0
 fail=0
 SRV_PID=
 cleanup() {
     [ -n "$SRV_PID" ] && kill "$SRV_PID" 2>/dev/null
-    if [ "$fail" -eq 0 ]; then rm -rf "$T"; else echo "  (logs kept in $T)"; fi
+    if [ "$fail" -ne 0 ]; then echo "  (logs kept in $T)"; elif [ -z "${RESULTS:-}" ]; then rm -rf "$T"; fi
 }
 trap cleanup EXIT
 ok()  { pass=$((pass + 1)); }
@@ -131,5 +132,11 @@ while [ "$s" -le "$SEEDS" ]; do
     s=$((s + 1))
 done
 
+if [ -n "${APX_LOGS:-}" ] && [ "$fail" -eq 0 ]; then
+    mkdir -p "$APX_LOGS"
+    cp "$T/ref.s.log" "$APX_LOGS/server.log" && cp "$T/ref.d.log" "$APX_LOGS/device_ZTP-93AF21.log" \
+        && cp "$T/ref.dump" "$APX_LOGS/db_dump.txt" && cp "$T/ref.verbose" "$APX_LOGS/db_dump_verbose.txt" \
+        && echo "  reference run logs copied to $APX_LOGS" || bad "could not copy the logs to $APX_LOGS"
+fi
 echo "Appendix A checks: $pass passed, $fail failed (Step 5 nonce value not checked: --nonce is open tooling, QA §12.5)"
 [ "$fail" -eq 0 ]

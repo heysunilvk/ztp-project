@@ -8,6 +8,11 @@ on:
   schedule:
     - cron: "17 3 * * *"   # nightly: the full matrix (10 seeds) and TC-PERF-02 (QA §6)
 
+# Every job keeps its suites' logs and summary.txt in results/ (tests/run_suite.sh), posts the summaries as
+# notices and uploads results/ as an artifact; the evidence job turns the run into evidence/ci/*.md (QA §11 M7).
+env:
+  RESULTS: ${{ github.workspace }}/results/ci
+
 jobs:
   build-test:
     name: build-test (${{ matrix.os }}, ${{ matrix.cc }})
@@ -43,6 +48,22 @@ jobs:
             grep -E 'error:|warning:|FAIL|ERROR: |runtime error' test.log | head -25 | sed 's/^/::error::/'
             exit 1
           }
+      - name: Results summary
+        if: always()
+        shell: bash
+        run: |
+          for f in $(find results -name summary.txt 2> /dev/null | sort); do
+            { echo "#### $(basename "$(dirname "$f")")"; echo '```'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=$(basename "$(dirname "$f")")::$(awk '{ printf "%s%%0A", $0 }' "$f")"
+          done
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-build-test-${{ matrix.os }}-${{ matrix.cc }}
+          path: results/
+          if-no-files-found: ignore
+          retention-days: 90
 
   asan:
     name: asan (${{ matrix.os }})
@@ -64,6 +85,22 @@ jobs:
             grep -E 'error:|warning:|FAIL|ERROR: |SUMMARY:|runtime error' asan.log | head -20 | sed 's/^/::error::/'
             exit 1
           }
+      - name: Results summary
+        if: always()
+        shell: bash
+        run: |
+          for f in $(find results -name summary.txt 2> /dev/null | sort); do
+            { echo "#### $(basename "$(dirname "$f")")"; echo '```'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=$(basename "$(dirname "$f")")::$(awk '{ printf "%s%%0A", $0 }' "$f")"
+          done
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-asan-${{ matrix.os }}
+          path: results/
+          if-no-files-found: ignore
+          retention-days: 90
 
   # M1 platform checks: PRD R-03 (multicast/broadcast) and R-11 (netem on the hosted kernel).
   platform-linux:
@@ -103,6 +140,8 @@ jobs:
         run: make all build/pcapcheck artifacts
       - name: TC-REL-01 - capture the session tests and check every frame on the wire
         shell: bash
+        env:
+          RESULTS: ${{ github.workspace }}/results/rel01
         run: |
           command -v tcpdump >/dev/null || sudo apt-get install -y tcpdump
           sudo tcpdump -i lo -U -w rel01.pcap 'udp and (portrange 25555-25557)' 2> tcpdump.err &
@@ -120,6 +159,8 @@ jobs:
             exit 1
           fi
       - name: TC-APX-01..10, TC-PDF-04 - Appendix A on the PDF's address 10.10.10.5:5555
+        env:
+          RESULTS: ${{ github.workspace }}/results/apx
         run: |
           sudo ip addr add 10.10.10.5/32 dev lo
           sudo tcpdump -i lo -U -w apx.pcap 'udp and host 10.10.10.5' 2> /dev/null &
@@ -138,6 +179,8 @@ jobs:
             exit $rc
           fi
       - name: TC-PROV-12 - a 1280-byte MTU path (lo MTU 1280) needs no fallback and never fragments
+        env:
+          RESULTS: ${{ github.workspace }}/results/prov12
         run: |
           sudo ip link set lo mtu 1280
           sudo tcpdump -i lo -U -w mtu.pcap 'udp port 37555' 2> /dev/null &
@@ -171,6 +214,22 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice::netem: ${{ steps.netem.outcome }}"
           uname -a >> "$GITHUB_STEP_SUMMARY"
+      - name: Results summary
+        if: always()
+        shell: bash
+        run: |
+          for f in $(find results -name summary.txt 2> /dev/null | sort); do
+            { echo "#### $(basename "$(dirname "$f")")"; echo '```'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=$(basename "$(dirname "$f")")::$(awk '{ printf "%s%%0A", $0 }' "$f")"
+          done
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-platform-linux
+          path: results/
+          if-no-files-found: ignore
+          retention-days: 90
 
   # QA §6: the 5-device demo over impairment rows M1-M4 (TC-REL-09, TC-E2E-02); 3 seeds per push, 10 nightly,
   # plus TC-PERF-02 (row M4, 20 runs) at night.
@@ -204,9 +263,25 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          ROWS=M4 SEEDS=20 sh scripts/run_matrix.sh 2>&1 | tee perf02.txt || {
+          RESULTS=$RESULTS/perf02 ROWS=M4 SEEDS=20 sh scripts/run_matrix.sh 2>&1 | tee perf02.txt || {
             grep -E 'FAIL' perf02.txt | head -20 | sed 's/^/::error::/'; exit 1; }
           echo "::notice::TC-PERF-02 $(grep -E '^M4' perf02.txt)"
+      - name: Results summary
+        if: always()
+        shell: bash
+        run: |
+          for f in $(find results -name summary.txt 2> /dev/null | sort); do
+            { echo "#### $(basename "$(dirname "$f")")"; echo '```'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=$(basename "$(dirname "$f")")::$(awk '{ printf "%s%%0A", $0 }' "$f")"
+          done
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-impair-matrix-${{ matrix.os }}
+          path: results/
+          if-no-files-found: ignore
+          retention-days: 90
 
   # QA §6 row M7: the demo with the impairment done by the kernel (netem on lo: correlated loss) instead of
   # in code; TC-SIM-03. 3 seeds per push, 10 nightly.
@@ -224,7 +299,7 @@ jobs:
           seeds=3; [ "${{ github.event_name }}" = schedule ] && seeds=10
           rc=0
           for s in $(seq 1 $seeds); do
-            d=$(mktemp -d)
+            d=$RESULTS/netem-seed$s; mkdir -p "$d"
             if IMPAIR= SEED=$s DEMO_DIR=$d PORT=$((50555 + 10 * s)) QUIET=1 sh scripts/run_demo.sh > demo.$s.txt 2>&1; then
               echo "seed $s: $(tail -1 demo.$s.txt)"
             else
@@ -234,6 +309,22 @@ jobs:
           sudo tc qdisc del dev lo root
           [ $rc -eq 0 ] && echo "::notice::M7 (netem): $seeds of $seeds demos passed"
           exit $rc
+      - name: Results summary
+        if: always()
+        shell: bash
+        run: |
+          for f in $(find results -name summary.txt 2> /dev/null | sort); do
+            { echo "#### $(basename "$(dirname "$f")")"; echo '```'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=$(basename "$(dirname "$f")")::$(awk '{ printf "%s%%0A", $0 }' "$f")"
+          done
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-impair-netem
+          path: results/
+          if-no-files-found: ignore
+          retention-days: 90
 
   # TC-PERF-04 on Linux: a soak with the server and one device under valgrind memcheck (leaks, invalid
   # accesses); the 1-hour soak with RSS and macOS leaks runs locally (make soak).
@@ -252,6 +343,22 @@ jobs:
           SOAK_S=180 WARMUP_S=30 VALGRIND=1 sh scripts/run_soak.sh 2>&1 | tee soak.txt || {
             grep -E 'FAIL' soak.txt | head -20 | sed 's/^/::error::/'; exit 1; }
           echo "::notice::$(grep -E '^soak:' soak.txt | tail -1)"
+      - name: Results summary
+        if: always()
+        shell: bash
+        run: |
+          for f in $(find results -name summary.txt 2> /dev/null | sort); do
+            { echo "#### $(basename "$(dirname "$f")")"; echo '```'; cat "$f"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=$(basename "$(dirname "$f")")::$(awk '{ printf "%s%%0A", $0 }' "$f")"
+          done
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-valgrind
+          path: results/
+          if-no-files-found: ignore
+          retention-days: 90
 
   platform-macos:
     runs-on: macos-latest
@@ -268,3 +375,43 @@ jobs:
           B=$(ifconfig "$IF" | awk '/broadcast/{print $NF; exit}')
           make build/netspike
           if build/netspike bcast "$B"; then echo "::notice::macOS bcast to $B via $IF: ok"; else echo "::warning::macOS bcast to $B via $IF: FAILED"; exit 1; fi
+
+  # CI evidence: this run as Markdown (scripts/ci_evidence.sh) in the job summary and as an artifact; nightly
+  # and manual runs on main also commit it to evidence/ci/ (GitHub deletes job logs after 90 days).
+  evidence:
+    needs: [build-test, asan, platform-linux, impair-matrix, impair-netem, valgrind, platform-macos]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+      checks: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: CI evidence report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SKIP_JOB: evidence
+        run: |
+          mkdir -p evidence/ci
+          f=evidence/ci/$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}-run${{ github.run_number }}.md
+          sh scripts/ci_evidence.sh ${{ github.run_id }} "$f"
+          cat "$f" >> "$GITHUB_STEP_SUMMARY"
+          echo "REPORT=$f" >> "$GITHUB_ENV"
+      - name: Upload the report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence
+          path: evidence/ci/
+      - name: Commit the report (nightly and manual runs on main)
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$REPORT"
+          git commit -q -m "CI evidence: run ${{ github.run_number }} (${{ github.event_name }}) [skip ci]"
+          for i in 1 2 3; do git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0; sleep 10; done
+          exit 1

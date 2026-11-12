@@ -13,4 +13,6 @@ ztp-assignment-analysis.md
 /build/
 /build-asan/
 /build-debug/
-/logs/
+# logs/ is committed: the demo and Appendix A logs are deliverables (TC-DEL-09); make demo / appendix-a rewrite it
+# one folder per test run (make test); one release run is copied to evidence/
+/results/

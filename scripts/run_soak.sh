@@ -11,7 +11,7 @@ SOAK_S=${SOAK_S:-3600}
 WARMUP_S=${WARMUP_S:-60}
 PORT=${PORT:-47555}
 BIN=${BIN:-build}
-OUT=${OUT:-${TMPDIR:-/tmp}/ztp-soak.$$}
+OUT=${OUT:-${RESULTS:+$RESULTS/run_soak}}; OUT=${OUT:-${TMPDIR:-/tmp}/ztp-soak.$$}   # kept under RESULTS
 VALGRIND=${VALGRIND:-0}
 L="$OUT/logs"
 S="$OUT/state"
@@ -102,6 +102,6 @@ fi
 to=$(cat "$L"/device_*.log | grep -c 'Session timeout detected')
 echo "soak: $(cat "$L"/device_*.log | grep -c 'Keepalive sent') keepalives, $to session timeouts"
 [ "$to" -eq 0 ] && ok || bad "$to session timeouts on a lossless link"
-if [ "$fail" -eq 0 ]; then echo "soak PASS"; rm -rf "$OUT"; exit 0; fi
+if [ "$fail" -eq 0 ]; then echo "soak PASS"; [ -n "${RESULTS:-}" ] || rm -rf "$OUT"; exit 0; fi
 echo "soak FAIL (logs in $L)"
 exit 1

@@ -9,7 +9,7 @@ SIM=$3
 PORT=${ZTP_PORT:-26555}
 DPORT=$((PORT + 1))
 DPORT2=$((PORT + 2))
-T=${TMPDIR:-/tmp}/ztp-peer.$$
+T=${RESULTS:+$RESULTS/m2_peer}; T=${T:-${TMPDIR:-/tmp}/ztp-peer.$$}   # kept under RESULTS (make test)
 mkdir -p "$T"
 pass=0
 fail=0
@@ -17,7 +17,7 @@ SRV_PID=
 
 cleanup() {
     [ -n "$SRV_PID" ] && kill "$SRV_PID" 2>/dev/null
-    if [ "$fail" -eq 0 ]; then rm -rf "$T"; else echo "  (logs kept in $T)"; fi
+    if [ "$fail" -ne 0 ]; then echo "  (logs kept in $T)"; elif [ -z "${RESULTS:-}" ]; then rm -rf "$T"; fi
 }
 trap cleanup EXIT
 

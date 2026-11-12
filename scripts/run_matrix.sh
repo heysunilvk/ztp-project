@@ -11,7 +11,7 @@ ROWS=${ROWS:-M2 M3 M4}
 SEEDS=${SEEDS:-10}
 PORT=${PORT:-42555}
 BIN=${BIN:-build}
-OUT=${OUT:-${TMPDIR:-/tmp}/ztp-matrix.$$}
+OUT=${OUT:-${RESULTS:+$RESULTS/run_matrix}}; OUT=${OUT:-${TMPDIR:-/tmp}/ztp-matrix.$$}   # kept under RESULTS
 MEDIAN_MAX=${MEDIAN_MAX:-60}
 P95_MAX=${P95_MAX:-90}
 mkdir -p "$OUT"
@@ -77,7 +77,7 @@ PY
     [ "$res" = PASS ] || overall=1
     printf '%-4s %-7s %-13s %-9s %-7s %s\n' "$r" "$okruns/$SEEDS" "$opn/$total" "${med}s" "${p95}s" "$res"
 done
-if [ "$overall" -eq 0 ]; then echo "matrix PASS"; rm -rf "$OUT"
+if [ "$overall" -eq 0 ]; then echo "matrix PASS"; [ -n "${RESULTS:-}" ] || rm -rf "$OUT"
 else
     echo "matrix FAIL (runs kept in $OUT; each holds demo.txt and logs/)"
     grep -l 'demo FAIL' "$OUT"/*/demo.txt 2>/dev/null | head -5 | while read -r f; do echo "--- $f"; grep 'FAIL' "$f" | head -5; done

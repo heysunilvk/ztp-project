@@ -35,7 +35,7 @@ SERVER_BIN := $(BUILD)/ztp-server
 DEVICE_BIN := $(BUILD)/ztp-device
 TEST_BIN   := $(BUILD)/unit-tests
 
-.PHONY: all server device test demo scale soak longrun asan debug clean clean-logs check-separation spike artifacts
+.PHONY: all server device test demo appendix-a matrix scale soak longrun asan debug clean clean-logs check-separation spike artifacts
 
 # Deterministic mock artifacts and demo keys (tools/mkartifacts; links the device library for the
 # demo key derivation). `make artifacts` writes artifacts/ for conf/policy.json.
@@ -94,25 +94,33 @@ $(PCAPCHECK): tests/pcapcheck/pcapcheck.c $(LIB)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB) $(LDFLAGS) $(LDLIBS)
 
+# Every run keeps its logs and results in RESULTS (default results/<date-time>; git ignores results/):
+# <suite>.out is each suite's output, <suite>/ its logs and state, summary.txt one line per suite.
+RUN_ID  := $(shell date +%Y%m%d-%H%M%S)
+RESULTS ?= results/$(RUN_ID)
+export RESULTS
+SUITE   := BUILD=$(BUILD) sh tests/run_suite.sh
+
 test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK) artifacts
 	@if [ -n "$(KEEP_AWAKE)" ]; then ( $(KEEP_AWAKE) -w $$PPID & ); fi   # awake until make exits
 	@chmod 600 conf/keys.json
-	$(TEST_BIN)
-	@mkdir -p $(BUILD)/selftest && $(PCAPCHECK) --selftest $(BUILD)/selftest
-	sh tests/cli_config.sh $(SERVER_BIN) $(DEVICE_BIN)
-	sh tests/m2_session.sh $(SERVER_BIN) $(DEVICE_BIN)
-	sh tests/m2_peer.sh $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM)
-	sh tests/m3_register.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS) $(PEER_SIM)
-	sh tests/m4_provision.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
-	sh tests/m5_upgrade.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
-	sh tests/m5_gate.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
-	APX_SEEDS=3 sh tests/check_appendix_a.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
-	sh tests/m6_fuzz.sh $(SERVER_BIN) $(MKARTIFACTS)
-	sh tests/m6_server.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
-	sh tests/m6_demo.sh $(BUILD)
-	sh tests/m6_perf03.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
-	sh tests/check_pdf05.sh $(SERVER_BIN) $(DEVICE_BIN)
-	@$(MAKE) --no-print-directory check-separation BUILD=$(BUILD)
+	@$(SUITE) unit $(TEST_BIN)
+	@mkdir -p $(BUILD)/selftest && $(SUITE) pcapcheck $(PCAPCHECK) --selftest $(BUILD)/selftest
+	@$(SUITE) cli_config sh tests/cli_config.sh $(SERVER_BIN) $(DEVICE_BIN)
+	@$(SUITE) m2_session sh tests/m2_session.sh $(SERVER_BIN) $(DEVICE_BIN)
+	@$(SUITE) m2_peer sh tests/m2_peer.sh $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM)
+	@$(SUITE) m3_register sh tests/m3_register.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS) $(PEER_SIM)
+	@$(SUITE) m4_provision sh tests/m4_provision.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	@$(SUITE) m5_upgrade sh tests/m5_upgrade.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	@$(SUITE) m5_gate sh tests/m5_gate.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	@APX_SEEDS=3 $(SUITE) check_appendix_a sh tests/check_appendix_a.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	@$(SUITE) m6_fuzz sh tests/m6_fuzz.sh $(SERVER_BIN) $(MKARTIFACTS)
+	@$(SUITE) m6_server sh tests/m6_server.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	@$(SUITE) m6_demo sh tests/m6_demo.sh $(BUILD)
+	@$(SUITE) m6_perf03 sh tests/m6_perf03.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	@$(SUITE) check_pdf05 sh tests/check_pdf05.sh $(SERVER_BIN) $(DEVICE_BIN)
+	@$(SUITE) separation $(MAKE) --no-print-directory check-separation BUILD=$(BUILD)
+	@echo "all suites passed; results in $(RESULTS)/summary.txt"
 
 # The 5-device demo (DESIGN §19.3; QA TC-SRV-01, TC-E2E-02 with SEED=1..10): writes logs/ and state/.
 demo: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
@@ -129,6 +137,17 @@ scale: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	BIN=$(BUILD) $(KEEP_AWAKE) sh scripts/run_scale.sh $(N)
 soak: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	BIN=$(BUILD) $(KEEP_AWAKE) sh scripts/run_soak.sh
+
+# The impairment matrix (QA §6): make matrix ROWS="M1 M2 M3 M4" SEEDS=10
+ROWS  ?= M2 M3 M4
+SEEDS ?= 10
+matrix: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	BIN=$(BUILD) ROWS="$(ROWS)" SEEDS=$(SEEDS) $(KEEP_AWAKE) sh scripts/run_matrix.sh
+
+# The PDF's Appendix A journey (ZTP-93AF21, session 7421) on 127.0.0.1:5555; on success its logs replace
+# logs/appendix_a/ (committed). CI runs the same check on 10.10.10.5:5555 (job platform-linux).
+appendix-a: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	APX_SEEDS=0 APX_LOGS=logs/appendix_a $(SUITE) appendix_a sh tests/check_appendix_a.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS) 127.0.0.1 5555
 
 # TC-NAT-07 (30 min) and TC-NAT-13 (10 min), in parallel: too long for every push.
 longrun: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
@@ -153,7 +172,7 @@ spike: $(SPIKE_BIN)
 
 # Same build and tests with AddressSanitizer + UBSan (TC-DEL-08).
 asan:
-	$(MAKE) BUILD=build-asan OPT="-O1 -g -fno-omit-frame-pointer" \
+	$(MAKE) BUILD=build-asan RESULTS=results/$(RUN_ID)-asan OPT="-O1 -g -fno-omit-frame-pointer" \
 	    SAN="-fsanitize=address,undefined -fno-sanitize-recover=undefined" test
 
 debug:

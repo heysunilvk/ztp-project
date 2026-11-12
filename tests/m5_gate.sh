@@ -10,7 +10,7 @@ DEV=$2
 MKA=$3
 PORT=${ZTP_PORT:-31555}
 DPORT=$((PORT + 1))
-T=${TMPDIR:-/tmp}/ztp-m5g.$$
+T=${RESULTS:+$RESULTS/m5_gate}; T=${T:-${TMPDIR:-/tmp}/ztp-m5g.$$}   # kept under RESULTS (make test)
 mkdir -p "$T/art"
 pass=0
 fail=0
@@ -18,7 +18,7 @@ SRV_PID=
 BG_PIDS=
 cleanup() {
     for p in $SRV_PID $BG_PIDS; do kill -CONT "$p" 2>/dev/null; kill "$p" 2>/dev/null; done
-    if [ "$fail" -eq 0 ]; then rm -rf "$T"; else echo "  (logs kept in $T)"; fi
+    if [ "$fail" -ne 0 ]; then echo "  (logs kept in $T)"; elif [ -z "${RESULTS:-}" ]; then rm -rf "$T"; fi
 }
 trap cleanup EXIT
 ok()  { pass=$((pass + 1)); }
