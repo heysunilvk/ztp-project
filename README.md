@@ -894,7 +894,9 @@ netem and valgrind jobs, and the evidence report):
 | 821d134 | [43252475092](https://github.com/heysunilvk/ztp-project/actions/runs/43252475092) | 12/12 jobs green |
 | a1c5bd3 | [43285234948](https://github.com/heysunilvk/ztp-project/actions/runs/43285234948) | 12/12 jobs green |
 | b936db3 | [43335677454](https://github.com/heysunilvk/ztp-project/actions/runs/43335677454) | every test step passed; `build-test (macos)` failed on its *Upload results* step, a transient storage error. Uploads have since been marked `continue-on-error`, so the tests alone decide a job |
-| __FINAL__ | __FINALRUN__ | __FINALRES__ |
+| dc3c139 | [43355813851](https://github.com/heysunilvk/ztp-project/actions/runs/43355813851) | 11/12 green; `impair-matrix (macos)` failed one demo check, TC-SRV-09, on M2 seed 1 (all 12 devices OPERATIONAL). The check counted session switches over the few `[PROVISION]` lines only; it now counts every session line in the provisioning window. On all 91 release-run server logs the new count passes with a margin of 8 or more switches, where the old one's smallest margin was 2 |
+
+Later runs: https://github.com/heysunilvk/ztp-project/actions.
 
 ---
 

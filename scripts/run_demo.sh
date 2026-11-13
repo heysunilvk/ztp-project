@@ -202,8 +202,12 @@ nok=4; nfail=0; [ $HAVE_BAD_KEY = 1 ] && nfail=1
 grep -q "Registered successfully : $nok" "$D" && ok || bad "TC-SRV-05: summary does not list $nok successes"
 [ $HAVE_BAD_KEY = 1 ] || skip "TC-SRV-05 failure count (needs S2)"
 
-# TC-SRV-09: provisioning from at least 3 sessions interleaves in the server log
-sids=$(grep '\[PROVISION\] \[sid=' "$SRV_LOG" | sed -n 's/.*\[sid=\([0-9]*\) .*/\1/p')
+# TC-SRV-09: provisioning from at least 3 sessions interleaves in the server log. Every session line from the
+# first to the last [PROVISION] line counts: the [PROVISION] lines alone are a few per session, and on a fast
+# run they could come out one session after another while the sessions overlapped (CI macOS, M2 seed 1)
+sids=$(awk '/\[PROVISION\] \[sid=/ { if (!f) f = NR; l = NR } { L[NR] = $0 }
+            END { for (i = f; i <= l; i++) if (L[i] ~ /\[sid=[0-9]+ /) print L[i] }' "$SRV_LOG" |
+       sed -n 's/.*\[sid=\([0-9]*\) .*/\1/p')
 nd=$(echo "$sids" | sort -u | grep -c .)
 switches=$(echo "$sids" | awk 'prev != "" && $0 != prev { n++ } { prev = $0 } END { print n + 0 }')
 [ "$nd" -ge 3 ] && [ "$switches" -ge "$nd" ] && ok || bad "TC-SRV-09: $nd sessions, $switches switches: not interleaved"
