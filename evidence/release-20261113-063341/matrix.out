@@ -1,0 +1,9 @@
+row  runs    operational   median    p95     result
+M1   10/10   40/40         0.4s      0.4s    PASS
+M2   10/10   40/40         1.4s      3.4s    PASS
+M3   10/10   40/40         3.0s      6.1s    PASS
+M4   10/10   40/40         4.8s      12.2s   PASS
+M5   10/10   40/40         12.0s     38.3s   PASS
+M8   10/10   40/40         1.3s      6.3s    PASS
+M9   10/10   40/40         1.6s      4.6s    PASS
+matrix PASS

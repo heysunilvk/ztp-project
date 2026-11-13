@@ -1,0 +1,4 @@
+m5 long-run tests: TC-NAT-07 1800 s (default profile), TC-NAT-13 600 s (demo profile), 20% loss
+  TC-NAT-07: 87 keepalives while OPERATIONAL, 0 session timeouts, 1 REGISTER
+  TC-NAT-13: 280 keepalives, 1 session timeouts, slowest recovery 0.5 s
+m5 long-run tests: 5 passed, 0 failed

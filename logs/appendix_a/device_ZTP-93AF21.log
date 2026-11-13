@@ -1,55 +1,55 @@
-2026-11-13T14:28:03.755Z [BOOT] Device starting (boot #1)
-2026-11-13T14:28:03.755Z [BOOT] Soft serial assigned (configuration)
-2026-11-13T14:28:03.755Z [BOOT] Soft serial: ZTP-93AF21
-2026-11-13T14:28:03.755Z [BOOT] Firmware version: v1.0
-2026-11-13T14:28:03.755Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
-2026-11-13T14:28:03.755Z [DISCOVERY] Using static server IP 127.0.0.1:5555
-2026-11-13T14:28:03.755Z [DISCOVERY] Provisioning server found 127.0.0.1:5555 (static)
-2026-11-13T14:28:03.756Z [UDP] HELLO sent (seq=1)
-2026-11-13T14:28:03.756Z [UDP] Session established (session_id=7421)
-2026-11-13T14:28:03.756Z [NAT] Keepalive sent
-2026-11-13T14:28:03.756Z [NAT] Keepalive acknowledged (rtt=0 ms)
-2026-11-13T14:28:03.756Z [AUTH] REGISTER: session_id=7421 soft_serial=ZTP-93AF21 model=EDGE-GW-100 firmware=v1.0 nonce=18241778955212889794
-2026-11-13T14:28:03.760Z [AUTH] Registration successful
-2026-11-13T14:28:03.760Z [AUTH] Assigned tenant: cruise_ops
-2026-11-13T14:28:03.766Z [PROVISION] Config manifest: v3, 2310 bytes, 3 chunks, sha256=e0a7b0d079200c3e67a33e59b778feb77afff2553fdd9a0c87473e143c23e01b
-2026-11-13T14:28:03.768Z [PROVISION] Receiving config (chunk 1/3)
-2026-11-13T14:28:03.768Z [PROVISION] Receiving config (chunk 2/3)
-2026-11-13T14:28:03.768Z [PROVISION] Receiving config (chunk 3/3)
-2026-11-13T14:28:03.768Z [PROVISION] Config: 3 chunks written, 0 duplicates ignored
-2026-11-13T14:28:03.769Z [PROVISION] Config checksum verified
-2026-11-13T14:28:03.773Z [UPGRADE] Current: v1.0 -> Target: v1.1
-2026-11-13T14:28:03.773Z [PROVISION] Firmware manifest: v1.1, 65536 bytes, 64 chunks
-2026-11-13T14:28:03.773Z [PROVISION] Firmware 8/64 (12%)
-2026-11-13T14:28:03.795Z [PROVISION] Firmware 16/64 (25%)
-2026-11-13T14:28:03.816Z [PROVISION] Firmware 24/64 (37%)
-2026-11-13T14:28:03.837Z [PROVISION] Firmware 32/64 (50%)
-2026-11-13T14:28:03.846Z [PROVISION] Firmware 40/64 (62%)
-2026-11-13T14:28:03.868Z [PROVISION] Firmware 48/64 (75%)
-2026-11-13T14:28:03.890Z [PROVISION] Firmware 56/64 (87%)
-2026-11-13T14:28:03.911Z [PROVISION] Firmware 64/64 (100%)
-2026-11-13T14:28:03.920Z [PROVISION] Firmware: 64 chunks written, 0 duplicates ignored
-2026-11-13T14:28:03.928Z [PROVISION] Firmware checksum verified
-2026-11-13T14:28:03.931Z [UPGRADE] Image v1.1 staged in slot B (verified; commit after the INSTALLING ACK)
-2026-11-13T14:28:03.963Z [UPGRADE] Upgrade complete, restarting device
-2026-11-13T14:28:03.963Z [UDP] Counters: tx=17 rx=71 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=8 frames=11
-2026-11-13T14:28:03.971Z [BOOT] Device starting (boot #2)
-2026-11-13T14:28:03.972Z [BOOT] Restart detected (pending upgrade to v1.1)
-2026-11-13T14:28:03.972Z [BOOT] Soft serial loaded
-2026-11-13T14:28:03.972Z [BOOT] Soft serial: ZTP-93AF21
-2026-11-13T14:28:03.972Z [BOOT] Firmware version: v1.1 (slot B)
-2026-11-13T14:28:03.972Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
-2026-11-13T14:28:03.976Z [UDP] Resuming session 7421 (ctr=1, proposed epoch 1, stage FW_INSTALLED)
-2026-11-13T14:28:03.983Z [UDP] Session resumed (session_id=7421) epoch=1
-2026-11-13T14:28:03.983Z [VALIDATION] Configuration present (v3, sha ok)
-2026-11-13T14:28:03.984Z [VALIDATION] Firmware v1.1 verified
-2026-11-13T14:28:03.984Z [NAT] Keepalive sent
-2026-11-13T14:28:03.984Z [NAT] Keepalive acknowledged (rtt=5 ms)
-2026-11-13T14:28:03.984Z [VALIDATION] Session healthy (rtt=5 ms)
-2026-11-13T14:28:03.989Z [STATE] Device is OPERATIONAL
-2026-11-13T14:28:06.008Z [NAT] Keepalive sent
-2026-11-13T14:28:06.008Z [NAT] Keepalive acknowledged (rtt=0 ms)
-2026-11-13T14:28:08.011Z [NAT] Keepalive sent
-2026-11-13T14:28:08.011Z [NAT] Keepalive acknowledged (rtt=1 ms)
-2026-11-13T14:28:08.986Z [STATE] Exiting after operational hold (run.exit_when_operational, 5 s)
-2026-11-13T14:28:08.986Z [UDP] Counters: tx=7 rx=2 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=5 frames=6
+2026-11-13T17:11:23.099Z [BOOT] Device starting (boot #1)
+2026-11-13T17:11:23.099Z [BOOT] Soft serial assigned (configuration)
+2026-11-13T17:11:23.099Z [BOOT] Soft serial: ZTP-93AF21
+2026-11-13T17:11:23.099Z [BOOT] Firmware version: v1.0
+2026-11-13T17:11:23.100Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
+2026-11-13T17:11:23.100Z [DISCOVERY] Using static server IP 127.0.0.1:5555
+2026-11-13T17:11:23.100Z [DISCOVERY] Provisioning server found 127.0.0.1:5555 (static)
+2026-11-13T17:11:23.100Z [UDP] HELLO sent (seq=1)
+2026-11-13T17:11:23.100Z [UDP] Session established (session_id=7421)
+2026-11-13T17:11:23.100Z [NAT] Keepalive sent
+2026-11-13T17:11:23.100Z [NAT] Keepalive acknowledged (rtt=0 ms)
+2026-11-13T17:11:23.100Z [AUTH] REGISTER: session_id=7421 soft_serial=ZTP-93AF21 model=EDGE-GW-100 firmware=v1.0 nonce=16416830223895452106
+2026-11-13T17:11:23.102Z [AUTH] Registration successful
+2026-11-13T17:11:23.102Z [AUTH] Assigned tenant: cruise_ops
+2026-11-13T17:11:23.108Z [PROVISION] Config manifest: v3, 2310 bytes, 3 chunks, sha256=e0a7b0d079200c3e67a33e59b778feb77afff2553fdd9a0c87473e143c23e01b
+2026-11-13T17:11:23.111Z [PROVISION] Receiving config (chunk 1/3)
+2026-11-13T17:11:23.111Z [PROVISION] Receiving config (chunk 2/3)
+2026-11-13T17:11:23.111Z [PROVISION] Receiving config (chunk 3/3)
+2026-11-13T17:11:23.111Z [PROVISION] Config: 3 chunks written, 0 duplicates ignored
+2026-11-13T17:11:23.112Z [PROVISION] Config checksum verified
+2026-11-13T17:11:23.118Z [UPGRADE] Current: v1.0 -> Target: v1.1
+2026-11-13T17:11:23.118Z [PROVISION] Firmware manifest: v1.1, 65536 bytes, 64 chunks
+2026-11-13T17:11:23.118Z [PROVISION] Firmware 8/64 (12%)
+2026-11-13T17:11:23.141Z [PROVISION] Firmware 16/64 (25%)
+2026-11-13T17:11:23.163Z [PROVISION] Firmware 24/64 (37%)
+2026-11-13T17:11:23.185Z [PROVISION] Firmware 32/64 (50%)
+2026-11-13T17:11:23.194Z [PROVISION] Firmware 40/64 (62%)
+2026-11-13T17:11:23.214Z [PROVISION] Firmware 48/64 (75%)
+2026-11-13T17:11:23.236Z [PROVISION] Firmware 56/64 (87%)
+2026-11-13T17:11:23.259Z [PROVISION] Firmware 64/64 (100%)
+2026-11-13T17:11:23.268Z [PROVISION] Firmware: 64 chunks written, 0 duplicates ignored
+2026-11-13T17:11:23.275Z [PROVISION] Firmware checksum verified
+2026-11-13T17:11:23.276Z [UPGRADE] Image v1.1 staged in slot B (verified; commit after the INSTALLING ACK)
+2026-11-13T17:11:23.310Z [UPGRADE] Upgrade complete, restarting device
+2026-11-13T17:11:23.310Z [UDP] Counters: tx=17 rx=71 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=8 frames=11
+2026-11-13T17:11:23.318Z [BOOT] Device starting (boot #2)
+2026-11-13T17:11:23.318Z [BOOT] Restart detected (pending upgrade to v1.1)
+2026-11-13T17:11:23.318Z [BOOT] Soft serial loaded
+2026-11-13T17:11:23.318Z [BOOT] Soft serial: ZTP-93AF21
+2026-11-13T17:11:23.318Z [BOOT] Firmware version: v1.1 (slot B)
+2026-11-13T17:11:23.318Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
+2026-11-13T17:11:23.325Z [UDP] Resuming session 7421 (ctr=1, proposed epoch 1, stage FW_INSTALLED)
+2026-11-13T17:11:23.334Z [UDP] Session resumed (session_id=7421) epoch=1
+2026-11-13T17:11:23.334Z [VALIDATION] Configuration present (v3, sha ok)
+2026-11-13T17:11:23.334Z [VALIDATION] Firmware v1.1 verified
+2026-11-13T17:11:23.334Z [NAT] Keepalive sent
+2026-11-13T17:11:23.334Z [NAT] Keepalive acknowledged (rtt=7 ms)
+2026-11-13T17:11:23.334Z [VALIDATION] Session healthy (rtt=7 ms)
+2026-11-13T17:11:23.343Z [STATE] Device is OPERATIONAL
+2026-11-13T17:11:25.360Z [NAT] Keepalive sent
+2026-11-13T17:11:25.361Z [NAT] Keepalive acknowledged (rtt=0 ms)
+2026-11-13T17:11:27.362Z [NAT] Keepalive sent
+2026-11-13T17:11:27.362Z [NAT] Keepalive acknowledged (rtt=0 ms)
+2026-11-13T17:11:28.338Z [STATE] Exiting after operational hold (run.exit_when_operational, 5 s)
+2026-11-13T17:11:28.338Z [UDP] Counters: tx=7 rx=2 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=6 frames=6

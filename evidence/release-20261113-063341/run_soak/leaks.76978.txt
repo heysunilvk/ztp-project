@@ -1,0 +1,26 @@
+Process 76978 is not debuggable. Due to security restrictions, leaks can only show or save contents of readonly memory of restricted processes.
+
+Process:         ztp-device [76978]
+Path:            /Users/USER/*/ztp-device
+Load Address:    0x100a2c000
+Identifier:      ztp-device
+Version:         0
+Code Type:       ARM64
+Platform:        macOS
+Parent Process:  bash [76966]
+
+Date/Time:       2026-11-13 08:41:02.316 -0800
+Launch Time:     2026-11-13 07:39:59.888 -0800
+OS Version:      macOS 14.7.1 (23H222)
+Report Version:  7
+Analysis Tool:   /usr/bin/leaks
+
+Physical footprint:         1825K
+Physical footprint (peak):  1825K
+Idle exit:                  untracked
+----
+
+leaks Report Version: 4.0
+Process 76978: 277 nodes malloced for 132 KB
+Process 76978: 0 leaks for 0 total leaked bytes.
+

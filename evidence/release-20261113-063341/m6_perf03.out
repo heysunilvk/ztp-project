@@ -1,0 +1,6 @@
+m6 TC-PERF-03 (3 seeds per loss rate)
+  loss  frames   sent     ratio    bound   result
+  0.10  264      305      1.16     1.23    PASS
+  0.20  272      368      1.35     1.56    PASS
+  0.30  280      469      1.68     2.04    PASS
+m6 TC-PERF-03: 3 passed, 0 failed

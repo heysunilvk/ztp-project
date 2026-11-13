@@ -1,32 +1,32 @@
-2026-11-13T14:29:36.068Z [CONFIG] profile=demo file=conf/server.json sha256=8b744a14daeeccef907752832f26e76810bec90e86eaf4441f8ab79edda168cc keepalive=2s grace=30s window=8 max_dgram=1200
-2026-11-13T14:29:36.069Z [PROVISION] Artifact 1: config v3, 2310 bytes, sha256=e0a7b0d079200c3e…
-2026-11-13T14:29:36.069Z [PROVISION] Artifact 2: firmware v1.1, 65536 bytes, sha256=c6861e6d6f876733…
-2026-11-13T14:29:36.069Z [PROVISION] Artifact 3: config v2, 1800 bytes, sha256=7d8edcc00f98ebb1…
-2026-11-13T14:29:36.069Z [PROVISION] Artifact 4: firmware v1.0, 49152 bytes, sha256=2d1a937e3095f8a4…
-2026-11-13T14:29:36.070Z [BOOT] Server listening on 0.0.0.0:38555 (discovery 0.0.0.0:38556, group 239.255.90.90)
-2026-11-13T14:29:36.193Z [UDP] [sid=3186086474 ZTP-670DA2] HELLO seq=1 received (serial ZTP-670DA2, EDGE-GW-100, v1.1), HELLO_ACK seq=1 sent
-2026-11-13T14:29:36.193Z [NAT] [sid=3186086474 ZTP-670DA2] Keepalive (path probe) acknowledged
-2026-11-13T14:29:36.193Z [UDP] [sid=3186086474 ZTP-670DA2] Session established
-2026-11-13T14:29:36.197Z [AUTH] [sid=3186086474 ZTP-670DA2] Registration successful
-2026-11-13T14:29:36.197Z [AUTH] [sid=3186086474 ZTP-670DA2] Assigned tenant: cruise_ops, fw v1.1, config 3
-2026-11-13T14:29:36.197Z [PROVISION] [sid=3186086474 ZTP-670DA2] Policy: EDGE-GW-100 -> fw v1.1, cfg 3, keepalive 2 s, grace 30 s (source: profile:demo)
-2026-11-13T14:29:36.197Z [DB]   ZTP-670DA2 Success fw=v1.1 cfg=3
-2026-11-13T14:29:36.204Z [PROVISION] [sid=3186086474 ZTP-670DA2] Sending config 3 (3 chunks)
-2026-11-13T14:29:36.212Z [PROVISION] [sid=3186086474 ZTP-670DA2] Config v3 delivered and verified by the device (max in flight 3)
-2026-11-13T14:29:36.215Z [STATE] [sid=3186086474 ZTP-670DA2] OPERATIONAL
-2026-11-13T14:29:44.490Z [NAT] [sid=3186086474 ZTP-670DA2] Session idle, entering grace
-2026-11-13T14:29:44.497Z [AUTH] [sid=3186086474 ZTP-670DA2] Resume accepted (ctr=1, epoch=1), no re-registration
-2026-11-13T14:29:47.616Z [BOOT] Server stopping
+2026-11-13T17:12:55.408Z [CONFIG] profile=demo file=conf/server.json sha256=8b744a14daeeccef907752832f26e76810bec90e86eaf4441f8ab79edda168cc keepalive=2s grace=30s window=8 max_dgram=1200
+2026-11-13T17:12:55.408Z [PROVISION] Artifact 1: config v3, 2310 bytes, sha256=e0a7b0d079200c3e…
+2026-11-13T17:12:55.409Z [PROVISION] Artifact 2: firmware v1.1, 65536 bytes, sha256=c6861e6d6f876733…
+2026-11-13T17:12:55.409Z [PROVISION] Artifact 3: config v2, 1800 bytes, sha256=7d8edcc00f98ebb1…
+2026-11-13T17:12:55.409Z [PROVISION] Artifact 4: firmware v1.0, 49152 bytes, sha256=2d1a937e3095f8a4…
+2026-11-13T17:12:55.409Z [BOOT] Server listening on 0.0.0.0:38555 (discovery 0.0.0.0:38556, group 239.255.90.90)
+2026-11-13T17:12:55.530Z [UDP] [sid=2279605784 ZTP-9215A1] HELLO seq=1 received (serial ZTP-9215A1, EDGE-GW-100, v1.1), HELLO_ACK seq=1 sent
+2026-11-13T17:12:55.530Z [NAT] [sid=2279605784 ZTP-9215A1] Keepalive (path probe) acknowledged
+2026-11-13T17:12:55.530Z [UDP] [sid=2279605784 ZTP-9215A1] Session established
+2026-11-13T17:12:55.536Z [AUTH] [sid=2279605784 ZTP-9215A1] Registration successful
+2026-11-13T17:12:55.536Z [AUTH] [sid=2279605784 ZTP-9215A1] Assigned tenant: cruise_ops, fw v1.1, config 3
+2026-11-13T17:12:55.536Z [PROVISION] [sid=2279605784 ZTP-9215A1] Policy: EDGE-GW-100 -> fw v1.1, cfg 3, keepalive 2 s, grace 30 s (source: profile:demo)
+2026-11-13T17:12:55.536Z [DB]   ZTP-9215A1 Success fw=v1.1 cfg=3
+2026-11-13T17:12:55.543Z [PROVISION] [sid=2279605784 ZTP-9215A1] Sending config 3 (3 chunks)
+2026-11-13T17:12:55.552Z [PROVISION] [sid=2279605784 ZTP-9215A1] Config v3 delivered and verified by the device (max in flight 3)
+2026-11-13T17:12:55.555Z [STATE] [sid=2279605784 ZTP-9215A1] OPERATIONAL
+2026-11-13T17:13:03.744Z [NAT] [sid=2279605784 ZTP-9215A1] Session idle, entering grace
+2026-11-13T17:13:03.750Z [AUTH] [sid=2279605784 ZTP-9215A1] Resume accepted (ctr=1, epoch=1), no re-registration
+2026-11-13T17:13:06.864Z [BOOT] Server stopping
 Device Registration Details
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
 | Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
-| ZTP-670DA2 | Success             | v1.1              | v3             | 2026-11-13 14:29:36 | —                |
+| ZTP-9215A1 | Success             | v1.1              | v3             | 2026-11-13 17:12:55 | —                |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
 Summary
-  Registered successfully : 1   ZTP-670DA2
+  Registered successfully : 1   ZTP-9215A1
   Failed registration     : 0  
   Firmware / config per device:
-    ZTP-670DA2  EDGE-GW-100  v1.1 (current)   cfg v3  cruise_ops
+    ZTP-9215A1  EDGE-GW-100  v1.1 (current)   cfg v3  cruise_ops
   Protocol counters: rx=10 tx=11 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 mac_fail=0 replay_rejected=0 rate_limited=0
-2026-11-13T14:29:47.622Z [UDP] Counters: tx=11 rx=10 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=5 mac_fail=0 replay_rejected=0 rate_limited=0 mtu_stepdowns=0 sessions_peak=1 srtt_ms=7 frames=8
+2026-11-13T17:13:06.869Z [UDP] Counters: tx=11 rx=10 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=5 mac_fail=0 replay_rejected=0 rate_limited=0 mtu_stepdowns=0 sessions_peak=1 srtt_ms=8 frames=8

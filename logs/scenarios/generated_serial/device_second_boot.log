@@ -1,9 +1,9 @@
-2026-11-13T14:29:35.018Z [BOOT] Device starting (boot #2)
-2026-11-13T14:29:35.019Z [BOOT] Soft serial loaded
-2026-11-13T14:29:35.019Z [BOOT] Soft serial: ZTP-093148
-2026-11-13T14:29:35.019Z [BOOT] Firmware version: v1.1
-2026-11-13T14:29:35.019Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
-2026-11-13T14:29:35.027Z [UDP] Resuming session 122833681 (ctr=1, proposed epoch 1, stage OPERATIONAL)
-2026-11-13T14:29:35.034Z [UDP] Session resumed (session_id=122833681) epoch=1
-2026-11-13T14:29:36.030Z [STATE] Exiting after operational hold (run.exit_when_operational, 1 s)
-2026-11-13T14:29:36.030Z [UDP] Counters: tx=2 rx=1 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=9 frames=1
+2026-11-13T17:12:54.358Z [BOOT] Device starting (boot #2)
+2026-11-13T17:12:54.359Z [BOOT] Soft serial loaded
+2026-11-13T17:12:54.359Z [BOOT] Soft serial: ZTP-847F06
+2026-11-13T17:12:54.359Z [BOOT] Firmware version: v1.1
+2026-11-13T17:12:54.359Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
+2026-11-13T17:12:54.364Z [UDP] Resuming session 621923040 (ctr=1, proposed epoch 1, stage OPERATIONAL)
+2026-11-13T17:12:54.371Z [UDP] Session resumed (session_id=621923040) epoch=1
+2026-11-13T17:12:55.367Z [STATE] Exiting after operational hold (run.exit_when_operational, 1 s)
+2026-11-13T17:12:55.367Z [UDP] Counters: tx=2 rx=1 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=7 frames=1

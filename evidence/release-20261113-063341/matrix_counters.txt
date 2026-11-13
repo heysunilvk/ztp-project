@@ -1,0 +1,13 @@
+# Per-row totals of every process's [UDP] Counters line (server and devices, all 10 seeds), from the full
+# release-run logs. Produced by:
+#   for row in M1 M2 M3 M4 M5 M8 M9; do cat run_matrix/$row.*/logs/server.log run_matrix/$row.*/logs/device_*.log \
+#     | grep '\[UDP\] Counters:' | sed 's/.*Counters: //' | awk '{for(i=1;i<=NF;i++){split($i,a,"="); v[a[1]]+=a[2]}} END {...}'; done
+# retx share = (retx_timeout + retx_fast) / tx
+row        tx   frames  retx_to retx_fast    dup    ooo retx_share
+M1       3350     2910        0        0      0      0     0.0%
+M2       4912     2922      343      240    225    740    11.9%
+M3       5738     2941      515      436    388   1009    16.6%
+M4       6173     2956      801      466    405   1065    20.5%
+M5       7286     3044     1552      495    610   1051    28.1%
+M8       4360     2918      656        0    293     28    15.0%
+M9       4981     2941      394      283    109    783    13.6%

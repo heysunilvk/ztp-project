@@ -1,0 +1,19 @@
+Device Registration Details
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+| Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            |
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 15:31:33 | —                |
+| ZTP-84BC19 | Failed              | —                 | —              | 2026-11-13 15:31:33 | Invalid HMAC     |
+| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-13 15:31:33 | Legacy device    |
+| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-13 15:31:33 | —                |
+| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-13 15:31:34 | —                |
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+Summary
+  Registered successfully : 4   ZTP-93AF21, ZTP-19FE77, ZTP-71DD08, ZTP-55AC90
+  Failed registration     : 1   ZTP-84BC19 (Invalid HMAC, 3 attempts)
+  Firmware / config per device:
+    ZTP-93AF21  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
+    ZTP-19FE77  EDGE-GW-050  v0.9 -> v1.0     cfg v2  cruise_ops  Legacy device
+    ZTP-71DD08  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
+    ZTP-55AC90  EDGE-GW-100  v1.1 (current)   cfg v3  cruise_ops
+  Protocol counters: rx=81 tx=310 retx_timeout=21 retx_fast=28 dup=6 ooo=0 out_of_window=0 mac_fail=5 replay_rejected=0 rate_limited=0

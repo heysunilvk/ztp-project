@@ -1,0 +1,38 @@
+2026-11-13T15:14:10.565Z [TEST] TEST HOOK ACTIVE: --bad-key
+2026-11-13T15:14:10.573Z [BOOT] Device starting (boot #1)
+2026-11-13T15:14:10.573Z [BOOT] Soft serial assigned (configuration)
+2026-11-13T15:14:10.573Z [BOOT] Soft serial: ZTP-84BC19
+2026-11-13T15:14:10.573Z [BOOT] Firmware version: v1.0
+2026-11-13T15:14:10.573Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
+2026-11-13T15:14:10.573Z [DISCOVERY] Using static server IP 127.0.0.1:42555
+2026-11-13T15:14:10.573Z [DISCOVERY] Provisioning server found 127.0.0.1:42555 (static)
+2026-11-13T15:14:10.573Z [UDP] HELLO sent (seq=1)
+2026-11-13T15:14:10.578Z [UDP] Session established (session_id=1280201876)
+2026-11-13T15:14:10.578Z [NAT] Keepalive sent
+2026-11-13T15:14:10.780Z [UDP] Retransmitting seq=2 (timeout)
+2026-11-13T15:14:11.181Z [UDP] Retransmitting seq=2 (timeout)
+2026-11-13T15:14:11.188Z [NAT] Keepalive acknowledged (rtt=610 ms)
+2026-11-13T15:14:11.188Z [AUTH] REGISTER: session_id=1280201876 soft_serial=ZTP-84BC19 model=EDGE-GW-100 firmware=v1.0 nonce=17549670942834584988
+2026-11-13T15:14:11.196Z [AUTH] Registration failed: Invalid HMAC (1/3)
+2026-11-13T15:14:11.197Z [UDP] Reconnecting in 0.1 s (registration rejected)
+2026-11-13T15:14:11.250Z [DISCOVERY] Using static server IP 127.0.0.1:42555
+2026-11-13T15:14:11.250Z [DISCOVERY] Provisioning server found 127.0.0.1:42555 (static)
+2026-11-13T15:14:11.250Z [UDP] HELLO sent (seq=1)
+2026-11-13T15:14:11.256Z [UDP] Session established (session_id=1041889901)
+2026-11-13T15:14:11.256Z [NAT] Keepalive sent
+2026-11-13T15:14:11.260Z [NAT] Keepalive acknowledged (rtt=4 ms)
+2026-11-13T15:14:11.260Z [AUTH] REGISTER: session_id=1041889901 soft_serial=ZTP-84BC19 model=EDGE-GW-100 firmware=v1.0 nonce=2963928693395822568
+2026-11-13T15:14:11.272Z [AUTH] Registration failed: Invalid HMAC (2/3)
+2026-11-13T15:14:11.272Z [UDP] Reconnecting in 0.5 s (registration rejected)
+2026-11-13T15:14:11.729Z [DISCOVERY] Using static server IP 127.0.0.1:42555
+2026-11-13T15:14:11.729Z [DISCOVERY] Provisioning server found 127.0.0.1:42555 (static)
+2026-11-13T15:14:11.729Z [UDP] HELLO sent (seq=1)
+2026-11-13T15:14:11.732Z [UDP] Session established (session_id=241655738)
+2026-11-13T15:14:11.732Z [NAT] Keepalive sent
+2026-11-13T15:14:11.738Z [NAT] Keepalive acknowledged (rtt=7 ms)
+2026-11-13T15:14:11.738Z [AUTH] REGISTER: session_id=241655738 soft_serial=ZTP-84BC19 model=EDGE-GW-100 firmware=v1.0 nonce=16148885409420896928
+2026-11-13T15:14:11.940Z [UDP] Retransmitting seq=3 (timeout)
+2026-11-13T15:14:11.947Z [AUTH] Registration failed: Invalid HMAC (3/3), giving up
+2026-11-13T15:14:11.952Z [STATE] Device is FAILED (reason: Invalid HMAC)
+2026-11-13T15:14:11.952Z [UDP] Counters: tx=12 rx=3 retx_timeout=3 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=3 frames=9
+2026-11-13T15:14:11.952Z [SIM] tx=12 dropped=1 (8.3%) reordered=0 duplicated=0 rx=9

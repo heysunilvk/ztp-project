@@ -373,20 +373,21 @@ Device Registration Details
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
 | Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
-| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-13 08:36:09 | Legacy device    |
-| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-13 08:36:09 | —                |
-| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-13 08:36:10 | —                |
-| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 08:36:11 | —                |
+| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-13 17:11:06 | —                |
+| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-13 17:11:06 | Legacy device    |
+| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-13 17:11:06 | —                |
+| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 17:11:06 | —                |
+| ZTP-84BC19 | Failed              | —                 | —              | 2026-11-13 17:11:07 | Invalid HMAC     |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
 Summary
-  Registered successfully : 4   ZTP-19FE77, ZTP-55AC90, ZTP-71DD08, ZTP-93AF21
-  Failed registration     : 0  
+  Registered successfully : 4   ZTP-55AC90, ZTP-19FE77, ZTP-71DD08, ZTP-93AF21
+  Failed registration     : 1   ZTP-84BC19 (Invalid HMAC, 3 attempts)
   Firmware / config per device:
-    ZTP-19FE77  EDGE-GW-050  v0.9 -> v1.0     cfg v2  cruise_ops  Legacy device
     ZTP-55AC90  EDGE-GW-100  v1.1 (current)   cfg v3  cruise_ops
+    ZTP-19FE77  EDGE-GW-050  v0.9 -> v1.0     cfg v2  cruise_ops  Legacy device
     ZTP-71DD08  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
     ZTP-93AF21  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
-  Protocol counters: rx=84 tx=327 retx_timeout=17 retx_fast=45 dup=14 ooo=3 out_of_window=0 mac_fail=0 replay_rejected=0 rate_limited=0
+  Protocol counters: rx=83 tx=320 retx_timeout=21 retx_fast=38 dup=7 ooo=2 out_of_window=0 mac_fail=3 replay_rejected=0 rate_limited=0
 ```
 
 **Compared with the PDF's example dump:**
@@ -473,8 +474,8 @@ configuration is required; the NAT and firewall stay the customer's or ISP's.
 |---|---|---|---|
 | 0% | 1.00 | — | Baseline |
 | 10% | ≤ 1.23 | 1.16 | Mostly fast retransmits; barely visible |
-| 20% | ≤ 1.56 | 1.36 | A few timeout stalls; time to OPERATIONAL still far under 60 s |
-| 30% | ≤ 2.04 | 1.76 | Slower; an occasional session failure, then an automatic resume |
+| 20% | ≤ 1.56 | 1.35 | A few timeout stalls; time to OPERATIONAL still far under 60 s |
+| 30% | ≤ 2.04 | 1.68 | Slower; an occasional session failure, then an automatic resume |
 | 50% | ≤ 4.00 | not run | Expected: frequent session failures, converging slowly through resumes. Matrix row M6 (50%) is not part of the release run, so this row is a prediction, not a measurement |
 
 In detail: a lost HELLO or REGISTER is retransmitted with identical bytes and answered idempotently; lost
@@ -484,7 +485,7 @@ production timers a false "dead session" needs about 14 consecutive failed round
 budget tears the session down and the device resumes it with jittered backoff, keeping every chunk it has.
 Loss never corrupts state: frames are MAC-checked, handlers are idempotent and progress is written
 atomically. Measured on the demo at 20% loss with 10% reordering and 5% duplication (matrix row M4 × 20 runs on the Mac,
-TC-PERF-02): median 3.4 s and p95 8.7 s from first boot to OPERATIONAL. (DESIGN §8, §9.3, §11.4)
+TC-PERF-02): median 3.9 s and p95 10.6 s from first boot to OPERATIONAL. (DESIGN §8, §9.3, §11.4)
 
 ---
 
@@ -542,10 +543,10 @@ reports only move forward.
 **The PDF's bonus log lines** appear in the logs (checked by TC-LOG-02), for example from
 `logs/device_ZTP-19FE77.log`:
 ```
-2026-11-13T08:36:10.270Z [UDP] Received packet seq=11 (out of order, expected=9)
-2026-11-13T08:36:10.270Z [UDP] Buffered packet seq=11
-2026-11-13T08:36:10.304Z [UDP] Duplicate packet seq=12 ignored
-2026-11-13T08:36:10.832Z [UDP] Retransmitting seq=10 (timeout)
+2026-11-13T17:11:07.060Z [UDP] Received packet seq=9 (out of order, expected=7)
+2026-11-13T17:11:07.060Z [UDP] Buffered packet seq=9
+2026-11-13T17:11:07.264Z [UDP] Duplicate packet seq=7 ignored
+2026-11-13T17:11:07.541Z [UDP] Retransmitting seq=9 (timeout)
 ```
 
 ### B1. How does your implementation handle out-of-order packets?
@@ -600,36 +601,36 @@ the start of a line (some lines add detail after the PDF's words, such as `(rtt=
 
 ```
 # Step 1
-2026-11-13T08:36:26.792Z [BOOT] Device starting (boot #1)
-2026-11-13T08:36:26.793Z [BOOT] Soft serial: ZTP-93AF21
-2026-11-13T08:36:26.793Z [BOOT] Firmware version: v1.0
+2026-11-13T17:11:23.099Z [BOOT] Device starting (boot #1)
+2026-11-13T17:11:23.099Z [BOOT] Soft serial: ZTP-93AF21
+2026-11-13T17:11:23.099Z [BOOT] Firmware version: v1.0
 # Step 2
-2026-11-13T08:36:26.793Z [DISCOVERY] Using static server IP 127.0.0.1:5555
+2026-11-13T17:11:23.100Z [DISCOVERY] Using static server IP 127.0.0.1:5555
 # Step 3
-2026-11-13T08:36:26.793Z [UDP] HELLO sent (seq=1)
-2026-11-13T08:36:26.793Z [UDP] Session established (session_id=7421)
+2026-11-13T17:11:23.100Z [UDP] HELLO sent (seq=1)
+2026-11-13T17:11:23.100Z [UDP] Session established (session_id=7421)
 # Step 4
-2026-11-13T08:36:26.793Z [NAT] Keepalive sent
-2026-11-13T08:36:26.793Z [NAT] Keepalive acknowledged (rtt=0 ms)
+2026-11-13T17:11:23.100Z [NAT] Keepalive sent
+2026-11-13T17:11:23.100Z [NAT] Keepalive acknowledged (rtt=0 ms)
 # Step 5
-2026-11-13T08:36:26.793Z [AUTH] REGISTER: session_id=7421 soft_serial=ZTP-93AF21 model=EDGE-GW-100 firmware=v1.0 nonce=5955615554674051909
-2026-11-13T08:36:26.797Z [AUTH] Registration successful
-2026-11-13T08:36:26.797Z [AUTH] Assigned tenant: cruise_ops
+2026-11-13T17:11:23.100Z [AUTH] REGISTER: session_id=7421 soft_serial=ZTP-93AF21 model=EDGE-GW-100 firmware=v1.0 nonce=16416830223895452106
+2026-11-13T17:11:23.102Z [AUTH] Registration successful
+2026-11-13T17:11:23.102Z [AUTH] Assigned tenant: cruise_ops
 # Step 6
-2026-11-13T08:36:26.804Z [PROVISION] Receiving config (chunk 1/3)
-2026-11-13T08:36:26.804Z [PROVISION] Receiving config (chunk 2/3)
-2026-11-13T08:36:26.804Z [PROVISION] Receiving config (chunk 3/3)
-2026-11-13T08:36:26.807Z [PROVISION] Config checksum verified
+2026-11-13T17:11:23.111Z [PROVISION] Receiving config (chunk 1/3)
+2026-11-13T17:11:23.111Z [PROVISION] Receiving config (chunk 2/3)
+2026-11-13T17:11:23.111Z [PROVISION] Receiving config (chunk 3/3)
+2026-11-13T17:11:23.112Z [PROVISION] Config checksum verified
 # Step 7
-2026-11-13T08:36:26.813Z [UPGRADE] Current: v1.0 -> Target: v1.1
-2026-11-13T08:36:26.999Z [UPGRADE] Upgrade complete, restarting device
+2026-11-13T17:11:23.118Z [UPGRADE] Current: v1.0 -> Target: v1.1
+2026-11-13T17:11:23.310Z [UPGRADE] Upgrade complete, restarting device
 # Step 8
-2026-11-13T08:36:27.007Z [BOOT] Restart detected (pending upgrade to v1.1)
-2026-11-13T08:36:27.022Z [UDP] Session resumed (session_id=7421) epoch=1
+2026-11-13T17:11:23.318Z [BOOT] Restart detected (pending upgrade to v1.1)
+2026-11-13T17:11:23.334Z [UDP] Session resumed (session_id=7421) epoch=1
 # Step 9
-2026-11-13T08:36:27.022Z [VALIDATION] Configuration present (v3, sha ok)
-2026-11-13T08:36:27.022Z [VALIDATION] Firmware v1.1 verified
-2026-11-13T08:36:27.030Z [STATE] Device is OPERATIONAL
+2026-11-13T17:11:23.334Z [VALIDATION] Configuration present (v3, sha ok)
+2026-11-13T17:11:23.334Z [VALIDATION] Firmware v1.1 verified
+2026-11-13T17:11:23.343Z [STATE] Device is OPERATIONAL
 ```
 
 One difference from the PDF: the Step 5 nonce is random (`nonce=` a 64-bit value), not the PDF's 984312.
@@ -881,29 +882,29 @@ there can be copied into a root shell on any Linux machine.
 where it ran and a link to the output.
 
 ### 17.1 The release run
-[evidence/release-20261112-220052/](evidence/release-20261112-220052/) holds the final release regression: `make
-release` on commit **0b2e460**, on the development Mac (Darwin arm64, Apple clang 16.0.0), 2026-11-12 22:00 PST
-to 2026-11-13 00:39 PST, with no sleep during the run (checked against `pmset`'s log; the result is the last line
-of `summary.txt`). The device and server code there is the submitted code; commits after it change only tests,
-scripts and documents. [evidence/README.md](evidence/README.md) lists every file.
+[evidence/release-20261113-063341/](evidence/release-20261113-063341/) holds the final release regression: `make
+release` on commit **86d8ac2**, on the development Mac (Darwin arm64, Apple clang 16.0.0), 2026-11-13 06:33 to
+09:13 PST, with no sleep during the run (checked against `pmset`'s log; the result is the last line of
+`summary.txt`). Its device and server code is the submitted code. [evidence/README.md](evidence/README.md) lists
+every file.
 
 | Step | Result | Time | Output |
 |---|---|---|---|
-| `make test` (16 suites) | PASS | 16 min | 1090 unit checks and 633 scenario checks, 0 failed |
-| `make asan` (the same 16) | PASS | 17 min | 0 failed, no sanitizer report |
-| matrix: M1–M5, M8, M9 × 10 seeds | PASS | 24 min | every row 10/10 runs and 40/40 valid devices OPERATIONAL (4 per run; the fifth, ZTP-84BC19, must and does end FAILED); medians 0.3 / 1.6 / 2.7 / 4.3 / 11.0 / 1.4 / 1.6 s |
-| perf02: M4 × 20 (TC-PERF-02) | PASS | 6 min | 80/80 OPERATIONAL, median 3.4 s, p95 8.7 s (limits 60 / 90 s) |
-| scale: 50 devices (TC-PERF-01) | PASS | 26 s | 50 OPERATIONAL in 21 s, server peak RSS 9 MB |
+| `make test` (16 suites) | PASS | 17 min | 1090 unit checks and 646 scenario checks, 0 failed |
+| `make asan` (the same 16) | PASS | 18 min | 0 failed, no sanitizer report |
+| matrix: M1–M5, M8, M9 × 10 seeds | PASS | 25 min | every row 10/10 runs and 40/40 valid devices OPERATIONAL (4 per run; the fifth, ZTP-84BC19, must and does end FAILED); medians 0.4 / 1.4 / 3.0 / 4.8 / 12.0 / 1.3 / 1.6 s |
+| perf02: M4 × 20 (TC-PERF-02) | PASS | 7 min | 80/80 OPERATIONAL, median 3.9 s, p95 10.6 s (limits 60 / 90 s) |
+| scale: 50 devices (TC-PERF-01) | PASS | 29 s | 50 OPERATIONAL in 24 s, server peak RSS 9 MB |
 | soak: 1 h, 5 devices (TC-PERF-04) | PASS | 61 min | RSS lower at the end than after warm-up for all 6 processes, `leaks` 0, 0 session timeouts |
 | longrun (TC-NAT-07, TC-NAT-13) | PASS | 30 min | 30 min at 20% loss, production timers: 0 session timeouts, 1 REGISTER |
-| demo | PASS | 17 s | 34 checks; `logs/` regenerated |
-| appendix-a | PASS | 90 s | 8 checks; `logs/appendix_a/` regenerated |
-| scenario-logs | PASS | 14 s | 10 checks; `logs/scenarios/` regenerated |
+| demo | PASS | 17 s | 38 checks, five devices (ZTP-84BC19 Failed / "Invalid HMAC"); `logs/` regenerated |
+| appendix-a | PASS | 91 s | 8 checks; `logs/appendix_a/` regenerated |
+| scenario-logs | PASS | 13 s | 10 checks; `logs/scenarios/` regenerated |
 
 Earlier release runs are not the evidence; evidence/README.md lists them and what each one found (two harness
-bugs, timing-sensitive demo checks, two device defects in the PMTU black-hole detector, a run during which the Mac
-slept, and, after the external-style review, the fixes in 0b2e460). To reproduce: `make release` (about 2.5 h;
-keep the Mac awake, lid open and on power).
+bugs, timing-sensitive demo checks, three defects in the device's PMTU black-hole detector, a run during which
+the Mac slept, and the review fixes and the `--bad-key` hook). To reproduce: `make release` (about 2.7 h; keep the
+Mac awake, lid open and on power).
 
 ### 17.2 CI
 [.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every push, every night (03:17 UTC, with the
@@ -986,8 +987,8 @@ Appendix A Step 5 nonce literal 984312. (The wrong-key device, TC-AUTH-03 and th
 **Waived.** TC-SIM-04 (macOS dummynet) needs `sudo` to replace the firewall rules and was not run; TC-SIM-03
 (netem on CI) and the in-code simulator cover the same behaviour.
 
-The result of every case, where it ran and the output that shows it: [TEST_REPORT.md](TEST_REPORT.md) (139 PASS,
-10 partial, 15 open, 1 waived, 0 failed). Per requirement: the traceability matrix in QA §10.
+The result of every case, where it ran and the output that shows it: [TEST_REPORT.md](TEST_REPORT.md) (144 PASS,
+6 partial, 14 open, 1 waived, 0 failed). Per requirement: the traceability matrix in QA §10.
 
 ---
 

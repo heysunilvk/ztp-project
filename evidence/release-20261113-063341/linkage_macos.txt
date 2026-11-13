@@ -1,0 +1,6 @@
+# TC-DEL-01: libraries the binaries link (macOS, otool -L), built from 86d8ac2 (the release-run commit).
+# (Linux: CI builds the same sources with -Werror; no ldd listing is committed.)
+build/ztp-server:
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+build/ztp-device:
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
