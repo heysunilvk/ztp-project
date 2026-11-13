@@ -15,6 +15,7 @@ fail=0
 step() { "$@" || fail=$((fail + 1)); }
 
 echo "release regression: $RESULTS"
+t0=$(date '+%Y-%m-%d %H:%M:%S')
 step make --no-print-directory test
 step make --no-print-directory asan
 step $SUITE matrix env OUT="$RESULTS/run_matrix" ROWS="M1 M2 M3 M4 M5 M8 M9" SEEDS="$SEEDS" sh scripts/run_matrix.sh
@@ -29,6 +30,17 @@ step make --no-print-directory appendix-a
 echo
 cat "$RESULTS/summary.txt"
 [ -f "$RESULTS/asan/summary.txt" ] && { echo; echo "ASan build:"; tail -n +7 "$RESULTS/asan/summary.txt"; }
+# A sleeping Mac freezes every process and makes timers jump: timed suites then fail, or pass on numbers that
+# mean nothing (M6, M7). caffeinate cannot hold a closed lid, so the power log is checked for the run's window.
+if command -v pmset > /dev/null 2>&1; then
+    slept=$(pmset -g log 2>/dev/null | awk -v t0="$t0" 'substr($0, 1, 19) >= t0 && / Sleep +\t?Entering Sleep/' | wc -l | tr -d ' ')
+    if [ "${slept:-0}" -gt 0 ]; then
+        echo "host:     slept $slept time(s) during the run: timings and timed suites are not valid" | tee -a "$RESULTS/summary.txt"
+        fail=$((fail + 1))
+    else
+        echo "host:     no sleep during the run (pmset log)" >> "$RESULTS/summary.txt"
+    fi
+fi
 echo
 [ "$fail" -eq 0 ] && echo "release regression PASS ($RESULTS)" || echo "release regression: $fail step(s) FAILED ($RESULTS)"
 [ "$fail" -eq 0 ]

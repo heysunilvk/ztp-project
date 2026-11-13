@@ -2,10 +2,10 @@ Device Registration Details
 +------------+---------------------+-------------------+----------------+---------------------+------------------+-------------+------------+------------+-------------+----------+-----------------+---------------------+-----------------------+-----------------------------------------+
 | Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            | Model       | FW Initial | Tenant     | Stage       | Attempts | Failed Attempts | Last Seen           | Last Source           | Provisioning Notes                      |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+-------------+------------+------------+-------------+----------+-----------------+---------------------+-----------------------+-----------------------------------------+
-| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-12 18:28:08 | Legacy device    | EDGE-GW-050 | v0.9       | cruise_ops | OPERATIONAL | 1        | 0               | 2026-11-12 18:28:13 | 127.0.0.1:57020       | Resumed after upgrade                   |
-| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-12 18:28:08 | —                | EDGE-GW-100 | v1.1       | cruise_ops | OPERATIONAL | 1        | 0               | 2026-11-12 18:28:22 | 127.0.0.1:64658       | —                                       |
-| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-12 18:28:08 | —                | EDGE-GW-100 | v1.0       | cruise_ops | OPERATIONAL | 1        | 0               | 2026-11-12 18:28:14 | 127.0.0.1:50893       | Transfer resumed; Resumed after upgrade |
-| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-12 18:28:09 | —                | EDGE-GW-100 | v1.0       | cruise_ops | OPERATIONAL | 1        | 0               | 2026-11-12 18:28:15 | 127.0.0.1:55068       | Resumed after upgrade                   |
+| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-13 00:12:38 | Legacy device    | EDGE-GW-050 | v0.9       | cruise_ops | OPERATIONAL | 1        | 0               | 2026-11-13 00:12:44 | 127.0.0.1:59569       | Resumed after upgrade                   |
+| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-13 00:12:38 | —                | EDGE-GW-100 | v1.1       | cruise_ops | OPERATIONAL | 1        | 0               | 2026-11-13 00:12:53 | 127.0.0.1:62154       | —                                       |
+| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-13 00:12:38 | —                | EDGE-GW-100 | v1.0       | cruise_ops | OPERATIONAL | 1        | 0               | 2026-11-13 00:12:45 | 127.0.0.1:65193       | Transfer resumed; Resumed after upgrade |
+| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 00:12:40 | —                | EDGE-GW-100 | v1.0       | cruise_ops | OPERATIONAL | 1        | 0               | 2026-11-13 00:12:46 | 127.0.0.1:63906       | Resumed after upgrade                   |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+-------------+------------+------------+-------------+----------+-----------------+---------------------+-----------------------+-----------------------------------------+
 Summary
   Registered successfully : 4   ZTP-19FE77, ZTP-55AC90, ZTP-71DD08, ZTP-93AF21
@@ -15,4 +15,4 @@ Summary
     ZTP-55AC90  EDGE-GW-100  v1.1 (current)   cfg v3  cruise_ops
     ZTP-71DD08  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
     ZTP-93AF21  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
-  Protocol counters: rx=78 tx=316 retx_timeout=13 retx_fast=45 dup=8 ooo=5 out_of_window=0 mac_fail=0 replay_rejected=0 rate_limited=0
+  Protocol counters: rx=80 tx=308 retx_timeout=12 retx_fast=36 dup=10 ooo=2 out_of_window=0 mac_fail=0 replay_rejected=0 rate_limited=0

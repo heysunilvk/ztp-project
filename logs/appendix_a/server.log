@@ -1,30 +1,30 @@
-2026-11-12T18:28:25.005Z [ERROR] TEST HOOK ACTIVE: --first-session-id
-2026-11-12T18:28:25.005Z [CONFIG] profile=demo file=conf/server.json sha256=8b744a14daeeccef907752832f26e76810bec90e86eaf4441f8ab79edda168cc keepalive=2s grace=30s window=8 max_dgram=1200
-2026-11-12T18:28:25.005Z [PROVISION] Artifact 1: config v3, 2310 bytes, sha256=aa1db15e2926b52b…
-2026-11-12T18:28:25.005Z [PROVISION] Artifact 2: firmware v1.1, 65536 bytes, sha256=c6861e6d6f876733…
-2026-11-12T18:28:25.006Z [BOOT] Server listening on 127.0.0.1:5555 (discovery 0.0.0.0:5556, group 239.255.90.90)
-2026-11-12T18:28:25.130Z [UDP] [sid=7421 ZTP-93AF21] HELLO seq=1 received (serial ZTP-93AF21, EDGE-GW-100, v1.0), HELLO_ACK seq=1 sent
-2026-11-12T18:28:25.131Z [NAT] [sid=7421 ZTP-93AF21] Keepalive (path probe) acknowledged
-2026-11-12T18:28:25.131Z [UDP] [sid=7421 ZTP-93AF21] Session established
-2026-11-12T18:28:25.135Z [AUTH] [sid=7421 ZTP-93AF21] Registration successful
-2026-11-12T18:28:25.135Z [AUTH] [sid=7421 ZTP-93AF21] Assigned tenant: cruise_ops, fw v1.1, config 3
-2026-11-12T18:28:25.135Z [PROVISION] [sid=7421 ZTP-93AF21] Policy: EDGE-GW-100 -> fw v1.1, cfg 3, keepalive 2 s, grace 30 s (source: profile:demo)
-2026-11-12T18:28:25.135Z [DB]   ZTP-93AF21 Success fw=v1.1 cfg=3
-2026-11-12T18:28:25.143Z [PROVISION] [sid=7421 ZTP-93AF21] Sending config 3 (3 chunks)
-2026-11-12T18:28:25.153Z [PROVISION] [sid=7421 ZTP-93AF21] Config v3 delivered and verified by the device (max in flight 3)
-2026-11-12T18:28:25.153Z [PROVISION] [sid=7421 ZTP-93AF21] Sending firmware v1.1 (64 chunks)
-2026-11-12T18:28:25.309Z [PROVISION] [sid=7421 ZTP-93AF21] Firmware v1.1 delivered and verified by the device (max in flight 8)
-2026-11-12T18:28:25.311Z [UPGRADE] [sid=7421 ZTP-93AF21] Device installing v1.1, awaiting resume (grace 30 s)
-2026-11-12T18:28:25.352Z [NAT] [sid=7421 ZTP-93AF21] Peer address changed 127.0.0.1:50874 -> 127.0.0.1:64825 (rebinding)
-2026-11-12T18:28:25.354Z [AUTH] [sid=7421 ZTP-93AF21] Resume accepted (ctr=1, epoch=1), no re-registration
-2026-11-12T18:28:25.359Z [UPGRADE] [sid=7421 ZTP-93AF21] Device running v1.1 after the upgrade
-2026-11-12T18:28:25.362Z [STATE] [sid=7421 ZTP-93AF21] OPERATIONAL
-2026-11-12T18:28:30.366Z [BOOT] Server stopping
+2026-11-13T00:12:55.406Z [ERROR] TEST HOOK ACTIVE: --first-session-id
+2026-11-13T00:12:55.406Z [CONFIG] profile=demo file=conf/server.json sha256=8b744a14daeeccef907752832f26e76810bec90e86eaf4441f8ab79edda168cc keepalive=2s grace=30s window=8 max_dgram=1200
+2026-11-13T00:12:55.406Z [PROVISION] Artifact 1: config v3, 2310 bytes, sha256=aa1db15e2926b52b…
+2026-11-13T00:12:55.407Z [PROVISION] Artifact 2: firmware v1.1, 65536 bytes, sha256=c6861e6d6f876733…
+2026-11-13T00:12:55.407Z [BOOT] Server listening on 127.0.0.1:5555 (discovery 0.0.0.0:5556, group 239.255.90.90)
+2026-11-13T00:12:55.525Z [UDP] [sid=7421 ZTP-93AF21] HELLO seq=1 received (serial ZTP-93AF21, EDGE-GW-100, v1.0), HELLO_ACK seq=1 sent
+2026-11-13T00:12:55.525Z [NAT] [sid=7421 ZTP-93AF21] Keepalive (path probe) acknowledged
+2026-11-13T00:12:55.525Z [UDP] [sid=7421 ZTP-93AF21] Session established
+2026-11-13T00:12:55.531Z [AUTH] [sid=7421 ZTP-93AF21] Registration successful
+2026-11-13T00:12:55.531Z [AUTH] [sid=7421 ZTP-93AF21] Assigned tenant: cruise_ops, fw v1.1, config 3
+2026-11-13T00:12:55.531Z [PROVISION] [sid=7421 ZTP-93AF21] Policy: EDGE-GW-100 -> fw v1.1, cfg 3, keepalive 2 s, grace 30 s (source: profile:demo)
+2026-11-13T00:12:55.531Z [DB]   ZTP-93AF21 Success fw=v1.1 cfg=3
+2026-11-13T00:12:55.540Z [PROVISION] [sid=7421 ZTP-93AF21] Sending config 3 (3 chunks)
+2026-11-13T00:12:55.546Z [PROVISION] [sid=7421 ZTP-93AF21] Config v3 delivered and verified by the device (max in flight 3)
+2026-11-13T00:12:55.546Z [PROVISION] [sid=7421 ZTP-93AF21] Sending firmware v1.1 (64 chunks)
+2026-11-13T00:12:55.711Z [PROVISION] [sid=7421 ZTP-93AF21] Firmware v1.1 delivered and verified by the device (max in flight 8)
+2026-11-13T00:12:55.713Z [UPGRADE] [sid=7421 ZTP-93AF21] Device installing v1.1, awaiting resume (grace 30 s)
+2026-11-13T00:12:55.752Z [NAT] [sid=7421 ZTP-93AF21] Peer address changed 127.0.0.1:54995 -> 127.0.0.1:50849 (rebinding)
+2026-11-13T00:12:55.755Z [AUTH] [sid=7421 ZTP-93AF21] Resume accepted (ctr=1, epoch=1), no re-registration
+2026-11-13T00:12:55.761Z [UPGRADE] [sid=7421 ZTP-93AF21] Device running v1.1 after the upgrade
+2026-11-13T00:12:55.764Z [STATE] [sid=7421 ZTP-93AF21] OPERATIONAL
+2026-11-13T00:13:00.767Z [BOOT] Server stopping
 Device Registration Details
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
 | Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
-| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-12 18:28:25 | —                |
+| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 00:12:55 | —                |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
 Summary
   Registered successfully : 1   ZTP-93AF21
@@ -32,4 +32,4 @@ Summary
   Firmware / config per device:
     ZTP-93AF21  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
   Protocol counters: rx=17 tx=78 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 mac_fail=0 replay_rejected=0 rate_limited=0
-2026-11-12T18:28:30.379Z [UDP] Counters: tx=78 rx=17 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 replay_rejected=0 rate_limited=0 mtu_stepdowns=0 sessions_peak=1 srtt_ms=14 frames=73
+2026-11-13T00:13:00.780Z [UDP] Counters: tx=78 rx=17 retx_timeout=0 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 replay_rejected=0 rate_limited=0 mtu_stepdowns=0 sessions_peak=1 srtt_ms=15 frames=73

@@ -130,9 +130,9 @@ demo: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	BIN=$(BUILD) $(KEEP_AWAKE) $(SUITE) demo sh scripts/run_demo.sh
 
 # Timing-sensitive runs must not be frozen by the Mac's idle sleep (a sleeping process looks like a stalled
-# one: M6 traced an intermittent TC-REL-11 failure to it). caffeinate -i holds an idle-sleep assertion while
-# the command runs; elsewhere it is empty.
-KEEP_AWAKE := $(shell command -v caffeinate > /dev/null 2>&1 && echo "caffeinate -i")
+# one: M6 traced an intermittent TC-REL-11 failure to it). caffeinate -is holds idle- and system-sleep assertions
+# while the command runs (-s only on AC power; closing a laptop lid still sleeps it); elsewhere it is empty.
+KEEP_AWAKE := $(shell command -v caffeinate > /dev/null 2>&1 && echo "caffeinate -is")
 
 # TC-PERF-01: N devices at 15% loss (make scale N=50); TC-PERF-04: 5 devices for an hour, RSS and leaks.
 N ?= 50
