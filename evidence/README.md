@@ -48,3 +48,7 @@ committed. `make release` recreates all of this in `results/<date-time>-release/
 The `evidence` job of [the CI workflow](../.github/workflows/ci.yml) writes a Markdown report for each run
 (every job's result, duration and link, its steps and its notices) with `scripts/ci_evidence.sh`. Nightly and
 manual runs on `main` commit it here; every run also shows it on the run page and uploads it. See README §17.2.
+
+| Report | Run | Result |
+|---|---|---|
+| [2026-11-13-ddfc8fb-run47.md](ci/2026-11-13-ddfc8fb-run47.md) | manual, ddfc8fb | all 11 test jobs passed; matrix M1–M4 × 10 seeds on Ubuntu and macOS, TC-PERF-01/02 |
