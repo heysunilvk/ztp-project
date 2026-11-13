@@ -1,0 +1,2 @@
+demo: skipped (open tooling, QA §12.5): S2 ZTP-84BC19 (needs --bad-key); S3 REGISTER replays (needs --replay-test); TC-SRV-05 failure count (needs S2); 
+demo PASS (34 checks, seed 19)

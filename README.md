@@ -842,9 +842,27 @@ there can be copied into a root shell on any Linux machine.
 ## 17. Test evidence and CI
 
 ### 17.1 The release run
-[evidence/](evidence/) holds the final release regression, run on the development Mac before submission:
+[evidence/release-20261112/](evidence/release-20261112/) holds the final release regression: `make release` on
+commit **b936db3** (the submitted code), on the development Mac (Darwin arm64, Apple clang 16.0.0), 2026-11-12
+16:16–18:55 PST, with no sleep during the run (checked against `pmset`'s log). [evidence/README.md](evidence/README.md)
+lists every file.
 
-*(Filled in from the release run.)*
+| Step | Result | Time | Output |
+|---|---|---|---|
+| `make test` (16 suites) | PASS | 15 min | 1082 unit checks and 618 scenario checks, 0 failed |
+| `make asan` (the same 16) | PASS | 17 min | 0 failed, no sanitizer report |
+| matrix: M1–M5, M8, M9 × 10 seeds | PASS | 26 min | every run 40/40 devices OPERATIONAL; medians 0.3 / 1.4 / 2.4 / 4.5 / 9.6 / 1.5 / 1.9 s |
+| perf02: M4 × 20 (TC-PERF-02) | PASS | 7 min | 80/80 OPERATIONAL, median 3.8 s, p95 9.3 s (limits 60 / 90 s) |
+| scale: 50 devices (TC-PERF-01) | PASS | 22 s | 50 OPERATIONAL in 18 s, server peak RSS 8 MB |
+| soak: 1 h, 5 devices (TC-PERF-04) | PASS | 61 min | RSS lower at the end than after warm-up for all 6 processes, `leaks` 0, 0 session timeouts |
+| longrun (TC-NAT-07, TC-NAT-13) | PASS | 30 min | 30 min at 20% loss, production timers: 0 session timeouts, 1 REGISTER |
+| demo | PASS | 17 s | 34 checks; `logs/` regenerated |
+| appendix-a | PASS | 90 s | 8 checks; `logs/appendix_a/` regenerated |
+
+Three earlier release runs are not the evidence and are listed in evidence/README.md. 3f9a06c found two
+harness bugs and three timing-sensitive demo checks. 821d134 passed, but its logs showed false PMTU black-hole
+step-downs under loss, a device bug fixed in DESIGN §5.8. a1c5bd3 ran while the Mac slept. To reproduce:
+`make release` (about 2.5 h; keep the Mac awake and on power).
 
 ### 17.2 CI
 [.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every push, every night (03:17 UTC, with the
@@ -868,7 +886,15 @@ notice) into Markdown, shows it on the run page, uploads it, and on nightly and 
 Run history: https://github.com/heysunilvk/ztp-project/actions. To regenerate a report for any run:
 `scripts/ci_evidence.sh <run-id> out.md` (needs `curl` and `jq`; public runs need no token).
 
-*(Filled in from the release run.)*
+CI on the final commits (every job on Ubuntu gcc and clang, macOS, both ASan builds, the platform, matrix,
+netem and valgrind jobs, and the evidence report):
+
+| Commit | Run | Result |
+|---|---|---|
+| 821d134 | [43252475092](https://github.com/heysunilvk/ztp-project/actions/runs/43252475092) | 12/12 jobs green |
+| a1c5bd3 | [43285234948](https://github.com/heysunilvk/ztp-project/actions/runs/43285234948) | 12/12 jobs green |
+| b936db3 | [43335677454](https://github.com/heysunilvk/ztp-project/actions/runs/43335677454) | every test step passed; `build-test (macos)` failed on its *Upload results* step, a transient storage error. Uploads have since been marked `continue-on-error`, so the tests alone decide a job |
+| __FINAL__ | __FINALRUN__ | __FINALRES__ |
 
 ---
 

@@ -1,0 +1,5 @@
+pcapcheck selftest: lo0 (DLT_NULL), clean              -> ok
+pcapcheck selftest: lo (Ethernet), clean               -> ok
+pcapcheck selftest: gap in a reliable stream           -> ok
+pcapcheck selftest: an IP fragment                     -> ok
+pcapcheck selftest: a non-ZTP datagram on the port     -> ok

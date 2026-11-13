@@ -2,10 +2,10 @@ Device Registration Details
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
 | Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
-| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-13 00:12:38 | Legacy device    |
-| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-13 00:12:38 | —                |
-| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-13 00:12:38 | —                |
-| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 00:12:40 | —                |
+| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-13 02:52:54 | Legacy device    |
+| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-13 02:52:54 | —                |
+| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-13 02:52:54 | —                |
+| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 02:52:55 | —                |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
 Summary
   Registered successfully : 4   ZTP-19FE77, ZTP-55AC90, ZTP-71DD08, ZTP-93AF21
@@ -15,4 +15,4 @@ Summary
     ZTP-55AC90  EDGE-GW-100  v1.1 (current)   cfg v3  cruise_ops
     ZTP-71DD08  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
     ZTP-93AF21  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
-  Protocol counters: rx=80 tx=308 retx_timeout=12 retx_fast=36 dup=10 ooo=2 out_of_window=0 mac_fail=0 replay_rejected=0 rate_limited=0
+  Protocol counters: rx=77 tx=324 retx_timeout=25 retx_fast=43 dup=7 ooo=4 out_of_window=0 mac_fail=0 replay_rejected=0 rate_limited=0

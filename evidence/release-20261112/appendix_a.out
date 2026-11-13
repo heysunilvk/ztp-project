@@ -1,0 +1,3 @@
+Appendix A reference run (127.0.0.1:5555)
+  reference run logs copied to logs/appendix_a
+Appendix A checks: 8 passed, 0 failed (Step 5 nonce value not checked: --nonce is open tooling, QA §12.5)

@@ -1,0 +1,3 @@
+m2 session tests (ports 25555/25556)
+  TC-DISC-05: skipped (BCAST not set)
+m2 session tests: 68 passed, 0 failed

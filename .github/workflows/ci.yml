@@ -58,6 +58,7 @@ jobs:
           done
       - name: Upload results
         if: always()
+        continue-on-error: true   # a storage hiccup must not fail the job; the tests decide (b936db3)
         uses: actions/upload-artifact@v5
         with:
           name: results-build-test-${{ matrix.os }}-${{ matrix.cc }}
@@ -95,6 +96,7 @@ jobs:
           done
       - name: Upload results
         if: always()
+        continue-on-error: true   # a storage hiccup must not fail the job; the tests decide (b936db3)
         uses: actions/upload-artifact@v5
         with:
           name: results-asan-${{ matrix.os }}
@@ -224,6 +226,7 @@ jobs:
           done
       - name: Upload results
         if: always()
+        continue-on-error: true   # a storage hiccup must not fail the job; the tests decide (b936db3)
         uses: actions/upload-artifact@v5
         with:
           name: results-platform-linux
@@ -276,6 +279,7 @@ jobs:
           done
       - name: Upload results
         if: always()
+        continue-on-error: true   # a storage hiccup must not fail the job; the tests decide (b936db3)
         uses: actions/upload-artifact@v5
         with:
           name: results-impair-matrix-${{ matrix.os }}
@@ -319,6 +323,7 @@ jobs:
           done
       - name: Upload results
         if: always()
+        continue-on-error: true   # a storage hiccup must not fail the job; the tests decide (b936db3)
         uses: actions/upload-artifact@v5
         with:
           name: results-impair-netem
@@ -353,6 +358,7 @@ jobs:
           done
       - name: Upload results
         if: always()
+        continue-on-error: true   # a storage hiccup must not fail the job; the tests decide (b936db3)
         uses: actions/upload-artifact@v5
         with:
           name: results-valgrind
@@ -402,6 +408,7 @@ jobs:
           cat "$f" >> "$GITHUB_STEP_SUMMARY"
           echo "REPORT=$f" >> "$GITHUB_ENV"
       - name: Upload the report
+        continue-on-error: true
         uses: actions/upload-artifact@v5
         with:
           name: ci-evidence
