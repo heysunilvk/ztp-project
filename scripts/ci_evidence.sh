@@ -21,7 +21,11 @@ get "$API/actions/runs/$RUN" > "$T/run.json" || { echo "ci_evidence: cannot read
 get "$API/actions/runs/$RUN/jobs?per_page=100" > "$T/all.json" || exit 1
 jq '.jobs |= map(select(.name != ($ENV.SKIP_JOB // "")))' "$T/all.json" > "$T/jobs.json" || exit 1
 {
-    jq -r '"# CI run \(.run_number) — \(.conclusion // .status)\n",
+    # The evidence job runs inside the run it reports, so the run itself is still in progress: the headline
+    # comes from the other jobs' results.
+    verdict=$(jq -r '[.jobs[] | .conclusion // .status] | if all(. == "success") then "all \(length) jobs passed"
+        else "\(map(select(. != "success")) | length) of \(length) jobs did not pass" end' "$T/jobs.json")
+    jq -r --arg v "$verdict" '"# CI run \(.run_number): \($v)\n",
         "| | |", "|---|---|",
         "| Run | [\(.id)](\(.html_url)) (attempt \(.run_attempt)) |",
         "| Commit | `\(.head_sha[0:7])` \(.head_commit.message | split("\n")[0]) |",
@@ -31,9 +35,9 @@ jq '.jobs |= map(select(.name != ($ENV.SKIP_JOB // "")))' "$T/all.json" > "$T/jo
     echo
     echo "| Job | Result | Time | Log |"
     echo "|---|---|---|---|"
-    jq -r '.jobs[] | "| \(.name) | \(.conclusion // .status) | \(if .completed_at and .started_at then
-        (((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601)) / 60 | floor | tostring) + " min" else "" end)
-        | [job](\(.html_url)) |"' "$T/jobs.json"
+    jq -r '.jobs[] | (if .completed_at and .started_at then (((.completed_at | fromdateiso8601)
+        - (.started_at | fromdateiso8601)) / 60 | floor | tostring) + " min" else "" end) as $t
+        | "| \(.name) | \(.conclusion // .status) | \($t) | [job](\(.html_url)) |"' "$T/jobs.json"
     echo
     jq -r '.jobs[] | "\(.id)\t\(.name)"' "$T/jobs.json" | while IFS="$(printf '\t')" read -r id name; do
         echo "## $name"
