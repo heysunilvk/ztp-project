@@ -125,7 +125,7 @@ test: $(TEST_BIN) $(SERVER_BIN) $(DEVICE_BIN) $(PEER_SIM) $(PCAPCHECK) artifacts
 	@$(SUITE) separation $(MAKE) --no-print-directory check-separation BUILD=$(BUILD)
 	@echo "all suites passed; results in $(RESULTS)/summary.txt"
 
-# The 5-device demo (DESIGN §19.3; QA TC-SRV-01, TC-E2E-02 with SEED=1..10): writes logs/ and state/.
+# The demo, four of the PDF's five devices (S2 needs the unbuilt --bad-key hook; DESIGN §19.3; QA TC-SRV-01, TC-E2E-02 with SEED=1..10): writes logs/ and state/.
 demo: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	BIN=$(BUILD) $(KEEP_AWAKE) $(SUITE) demo sh scripts/run_demo.sh
 

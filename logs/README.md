@@ -1,7 +1,8 @@
 # Committed logs
 
-The PDF asks for server and client logs (Expected Submission §3). Everything here was written by the release
-regression run that `evidence/release-20261112/` records (`make release`; README §17.1); `make demo`,
+The PDF asks for server and client logs (Expected Submission §3). Everything here except `appendix_a/linux-10.10.10.5/`
+(from CI, below) was written by the release regression run that `evidence/release-20261112-220052/` records
+(`make release`; README §17.1); `make demo`,
 `make appendix-a` and `make scenario-logs` regenerate it. Every line starts with an ISO-8601 UTC timestamp and a
 `[TAG]` (README §14.3).
 

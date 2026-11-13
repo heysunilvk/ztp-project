@@ -5,7 +5,7 @@
 | Document | PRD_ZTP.md (Product Manager persona) |
 | Version | 1.0, as delivered (M7) |
 | Date | 2026-11-12 (first draft 2026-11-10) |
-| Status | Final for submission; open items in R-15 and the waivers in QA §11 M7 row |
+| Status | Final for submission; open items in R-15 and the waivers in the QA §12.1 M7 gate row |
 | Owner | Sunil Vallamkonda (Product Manager) |
 | Companion documents | [DESIGN.md](DESIGN.md) (Architect: how it is built) · [QA_TEST_PLAN.md](QA_TEST_PLAN.md) (QA: how it is proven) |
 | Source of truth for requirements | `UDP‑Based Zero Touch Provisioning (ZTP) Assignment.pdf` (referred to below as "the PDF") |
@@ -100,7 +100,7 @@ The PDF says reviewers care about *"reasoning and tradeoffs more than feature co
 |---|---|---|---|---|
 | SM-1 | Valid devices that reach OPERATIONAL under 20% loss, 10% reorder and 5% duplication | **100%** across 10 seeded runs | ZTP-NFR-03 | TC-REL-09, TC-E2E-02 |
 | SM-2 | Duplicate registrations after an upgrade restart, a NAT rebind or a session timeout | **0** | ZTP-FR-23 | TC-UPG-03/04, TC-NAT-05 |
-| SM-3 | Forged, tampered or replayed registrations accepted | **0** (100% rejected) | ZTP-FR-13/14 | TC-AUTH-03..08 (as delivered: the logic is built and reviewed, but five of these six cases are open, R-15; TEST_REPORT §6) |
+| SM-3 | Forged, tampered or replayed registrations accepted | **0** (100% rejected) | ZTP-FR-13/14 | TC-AUTH-03..08 (as delivered: the logic is built and reviewed, but all six cases are open, R-15; TEST_REPORT §6) |
 | SM-4 | Median time from boot to OPERATIONAL per device at 20% loss (demo timers) | **≤ 60 s** (p95 ≤ 90 s) | ZTP-NFR-04 | TC-PERF-02 |
 | SM-5 | Concurrent devices provisioned in one run | **≥ 50**, server RSS ≤ 64 MB | ZTP-NFR-05 | TC-PERF-01 |
 | SM-6 | IP fragments on the wire | **0**; every datagram ≤ 1200 B | ZTP-FR-20, NFR-02 | TC-PROV-04/05 |

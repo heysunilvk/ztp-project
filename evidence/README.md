@@ -17,12 +17,17 @@ result as the last line of `summary.txt`.
 | `run_matrix/M3.1/logs/` | One complete run kept whole: every server and device log, under 15% loss, 10% reorder and 5% duplication (the demo configuration) |
 | `perf02/M4.<seed>/` | TC-PERF-02: row M4 × 20 seeds, the same files as above |
 | `matrix_counters.txt` | Per-row totals of every process's `[UDP] Counters:` line (transmissions, retransmissions, duplicates, out-of-order), with the command that produced them; TEST_REPORT §2 quotes it |
+| `linkage_macos.txt` | TC-DEL-01: `otool -L` of both binaries (only libSystem) |
 | `run_scale/` | TC-PERF-01: the dump and log checks for 50 devices |
 | `run_soak/` | TC-PERF-04: the dump and the macOS `leaks` report for each of the 6 processes after the hour (0 leaks each). The reports' binary paths were shortened to `./build/…` before committing; `leaks` itself already writes the home folder as `/Users/USER` |
 
 The steps' own working folders (state directories, journals, the other 69 matrix runs' full logs; about 120 MB)
 are not committed. `make release` recreates all of this in `results/<date-time>-release/`. The committed logs in
-`logs/` were written by this run's last three steps (`demo`, `appendix_a`, `scenario_logs`).
+`logs/` were written by this run's last three steps (`demo`, `appendix_a`, `scenario_logs`), except
+`logs/appendix_a/linux-10.10.10.5/`, which comes from CI. Two scripts changed after this run, neither in what it
+checks: `scripts/run_demo.sh` now removes only its own files from `logs/` (the run's demo had removed
+`logs/README.md`, since restored), and `tests/m4_provision.sh` labels the device-limit check TC-PROV-13 instead
+of TC-PROV-10.
 
 ### Results
 
@@ -42,8 +47,8 @@ are not committed. `make release` recreates all of this in `results/<date-time>-
 
 | Commit | Result | Why it is not the evidence |
 |---|---|---|
-| 3f9a06c | 3 steps failed | Two test-harness bugs and three timing-sensitive matrix checks; fixed in 821d134 |
-| 821d134 | 23/23 PASS | Its logs showed false PMTU black-hole step-downs under loss; the device was fixed in a1c5bd3 (DESIGN §5.8) |
+| 3f9a06c | 3 steps failed | Two test-harness bugs, timing-sensitive demo checks, and a device defect: a false PMTU black-hole step-down under loss (matrix M3 seed 3); fixed in 821d134 |
+| 821d134 | 23/23 PASS | Its logs still showed two false step-downs: buffered full-size chunks were not counted as data; fixed in a1c5bd3 (DESIGN §5.8) |
 | a1c5bd3 | 3 steps failed | The Mac slept during the run (59 sleeps in `pmset`'s log); the sleep check was added in b936db3 |
 | b936db3 | 23/23 PASS | Superseded: an external-style review then found and fixed 11 code defects, a missing feature (the forced re-key) and weak tests (0b2e460; TEST_REPORT §4) |
 
@@ -57,4 +62,5 @@ jobs were green. See README §17.2.
 
 | Report | Run | Result |
 |---|---|---|
+| [2026-11-13-23757cd-run52.md](ci/2026-11-13-23757cd-run52.md) | manual, 23757cd (the final code) | all 11 test jobs passed; matrix M1–M4 × 10 seeds on Ubuntu and macOS, TC-PERF-01/02, netem × 10 |
 | [2026-11-13-ddfc8fb-run47.md](ci/2026-11-13-ddfc8fb-run47.md) | manual, ddfc8fb | all 11 test jobs passed; matrix M1–M4 × 10 seeds on Ubuntu and macOS, TC-PERF-01/02 |

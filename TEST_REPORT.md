@@ -34,8 +34,8 @@ TC-DEL-02 Partial). The demo runs four of the PDF's five devices.
 |---|---|---|
 | `make release` on `0b2e460`, 2026-11-12 22:00 → 2026-11-13 00:39 PST | Development Mac (Darwin arm64, Apple clang 16.0.0), no sleep during the run | 24/24 steps PASS; ASan build 16/16 ([summary.txt](evidence/release-20261112-220052/summary.txt)) |
 | CI run on `0b2e460` (push) | GitHub Actions: Ubuntu gcc and clang, macOS clang, ASan on both, platform, matrix, netem, valgrind | 12/12 jobs green ([run 43375735275](https://github.com/heysunilvk/ztp-project/actions/runs/43375735275)); the 10.10.10.5 Appendix A logs from it are in [logs/appendix_a/linux-10.10.10.5/](logs/appendix_a/linux-10.10.10.5/) |
-| CI run 47 on `ddfc8fb` (manual, nightly seed counts) | The same jobs, 10-seed matrix | 12/12 green ([report](evidence/ci/2026-11-13-ddfc8fb-run47.md)); referenced below for the CI-only cases, whose code is unchanged since |
-| Fresh clone | Development Mac | `make`: no warnings; `make demo`: PASS (TC-DEL-01, TC-DEL-04) |
+| CI run 52 on `23757cd` (manual, nightly seed counts) | The same jobs, 10-seed matrix, TC-PERF-01/02, netem × 10 | 12/12 green ([report](evidence/ci/2026-11-13-23757cd-run52.md)); referenced below for the CI-only cases (the device and server code is that of 0b2e460) |
+| Fresh clone of `6903ab4` (the code of 0b2e460) | Development Mac | `make`: no warnings; `make demo`: PASS (TC-DEL-01, TC-DEL-04) |
 
 ## 2. Impairment matrix (QA §6)
 
@@ -53,11 +53,11 @@ whole in `run_matrix/M3.1/logs/`).
 | M4 | 20% loss, 10% reorder, 5% dup, 5±2 ms | 10/10 | 40/40 | 4.3 s | 9.7 s | 19.8% | 1017 / 372 | PASS |
 | M5 | 30% loss, 20% reorder, 10% dup (stress, ≥ 95% required) | 10/10 | 40/40 | 11.0 s | 35.4 s | 27.4% | 1076 / 596 | PASS |
 | M6 | 50% loss | not run | | | | | | not part of the release run |
-| M7 | 15% loss correlated 25%, 10% reorder, 5% dup, 5 ms (kernel netem, CI Ubuntu) | 10/10 (CI run 47) | all | | | | | PASS |
+| M7 | 15% loss correlated 25%, 10% reorder, 5% dup, 5 ms (kernel netem, CI Ubuntu) | 10/10 (CI run 52) | all | | | | | PASS |
 | M8 | 20% loss device → server only | 10/10 | 40/40 | 1.4 s | 5.6 s | 14.6% | 26 / 296 | PASS |
 | M9 | 20% loss server → device only | 10/10 | 40/40 | 1.6 s | 5.7 s | 13.7% | 760 / 124 | PASS |
 
-In CI (run 47) rows M1–M4 × 10 seeds passed on Ubuntu and macOS with every device OPERATIONAL. Every run also
+In CI (run 52) rows M1–M4 × 10 seeds passed on Ubuntu and macOS with every device OPERATIONAL. Every run also
 checks the invariants: no duplicate DB rows, no second REGISTER after a restart, and every artifact hash of an
 OPERATIONAL device verified (`tests/check_invariants.sh`). The PMTU black-hole detector re-requested chunks in
 8 of the 360 device runs of the matrix and perf02 and never stepped down falsely (DESIGN §5.8).
@@ -66,8 +66,8 @@ OPERATIONAL device verified (`tests/check_invariants.sh`). The PMTU black-hole d
 
 | Case | Measure | Target | Result |
 |---|---|---|---|
-| TC-PERF-01 | 50 devices at 15% loss | all OPERATIONAL ≤ 120 s, server RSS ≤ 64 MB | 50/50 in 21 s, peak RSS 9 MB (Mac); 26 s, 5 MB (CI macOS, run 47) |
-| TC-PERF-02 | Time to OPERATIONAL, row M4 × 20 | median ≤ 60 s, p95 ≤ 90 s | median 3.4 s, p95 8.7 s (Mac); 3.8 s / 13.3 s (CI macOS, run 47) |
+| TC-PERF-01 | 50 devices at 15% loss | all OPERATIONAL ≤ 120 s, server RSS ≤ 64 MB | 50/50 in 21 s, peak RSS 9 MB (Mac); 17 s, 5 MB (CI macOS) and 24 s, 8 MB (CI Ubuntu), run 52 |
+| TC-PERF-02 | Time to OPERATIONAL, row M4 × 20 | median ≤ 60 s, p95 ≤ 90 s | median 3.4 s, p95 8.7 s (Mac); 3.7 s / 9.6 s (CI macOS) and 3.9 s / 10.5 s (CI Ubuntu), run 52 |
 | TC-PERF-03 | Transmissions per frame at 10 / 20 / 30% loss | within 10% of the model 1.23 / 1.56 / 2.04 | 1.16 / 1.36 / 1.76 ([m6_perf03.out](evidence/release-20261112-220052/m6_perf03.out)) |
 | TC-PERF-04 | 1 h soak, 5 devices | no RSS growth, no leaks | every process's RSS lower at the end than after warm-up (server 1024 → 928 kB); `leaks`: 0 in all 6 processes; 9155 keepalives, 0 session timeouts; valgrind (CI, 3 min): clean |
 | TC-NAT-07 | 30 min at 20% loss, production timers | 0 session timeouts | 0 timeouts, 87 keepalives, 1 REGISTER |
@@ -130,7 +130,7 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 | TC-DISC-02 | Soft serial loaded on later boots, and assigned by configuration | FR-01 | P1 | ✅ PASS | `m2_session` (Mac; CI build-test ×3, asan ×2); `scenario_logs` (Mac; [logs/scenarios/](logs/scenarios/)) | [m2_session.out](evidence/release-20261112-220052/m2_session.out), [scenario_logs.out](evidence/release-20261112-220052/scenario_logs.out) |
 | TC-DISC-03 | Static IP discovery | FR-02 | P1 | ✅ PASS | `m2_session` (Mac; CI build-test ×3, asan ×2) | [m2_session.out](evidence/release-20261112-220052/m2_session.out) |
 | TC-DISC-04 | Multicast discovery | BON-01 | P1 | ✅ PASS | `m2_session` (Mac; CI build-test ×3, asan ×2) | [m2_session.out](evidence/release-20261112-220052/m2_session.out) |
-| TC-DISC-05 | Broadcast discovery | BON-01 | P2 | ⚠ Partial | `m2_session` (Mac; CI build-test ×3, asan ×2); CI `build-test` (Ubuntu): broadcast, part (b) | [m2_session.out](evidence/release-20261112-220052/m2_session.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) — part (b), broadcast on Ubuntu CI, runs; part (a), broadcast on the Mac, is skipped (no BCAST address set locally) |
+| TC-DISC-05 | Broadcast discovery | BON-01 | P2 | ⚠ Partial | `m2_session` (Mac; CI build-test ×3, asan ×2); CI `build-test` (Ubuntu): broadcast, part (b) | [m2_session.out](evidence/release-20261112-220052/m2_session.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) — part (b), broadcast on Ubuntu CI, runs; part (a), broadcast on the Mac, is skipped (no BCAST address set locally) |
 | TC-DISC-06 | Fallback to static | BON-01 | P1 | ✅ PASS | `m2_session` (Mac; CI build-test ×3, asan ×2) | [m2_session.out](evidence/release-20261112-220052/m2_session.out) |
 | TC-DISC-07 | Forged OFFER ignored | BON-01, NFR-06 | P1 | ✅ PASS | `m2_peer` (Mac; CI build-test ×3, asan ×2) | [m2_peer.out](evidence/release-20261112-220052/m2_peer.out) |
 | TC-DISC-08 | Replayed OFFER ignored | BON-01 | P2 | ✅ PASS | `m2_peer` (Mac; CI build-test ×3, asan ×2) | [m2_peer.out](evidence/release-20261112-220052/m2_peer.out) |
@@ -153,7 +153,7 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 
 | Case | Title | Req | Pri | Result | Where it ran | Evidence |
 |---|---|---|---|---|---|---|
-| TC-REL-01 | Every frame carries a seq | FR-05, BON-02 | P1 | ✅ PASS | CI `platform-linux`: packet capture checked frame by frame | [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| TC-REL-01 | Every frame carries a seq | FR-05, BON-02 | P1 | ✅ PASS | CI `platform-linux`: packet capture checked frame by frame | [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
 | TC-REL-02 | Retransmission on timeout | FR-06, FR-07, BON-03 | P1 | ✅ PASS | `m2_session` (Mac; CI build-test ×3, asan ×2) | [m2_session.out](evidence/release-20261112-220052/m2_session.out) |
 | TC-REL-03 | The PDF scenario, reproduced verbatim: seq 2 lost, seq 3 buffered, duplicate of seq 2 | BON-04, BON-08 | P1 | ✅ PASS | `unit`, `m2_peer` (Mac; CI build-test ×3, asan ×2) | [unit.out](evidence/release-20261112-220052/unit.out), [m2_peer.out](evidence/release-20261112-220052/m2_peer.out) |
 | TC-REL-04 | Lost ACK: data received | BON-07, BON-05 | P1 | ✅ PASS | `m3_register` (Mac; CI build-test ×3, asan ×2) | [m3_register.out](evidence/release-20261112-220052/m3_register.out) |
@@ -161,7 +161,7 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 | TC-REL-06 | Window limit respected | FR-06 | P1 | ✅ PASS | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
 | TC-REL-07 | Fast retransmit | FR-06 | P2 | ✅ PASS | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
 | TC-REL-08 | Out-of-window frames dropped | NFR-07 | P2 | ✅ PASS | `m2_peer` (Mac; CI build-test ×3, asan ×2) | [m2_peer.out](evidence/release-20261112-220052/m2_peer.out) |
-| TC-REL-09 | Completes at 10/15/20% loss | FR-09, NFR-03 | P1 | ✅ PASS | `matrix` (Mac: M1–M5, M8, M9 × 10); CI `impair-matrix` (Ubuntu, macOS) | [matrix.out](evidence/release-20261112-220052/matrix.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| TC-REL-09 | Completes at 10/15/20% loss | FR-09, NFR-03 | P1 | ✅ PASS | `matrix` (Mac: M1–M5, M8, M9 × 10); CI `impair-matrix` (Ubuntu, macOS) | [matrix.out](evidence/release-20261112-220052/matrix.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
 | TC-REL-10 | Heavy reordering | BON-04 | P1 | ✅ PASS | `m5_gate` (Mac; CI build-test ×3, asan ×2) | [m5_gate.out](evidence/release-20261112-220052/m5_gate.out) |
 | TC-REL-11 | No ACK loops | FR-07 | P2 | ✅ PASS | `m3_register` (Mac; CI build-test ×3, asan ×2) | [m3_register.out](evidence/release-20261112-220052/m3_register.out) |
 
@@ -179,7 +179,7 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 | TC-NAT-13 | False timeouts with demo timers recover cleanly | FR-11, FR-23 | P2 | ✅ PASS | `longrun` (Mac) | [longrun.out](evidence/release-20261112-220052/longrun.out) |
 | TC-NAT-08 | NAT idle timeout shorter than the keepalive | FR-36, FR-35, FR-11 | P1 | ✅ PASS | `m5_gate` (Mac; CI build-test ×3, asan ×2) | [m5_gate.out](evidence/release-20261112-220052/m5_gate.out) |
 | TC-NAT-09 | NAT reboot: all mappings flushed | FR-36, FR-23 | P1 | ✅ PASS | `m5_gate` (Mac; CI build-test ×3, asan ×2) | [m5_gate.out](evidence/release-20261112-220052/m5_gate.out) |
-| TC-NAT-10 | Public IP change | FR-36 | P2 | ✅ PASS | `m5_upgrade` (Mac; CI build-test ×3, asan ×2); CI `build-test` (Ubuntu): strict-IP resume needs 127.0.0.2, which macOS lacks (the Mac run prints "skipped") | [m5_upgrade.out](evidence/release-20261112-220052/m5_upgrade.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| TC-NAT-10 | Public IP change | FR-36 | P2 | ✅ PASS | `m5_upgrade` (Mac; CI build-test ×3, asan ×2); CI `build-test` (Ubuntu): strict-IP resume needs 127.0.0.2, which macOS lacks (the Mac run prints "skipped") | [m5_upgrade.out](evidence/release-20261112-220052/m5_upgrade.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
 | TC-NAT-11 | Outbound UDP blocked by a customer firewall | FR-36, A-09 | P1 | ✅ PASS | `m2_session` (Mac; CI build-test ×3, asan ×2) | [m2_session.out](evidence/release-20261112-220052/m2_session.out) |
 | TC-NAT-12 | A replayed valid frame from a new address can't move the peer | NFR-06, FR-14, FR-11 | P1 | ⚠ Partial | `m2_peer` (Mac; CI build-test ×3, asan ×2) | [m2_peer.out](evidence/release-20261112-220052/m2_peer.out) — KEEPALIVE half passes; the CHUNK_REQ replay half needs a replay tool |
 
@@ -210,15 +210,15 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 | TC-PROV-01 | Config in chunks with hash | FR-15, FR-17, FR-18 | P1 | ✅ PASS | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
 | TC-PROV-02 | Config is valid JSON | FR-15 | P1 | ✅ PASS | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
 | TC-PROV-03 | Firmware in chunks with hash | FR-16, FR-17, FR-18 | P1 | ✅ PASS | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
-| TC-PROV-04 | Datagram size cap | FR-20, NFR-02 | P1 | ✅ PASS | CI `platform-linux`: packet capture | [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
-| TC-PROV-05 | DF set, no IP fragments | FR-20 | P1 | ✅ PASS | `unit` (Mac; CI build-test ×3, asan ×2); CI `platform-linux`: packet capture | [unit.out](evidence/release-20261112-220052/unit.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| TC-PROV-04 | Datagram size cap | FR-20, NFR-02 | P1 | ✅ PASS | CI `platform-linux`: packet capture | [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
+| TC-PROV-05 | DF set, no IP fragments | FR-20 | P1 | ✅ PASS | `unit` (Mac; CI build-test ×3, asan ×2); CI `platform-linux`: packet capture | [unit.out](evidence/release-20261112-220052/unit.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
 | TC-PROV-06 | Chunk boundaries | FR-17 | P1 | ✅ PASS | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
 | TC-PROV-07 | Hash mismatch handling | FR-18 | P1 | ✅ PASS | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
 | TC-PROV-08 | Resume after kill -9 | FR-19 | P1 | ✅ PASS | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
 | TC-PROV-09 | Resume after a server restart | FR-19, FR-23 | P1 | ✅ PASS | `m5_gate` (Mac; CI build-test ×3, asan ×2) | [m5_gate.out](evidence/release-20261112-220052/m5_gate.out) |
 | TC-PROV-10 | Artifact changed between attempts | FR-18, FR-19 | P2 | ✅ PASS | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
 | TC-PROV-11 | Duplicate chunks are harmless | BON-05 | P1 | ✅ PASS | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
-| TC-PROV-12 | 1280-byte MTU path: no fallback needed | FR-20, NFR-02 | P1 | ✅ PASS | CI `platform-linux`: loopback MTU 1280 | [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| TC-PROV-12 | 1280-byte MTU path: no fallback needed | FR-20, NFR-02 | P1 | ✅ PASS | CI `platform-linux`: loopback MTU 1280 | [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
 | TC-PROV-13 | Small-MTU path: step-down to 508 B | FR-20, FR-19 | P1 | ⚠ Partial | `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) — parts (b) and (c) run on the Mac and in CI; part (a), a real 576-byte MTU path, needs a CI job that was not built |
 
 ### Upgrade and restart (UPG)
@@ -269,17 +269,17 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 |---|---|---|---|---|---|---|
 | TC-SIM-01 | Observed loss rate, per direction and end to end | BON-06 | P1 | ✅ PASS | `m2_peer` (Mac; CI build-test ×3, asan ×2) | [m2_peer.out](evidence/release-20261112-220052/m2_peer.out) |
 | TC-SIM-02 | Reordering and duplication are observable | BON-06 | P1 | ✅ PASS | `m2_session`, `m4_provision` (Mac; CI build-test ×3, asan ×2) | [m2_session.out](evidence/release-20261112-220052/m2_session.out), [m4_provision.out](evidence/release-20261112-220052/m4_provision.out) |
-| TC-SIM-03 | The netem alternative | BON-06 | P2 | ✅ PASS | CI `impair-netem` | [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| TC-SIM-03 | The netem alternative | BON-06 | P2 | ✅ PASS | CI `impair-netem` | [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
 | TC-SIM-04 | The macOS dummynet alternative | BON-06 | P2 | ⚠ Waived | — | Waived: macOS dummynet needs `sudo`; TC-SIM-03 and the in-code simulator cover it |
 
 ### Performance (PERF)
 
 | Case | Title | Req | Pri | Result | Where it ran | Evidence |
 |---|---|---|---|---|---|---|
-| TC-PERF-01 | 50 concurrent devices | NFR-05, FR-28 | P1 | ✅ PASS | `scale` (Mac); CI `impair-matrix` (Ubuntu, macOS) | [scale.out](evidence/release-20261112-220052/scale.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
-| TC-PERF-02 | Time to OPERATIONAL | NFR-04 | P1 | ✅ PASS | `matrix` (Mac: M1–M5, M8, M9 × 10); CI `impair-matrix` (Ubuntu, macOS) | [matrix.out](evidence/release-20261112-220052/matrix.out), [perf02.out](evidence/release-20261112-220052/perf02.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| TC-PERF-01 | 50 concurrent devices | NFR-05, FR-28 | P1 | ✅ PASS | `scale` (Mac); CI `impair-matrix` (Ubuntu, macOS) | [scale.out](evidence/release-20261112-220052/scale.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
+| TC-PERF-02 | Time to OPERATIONAL | NFR-04 | P1 | ✅ PASS | `matrix` (Mac: M1–M5, M8, M9 × 10); CI `impair-matrix` (Ubuntu, macOS) | [matrix.out](evidence/release-20261112-220052/matrix.out), [perf02.out](evidence/release-20261112-220052/perf02.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
 | TC-PERF-03 | Retransmission overhead against the model | FR-09 | P3 | ✅ PASS | `m6_perf03` (Mac; CI build-test ×3, asan ×2) | [m6_perf03.out](evidence/release-20261112-220052/m6_perf03.out) |
-| TC-PERF-04 | Soak with no leaks | NFR-07 | P2 | ✅ PASS | `soak` (Mac, 1 h); CI `valgrind`: 3 min under memcheck | [soak.out](evidence/release-20261112-220052/soak.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| TC-PERF-04 | Soak with no leaks | NFR-07 | P2 | ✅ PASS | `soak` (Mac, 1 h); CI `valgrind`: 3 min under memcheck | [soak.out](evidence/release-20261112-220052/soak.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
 
 ### Logs (LOG)
 
@@ -294,10 +294,10 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 
 | Case | Title | Req | Pri | Result | Where it ran | Evidence |
 |---|---|---|---|---|---|---|
-| TC-DEL-01 | Clean build on both platforms | DEL-02, NFR-01, NFR-11 | P1 | ✅ PASS | Fresh clone, `make` (M7, b936db3) and CI build jobs | no warnings; links only libSystem / libc |
+| TC-DEL-01 | Clean build on both platforms | DEL-02, NFR-01, NFR-11 | P1 | ✅ PASS | Fresh clone of 6903ab4, `make` (0 warnings), and the CI build jobs (Ubuntu gcc and clang, macOS clang; `-Werror`) | the binaries link only the C library: [linkage_macos.txt](evidence/release-20261112-220052/linkage_macos.txt) |
 | TC-DEL-02 | The demo produces its artifacts | DEL-01, DEL-09, DEL-10, DEL-11 | P1 | ⚠ Partial | `make demo` (Mac, release run) | [demo.out](evidence/release-20261112-220052/demo.out), [logs/](logs/) — 4 of 5 device logs; ZTP-84BC19 needs `--bad-key` |
 | TC-DEL-03 | Device/server separation | DEL-03 | P1 | ✅ PASS | `make check-separation` (suite `separation`) | [separation.out](evidence/release-20261112-220052/separation.out) |
-| TC-DEL-04 | The README quick start works | DEL-05 | P1 | ✅ PASS | Fresh clone, README quick start (M7, b936db3) | `make` and `make demo` PASS |
+| TC-DEL-04 | The README quick start works | DEL-05 | P1 | ✅ PASS | Fresh clone of 6903ab4, README quick start | `make` and `make demo` PASS |
 | TC-DEL-05 | README: 5 required answers | DEL-06 | P1 | ✅ PASS | README §11 (review) | Q1–Q5 present |
 | TC-DEL-06 | README: design sections | DEL-07 | P1 | ✅ PASS | README §4–§10 (review) | all 6 design topics present |
 | TC-DEL-07 | README: bonus coverage | DEL-08 | P1 | ✅ PASS | README §13 (review) | 3 topics and B1–B4 present |
@@ -310,15 +310,15 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 | Case | Title | Req | Pri | Result | Where it ran | Evidence |
 |---|---|---|---|---|---|---|
 | TC-E2E-01 | Appendix A flow, single device | FR-33, FR-01..27 | P1 | ✅ PASS | `check_appendix_a` (Mac and CI) | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out) |
-| TC-E2E-02 | Full demo under impairment | FR-28..32, NFR-03 | P1 | ⚠ Partial | `matrix` (Mac: M1–M5, M8, M9 × 10); CI `impair-matrix` (Ubuntu, macOS) | [matrix.out](evidence/release-20261112-220052/matrix.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) — all devices OPERATIONAL in every run; ZTP-71DD08 failed_attempts = 1 needs `--replay-test` |
+| TC-E2E-02 | Full demo under impairment | FR-28..32, NFR-03 | P1 | ⚠ Partial | `matrix` (Mac: M1–M5, M8, M9 × 10); CI `impair-matrix` (Ubuntu, macOS) | [matrix.out](evidence/release-20261112-220052/matrix.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) — all devices OPERATIONAL in every run; ZTP-71DD08 failed_attempts = 1 needs `--replay-test` |
 
 ### Conformance with PDF Appendix A (APX), one test per step
 
 | Case | Title | Req | Pri | Result | Where it ran | Evidence |
 |---|---|---|---|---|---|---|
 | TC-APX-01 | Step 1: Device boot (device information: ZTP-93AF21, EDGE-GW-100, v1.0) | FR-01, FR-33 | P1 | ✅ PASS | `check_appendix_a` (Mac; CI build-test ×3, asan ×2) | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out) |
-| TC-APX-02 | Step 2: Server discovery (static IP 10.10.10.5, UDP port 5555) | FR-02, FR-33 | P1 | ✅ PASS | `check_appendix_a` (Mac; CI build-test ×3, asan ×2); CI `platform-linux`: on 10.10.10.5:5555 | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
-| TC-APX-03 | Step 3: UDP session (HELLO seq=1 with soft_serial; HELLO_ACK seq=1 with session_id=7421) | FR-03, FR-04, FR-05, FR-33 | P1 | ✅ PASS | `check_appendix_a` (Mac; CI build-test ×3, asan ×2); CI `platform-linux`: on 10.10.10.5:5555 | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| TC-APX-02 | Step 2: Server discovery (static IP 10.10.10.5, UDP port 5555) | FR-02, FR-33 | P1 | ✅ PASS | `check_appendix_a` (Mac; CI build-test ×3, asan ×2); CI `platform-linux`: on 10.10.10.5:5555 | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
+| TC-APX-03 | Step 3: UDP session (HELLO seq=1 with soft_serial; HELLO_ACK seq=1 with session_id=7421) | FR-03, FR-04, FR-05, FR-33 | P1 | ✅ PASS | `check_appendix_a` (Mac; CI build-test ×3, asan ×2); CI `platform-linux`: on 10.10.10.5:5555 | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
 | TC-APX-04 | Step 4: NAT keepalive | FR-10, FR-33 | P1 | ✅ PASS | `check_appendix_a` (Mac; CI build-test ×3, asan ×2) | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out) |
 | TC-APX-05 | Step 5: Secure registration (session_id=7421, soft_serial, model, firmware v1.0, nonce=984312) | FR-12, FR-13, FR-29, FR-33 | P1 | ⚠ Partial | `check_appendix_a` (Mac; CI build-test ×3, asan ×2) | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out) — REGISTER fields and order checked; the literal nonce 984312 needs `--nonce` |
 | TC-APX-06 | Step 6: Config provisioning (the example config, 3 chunks) | FR-15, FR-17, FR-18, FR-33 | P1 | ✅ PASS | `check_appendix_a` (Mac; CI build-test ×3, asan ×2) | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out) |
@@ -334,7 +334,7 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 | TC-PDF-01 | §1 "Example output" | FR-01, FR-02, FR-33 | P1 | ✅ PASS | `m5_gate` (Mac; CI build-test ×3, asan ×2) | [m5_gate.out](evidence/release-20261112-220052/m5_gate.out) |
 | TC-PDF-02 | §9 "Example of a Dump from Server DB" | FR-31, FR-30, FR-32, DEL-11 | P1 | ⚠ Partial | `m6_demo` (Mac; CI build-test ×3, asan ×2) | [m6_demo.out](evidence/release-20261112-220052/m6_demo.out) — the dump shows 4 of the PDF's 5 rows; the ZTP-84BC19 "Invalid HMAC" row needs `--bad-key` |
 | TC-PDF-03 | Appendix A "Example Configuration" | FR-15 | P1 | ✅ PASS | `m5_gate` (Mac; CI build-test ×3, asan ×2) | [m5_gate.out](evidence/release-20261112-220052/m5_gate.out) |
-| TC-PDF-04 | Appendix A addressing (10.10.10.5:5555) | FR-02 | P3 | ✅ PASS | `check_appendix_a`, `m5_gate` (Mac; CI build-test ×3, asan ×2); CI `platform-linux`: on 10.10.10.5:5555 | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out), [m5_gate.out](evidence/release-20261112-220052/m5_gate.out), [CI run 47](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| TC-PDF-04 | Appendix A addressing (10.10.10.5:5555) | FR-02 | P3 | ✅ PASS | `check_appendix_a`, `m5_gate` (Mac; CI build-test ×3, asan ×2); CI `platform-linux`: on 10.10.10.5:5555 | [check_appendix_a.out](evidence/release-20261112-220052/check_appendix_a.out), [m5_gate.out](evidence/release-20261112-220052/m5_gate.out), [CI run 52](evidence/ci/2026-11-13-23757cd-run52.md) |
 | TC-PDF-05 | Overview / Scope & Expectations: UDP only, "not a REST or API exercise", C or Python, no UI | FR-03, NFR-01, DEL-04 | P1 | ✅ PASS | `check_pdf05` (Mac; CI build-test ×3, asan ×2) | [check_pdf05.out](evidence/release-20261112-220052/check_pdf05.out) |
 
 ### Configuration (CFG)
@@ -346,7 +346,7 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 | TC-CFG-03 | Precedence: defaults < file < profile < CLI | FR-34 | P1 | ✅ PASS | `unit`, `cli_config` (Mac; CI build-test ×3, asan ×2) | [unit.out](evidence/release-20261112-220052/unit.out), [cli_config.out](evidence/release-20261112-220052/cli_config.out) |
 | TC-CFG-04 | Range and type validation (fail fast) | FR-34, NFR-07 | P1 | ✅ PASS | `unit`, `cli_config` (Mac; CI build-test ×3, asan ×2) | [unit.out](evidence/release-20261112-220052/unit.out), [cli_config.out](evidence/release-20261112-220052/cli_config.out) |
 | TC-CFG-05 | Unknown keys rejected (typo protection) | FR-34 | P1 | ✅ PASS | `unit`, `cli_config` (Mac; CI build-test ×3, asan ×2) | [unit.out](evidence/release-20261112-220052/unit.out), [cli_config.out](evidence/release-20261112-220052/cli_config.out) |
-| TC-CFG-06 | Per-tenant, model and serial NAT override delivered to the device | FR-35, FR-29 | P1 | ✅ PASS | `unit` (Mac; CI build-test ×3, asan ×2) | [unit.out](evidence/release-20261112-220052/unit.out) |
+| TC-CFG-06 | Per-tenant, model and serial NAT override delivered to the device | FR-35, FR-29 | P1 | ✅ PASS | `unit` (precedence), `m6_server` (the override in the server's policy line) (Mac; CI build-test ×3, asan ×2) | [unit.out](evidence/release-20261112-220052/unit.out), [m6_server.out](evidence/release-20261112-220052/m6_server.out) |
 | TC-CFG-07 | Profiles | FR-34 | P2 | ✅ PASS | `unit`, `cli_config` (Mac; CI build-test ×3, asan ×2) | [unit.out](evidence/release-20261112-220052/unit.out), [cli_config.out](evidence/release-20261112-220052/cli_config.out) |
 | TC-CFG-08 | Device clamp on advertised values | FR-35, NFR-06 | P1 | ✅ PASS | `m2_peer` (Mac; CI build-test ×3, asan ×2) | [m2_peer.out](evidence/release-20261112-220052/m2_peer.out) |
 | TC-CFG-09 | Key-file permissions, and policy/artifact checks | FR-34, NFR-06 | P1 | ✅ PASS | `unit`, `m3_register` (Mac; CI build-test ×3, asan ×2) | [unit.out](evidence/release-20261112-220052/unit.out), [m3_register.out](evidence/release-20261112-220052/m3_register.out) |
@@ -357,7 +357,8 @@ counts, so a PASS row means none of that case's checks failed. To rerun one suit
 The 15 open cases and the open parts of the partial ones that depend on tooling all need test tools that
 generate hostile or forged traffic: device hooks (`--bad-key`, `--replay-test`, `--reuse-nonce`, `--nonce`) and
 `peer_sim` modes (a rogue server, forged or replayed frames, floods). They were not built in this project and
-remain with the project owner (PRD R-15); the owner waived them for this submission. The protection logic
+remain with the project owner (PRD R-15). They are counted as Open, not Waived: the owner accepted submitting
+without them, but they are not replaced by another test the way TC-SIM-04 is. The protection logic
 behind every one of them is implemented and was reviewed (DESIGN §18.3); README §18 lists, for each, which other
 tests reach that logic today. QA §12.5 is the register. The other partial cases are a platform or sub-case not
 run (each row says which).

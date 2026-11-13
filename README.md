@@ -356,7 +356,7 @@ before `val.deadline_s` (180 s), the device reports FAILED.
 
 **Concurrency (DESIGN §14).** One thread runs a `poll()` loop over the control and discovery sockets. Each
 device has its own session and reliability state, and timers sit in one heap, so many devices progress
-independently with no locks. Tested with 50 devices at 15% loss (TC-PERF-01) and a fuzzer feeding a million
+independently with no locks. Tested with 50 devices at 15% loss (TC-PERF-01) and a fuzzer feeding 300,000 (in `make test`; 1 million under ASan in CI)
 random and mutated datagrams (TC-SRV-07).
 
 **Assignment.** The policy gives each model (or a specific serial) its firmware, config and tenant; NAT
@@ -643,7 +643,7 @@ Fixing it needs the `--nonce` hook, which is part of the open tooling (section 1
 Each line is `<UTC time, ISO 8601 with milliseconds> [TAG] message`, for example
 `2026-11-12T05:50:40.842Z [BOOT] Soft serial: ZTP-93AF21`; server lines about a session add `[sid=… serial]`. Tags: `BOOT`, `DISCOVERY`, `UDP`, `NAT`,
 `AUTH`, `PROVISION`, `UPGRADE`, `VALIDATION`, `STATE`, `DB`, `CONFIG`, `SIM`, `ERROR`, and `TEST` (a test hook,
-only with `--test-hooks`; the demo uses some, for example the forced session id 7421 and the S3 crash). The PDF's
+only with `--test-hooks`; the demo uses some, for example the S3 crash and the S4 rebinding, and the Appendix A run forces session id 7421). The PDF's
 lines start with the PDF's words; some add detail after them. At exit each process prints its counters (frames, retransmissions
 by timeout and fast retransmit, duplicates, out-of-order frames, MAC failures). `-v` adds debug lines
 (every simulated drop, every ACK).
@@ -791,7 +791,7 @@ example with overrides is `tests/conf/policy_override.json`.
 ### 16.1 Full regression
 
 ```sh
-make test         # the 16 suites of the table in 16.3 marked `make test`, plus the pcapcheck selftest (about 15 min)
+make test         # 16 suites: the first 15 rows of the table in 16.3 and the pcapcheck selftest (about 16 min)
 make release      # the release regression: everything below into one results folder (about 2.5 h)
 make scenario-logs # rewrites logs/scenarios/ (a generated serial; a session timeout and resume)
 make asan         # the same with AddressSanitizer + UndefinedBehaviorSanitizer (build-asan/)
@@ -895,7 +895,7 @@ scripts and documents. [evidence/README.md](evidence/README.md) lists every file
 |---|---|---|---|
 | `make test` (16 suites) | PASS | 16 min | 1090 unit checks and 633 scenario checks, 0 failed |
 | `make asan` (the same 16) | PASS | 17 min | 0 failed, no sanitizer report |
-| matrix: M1–M5, M8, M9 × 10 seeds | PASS | 24 min | every run 40/40 devices OPERATIONAL; medians 0.3 / 1.6 / 2.7 / 4.3 / 11.0 / 1.4 / 1.6 s |
+| matrix: M1–M5, M8, M9 × 10 seeds | PASS | 24 min | every row 10/10 runs and 40/40 devices OPERATIONAL (4 devices per run); medians 0.3 / 1.6 / 2.7 / 4.3 / 11.0 / 1.4 / 1.6 s |
 | perf02: M4 × 20 (TC-PERF-02) | PASS | 6 min | 80/80 OPERATIONAL, median 3.4 s, p95 8.7 s (limits 60 / 90 s) |
 | scale: 50 devices (TC-PERF-01) | PASS | 26 s | 50 OPERATIONAL in 21 s, server peak RSS 9 MB |
 | soak: 1 h, 5 devices (TC-PERF-04) | PASS | 61 min | RSS lower at the end than after warm-up for all 6 processes, `leaks` 0, 0 session timeouts |
@@ -905,7 +905,7 @@ scripts and documents. [evidence/README.md](evidence/README.md) lists every file
 | scenario-logs | PASS | 14 s | 10 checks; `logs/scenarios/` regenerated |
 
 Earlier release runs are not the evidence; evidence/README.md lists them and what each one found (two harness
-bugs, timing-sensitive demo checks, a device defect in the PMTU black-hole detector, a run during which the Mac
+bugs, timing-sensitive demo checks, two device defects in the PMTU black-hole detector, a run during which the Mac
 slept, and, after the external-style review, the fixes in 0b2e460). To reproduce: `make release` (about 2.5 h;
 keep the Mac awake, lid open and on power).
 
@@ -942,6 +942,8 @@ netem and valgrind jobs, and the evidence report):
 | dc3c139 | [43355813851](https://github.com/heysunilvk/ztp-project/actions/runs/43355813851) | 11/12 green; `impair-matrix (macos)` failed one demo check, TC-SRV-09, on M2 seed 1 (all 12 devices OPERATIONAL). The check counted session switches over the few `[PROVISION]` lines only; it now counts every session line in the provisioning window. On all 91 release-run server logs the new count passes with a margin of 8 or more switches, where the old one's smallest margin was 2 |
 | cfcb3fa | [43358206325](https://github.com/heysunilvk/ztp-project/actions/runs/43358206325) | 12/12 jobs green (push; 11 test jobs and `evidence`) |
 | ddfc8fb | [43364354282](https://github.com/heysunilvk/ztp-project/actions/runs/43364354282) | 12/12 jobs green (the committed report says "all 11 jobs passed": it cannot report on its own `evidence` job), manual run with the nightly seed counts: matrix M1–M4 × 10 seeds on Ubuntu and macOS (40/40 OPERATIONAL in every row), TC-PERF-02 M4 × 20, TC-PERF-01 50 devices. Committed report: [evidence/ci/2026-11-13-ddfc8fb-run47.md](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| 0b2e460 | [43375735275](https://github.com/heysunilvk/ztp-project/actions/runs/43375735275) | 12/12 jobs green (push) on the release-run commit; its `platform-linux` job ran Appendix A on 10.10.10.5, and those logs are committed in [logs/appendix_a/linux-10.10.10.5/](logs/appendix_a/linux-10.10.10.5/) |
+| 23757cd | [43395552552](https://github.com/heysunilvk/ztp-project/actions/runs/43395552552) (push), [43395562835](https://github.com/heysunilvk/ztp-project/actions/runs/43395562835) (manual) | both 12/12 green; the manual run used the nightly seed counts (matrix M1–M4 × 10 on Ubuntu and macOS, TC-PERF-02 M4 × 20, netem × 10). Committed report: [evidence/ci/2026-11-13-23757cd-run52.md](evidence/ci/2026-11-13-23757cd-run52.md) |
 
 Later runs: https://github.com/heysunilvk/ztp-project/actions. A new committed report: Actions → ci → Run workflow
 (or `gh workflow run ci.yml --ref main`); nightly runs add one too.

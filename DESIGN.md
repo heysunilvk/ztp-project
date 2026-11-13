@@ -2091,7 +2091,7 @@ make             # libztpcommon.a, ztp-server, ztp-device, mkartifacts, artifact
 make test        # every suite (unit, CLI, session, peer_sim, registration, provisioning, upgrade, M5 gate,
                  # Appendix A, fuzz, server, one demo, PERF-03, PDF-05, separation) into results/<date-time>/
 make release     # the release regression: test, asan, the whole matrix, PERF-01/02/04, longrun, demo, appendix-a
-make demo        # the five-device demo (scripts/run_demo.sh); rewrites logs/
+make demo        # the demo: four of the five devices (S2 needs --bad-key; scripts/run_demo.sh); rewrites logs/
 make appendix-a  # the Appendix A journey on 127.0.0.1:5555; rewrites logs/appendix_a/
 make matrix ROWS="M1 M2 M3 M4" SEEDS=10   # the demo over QA §6 rows and seeds
 make scale N=50  # N devices at 15% loss (TC-PERF-01)
