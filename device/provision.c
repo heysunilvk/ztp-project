@@ -471,7 +471,17 @@ void dev_xfer_timer(device_t *d)
          * none, and ka_seq == 0 below would then read as "acknowledged"; the next timer tick tries again */
         x->probed = d->ka_seq != 0 && d->ka_seq != before;
     } else if (x->probed && quiet >= full && d->ka_seq == 0) {   /* the probe was ACKed: small frames pass */
-        if (!x->bh_rerequested) {
+        /* a black hole drops large frames only: if every chunk still missing from the outstanding request fits
+         * in a 508-byte datagram (the file's short last chunk), the silence is ordinary loss, not the path's
+         * MTU. Re-request again instead of stepping down (release run, matrix M4 seed 8: config chunk 3/3,
+         * 262 bytes, lost around the S4 rebinding) */
+        bool big = false;
+        for (uint32_t k = x->req_start; !big && k < x->req_start + x->req_num && k < x->count; k++) {
+            if (dev_xfermap_has(&x->map, k)) continue;
+            uint32_t len = k + 1 == x->count ? x->size - k * x->chunk_size : x->chunk_size;
+            big = ZTP_HDR_LEN + ZTP_CHUNK_HDR_LEN + len > ZTP_MIN_DGRAM;
+        }
+        if (!x->bh_rerequested || !big) {
             LOGI(T_UDP, LM_UDP_MTU_REREQUEST, (unsigned)(quiet / 1000u));
             request_next(d);          /* resets the probe; the interval restarts once this CHUNK_REQ is ACKed */
             x->bh_rerequested = true;

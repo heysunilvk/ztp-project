@@ -100,7 +100,7 @@ The PDF says reviewers care about *"reasoning and tradeoffs more than feature co
 |---|---|---|---|---|
 | SM-1 | Valid devices that reach OPERATIONAL under 20% loss, 10% reorder and 5% duplication | **100%** across 10 seeded runs | ZTP-NFR-03 | TC-REL-09, TC-E2E-02 |
 | SM-2 | Duplicate registrations after an upgrade restart, a NAT rebind or a session timeout | **0** | ZTP-FR-23 | TC-UPG-03/04, TC-NAT-05 |
-| SM-3 | Forged, tampered or replayed registrations accepted | **0** (100% rejected) | ZTP-FR-13/14 | TC-AUTH-03..08 (as delivered: the logic is built and reviewed, but all six cases are open, R-15; TEST_REPORT §6) |
+| SM-3 | Forged, tampered or replayed registrations accepted | **0** (100% rejected) | ZTP-FR-13/14 | TC-AUTH-03..08 (as delivered: TC-AUTH-03, the wrong-key device, passes; TC-AUTH-04..08 are open, R-15; TEST_REPORT §6) |
 | SM-4 | Median time from boot to OPERATIONAL per device at 20% loss (demo timers) | **≤ 60 s** (p95 ≤ 90 s) | ZTP-NFR-04 | TC-PERF-02 |
 | SM-5 | Concurrent devices provisioned in one run | **≥ 50**, server RSS ≤ 64 MB | ZTP-NFR-05 | TC-PERF-01 |
 | SM-6 | IP fragments on the wire | **0**; every datagram ≤ 1200 B | ZTP-FR-20, NFR-02 | TC-PROV-04/05 |
@@ -262,7 +262,7 @@ Every bullet in the PDF's "Expected Submission" section has an ID. A submission 
 
 | ID | Deliverable | PDF source | Acceptance criteria |
 |---|---|---|---|
-| ZTP-DEL-01 | Working code that implements the ZTP functionality | Exp. Sub. 1 | The demo reproduces scenarios S1–S5 (as delivered: S1, S3, S4, S5; S2 needs `--bad-key`, R-15) |
+| ZTP-DEL-01 | Working code that implements the ZTP functionality | Exp. Sub. 1 | The demo reproduces scenarios S1–S5 (as delivered: all five; S3's REGISTER replays need `--replay-test`, R-15) |
 | ZTP-DEL-02 | Runnable or buildable as submitted | Exp. Sub. 1 | `make && make demo` from a clean checkout |
 | ZTP-DEL-03 | Device and server logic clearly separated | Exp. Sub. 1 | `device/`, `server/` and `common/` directories; two binaries |
 | ZTP-DEL-04 | UDP sockets for all provisioning communication | Exp. Sub. 1 | Same as FR-03 |
@@ -413,7 +413,7 @@ Each milestone ends with a 30-minute review: a demo of the milestone's tests, re
 | R-12 | A customer's firewall blocks outbound UDP 5555/5556, or a NAT drops UDP mappings faster than the keepalive interval | M | H for that site | The prerequisite is documented (A-09); a clear device diagnostic; per-site, tenant or serial keepalive override (FR-35); a server-side hint when the NAT timeout looks short (FR-36) | PM / Ops |
 | R-13 | Misconfiguration of the new runtime config (typos, unsafe values) | M | M | Unknown keys rejected; range checks; fixed protocol invariants; `--print-config` with sources; device-side clamp on advertised values (DESIGN §25.8) | Dev |
 | R-14 | Extraction of the fleet bootstrap key from a device image | L | M | It grants no identity (that needs K_mfg): at most rogue OFFERs or HELLO_ACKs, forged terminal ERRORs and Failed-row noise, all bounded (rate limits, failed-record cap, NONCE_REG echo, Success rows never overwritten). Per-device keys are on the roadmap (L-01) | Security |
-| R-15 | The attack-simulation test tooling (device hooks `--bad-key`, `--replay-test`, `--reuse-nonce`/`--nonce`; `peer_sim` rogue, forged, replayed and load modes) wasn't built with M3 (recorded 2026-11-11; extended at M4 and M5). Fifteen security cases and the CHUNK_REQ half of TC-NAT-12 stay unexercised end to end (QA §12.5: eleven TC-AUTH cases, TC-SRV-08/11, TC-SESS-07/09), and **the demo's "Invalid HMAC" row (device ZTP-84BC19, S2) and the replay device (ZTP-71DD08, S3) depend on `--bad-key` and `--replay-test`** | H (already open) | M | The protection logic is built and partly unit-tested; the owner writes the tooling, `--bad-key` first (needed for the M6 demo and TC-PDF-02). **Status at M7 (as delivered): still open, waived by the owner** for this submission: 15 cases and the CHUNK_REQ half of TC-NAT-12; the PDF dump's failed row is not demonstrated. Declared in the README (status block, §18) and TEST_REPORT §6 | Owner / QA |
+| R-15 | The attack-simulation test tooling (device hooks `--bad-key`, `--replay-test`, `--reuse-nonce`/`--nonce`; `peer_sim` rogue, forged, replayed and load modes) wasn't built with M3 (recorded 2026-11-11; extended at M4 and M5). At M6, fifteen security cases and the CHUNK_REQ half of TC-NAT-12 were unexercised end to end (QA §12.5: eleven TC-AUTH cases, TC-SRV-08/11, TC-SESS-07/09), and **the demo's "Invalid HMAC" row (device ZTP-84BC19, S2) and the replay device (ZTP-71DD08, S3) depend on `--bad-key` and `--replay-test`** | H (already open) | M | The protection logic is built and partly unit-tested; the owner writes the tooling, `--bad-key` first (needed for the M6 demo and TC-PDF-02). **Status at M7 (as delivered):** `--bad-key` is built (S2 and the PDF dump's failed row are demonstrated; TC-AUTH-03 passes). The rest is still open, waived by the owner for this submission: 14 cases and the CHUNK_REQ half of TC-NAT-12. Declared in the README (status block, §18) and TEST_REPORT §6 | Owner / QA |
 
 ### 12.3 Resolved questions (decided 2026-11-10)
 These were open for P0. The owner **adopted the proposed answer for each one**. Each decision is recorded as an assumption (§10.3, A-16..A-22) and, where it is an operational choice, it is exposed as configuration that a customer or operator can change later without a rebuild (DESIGN §25). The design-level questions are in DESIGN §23 (OQ-1..OQ-12).
@@ -478,7 +478,7 @@ The submission is done when **all** of the following hold:
 2. Every `ZTP-NFR-*` target is met or has a waiver signed off (with a documented rationale).
 3. `make && make test && make demo` succeeds from a clean checkout on Linux and on macOS, shown by a green run of the CI workflow on both runners and a local macOS run.
 4. The README answers the 5 required and 4 bonus questions, explains why keepalives matter (DEL-12), and covers every section listed in DEL-07 and DEL-08. The Appendix A journey (§5.3) passes all 9 steps (TC-APX-01..10), and the DB dump matches the PDF's example format (TC-PDF-02).
-5. `logs/` contains `server.log`, one `device_<serial>.log` per demo device, and `db_dump.txt`, and they show scenarios S1–S5. *As delivered: S1, S3, S4 and S5; S2 (the failed row) is waived, R-15.*
+5. `logs/` contains `server.log`, one `device_<serial>.log` per demo device, and `db_dump.txt`, and they show scenarios S1–S5. *As delivered: all five, including S2's failed row; S3's replay part is open, R-15.*
 6. No Sev-1 or Sev-2 defects are open (QA §11.3).
 7. All three documents are updated to match the final implementation (version bumped to 1.0).
 

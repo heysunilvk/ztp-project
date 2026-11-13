@@ -10,7 +10,7 @@
 | Test basis | PRD 1.0 (requirement IDs), DESIGN 1.0 (§5 wire spec, §8 reliability, §10 auth, §19 demo); written against the 0.1 drafts, kept aligned since |
 | Results | [TEST_REPORT.md](TEST_REPORT.md): the result of every case in §5, from the release run in `evidence/` |
 
-> **Alignment rules.** Every test case (`TC-*`) traces to at least one PRD requirement ID, and every PRD requirement has at least one test case (§10). Constants such as timers, sizes and ports are **not** restated here: tests refer to them by name from DESIGN Appendix B, so a design change can't silently invalidate a test. The demo fixture is the five devices defined in PRD §5.2 and DESIGN §19.3; as delivered, four of them run (S2, ZTP-84BC19, needs the open `--bad-key` hook, §12.5).
+> **Alignment rules.** Every test case (`TC-*`) traces to at least one PRD requirement ID, and every PRD requirement has at least one test case (§10). Constants such as timers, sizes and ports are **not** restated here: tests refer to them by name from DESIGN Appendix B, so a design change can't silently invalidate a test. The demo fixture is the five devices defined in PRD §5.2 and DESIGN §19.3.
 
 ---
 
@@ -273,7 +273,7 @@ Each case gives its preconditions and steps in short form, followed by the expec
 ### 5.10 Server (SRV)
 | TC ID | Title | Req | Pri | Steps / setup | Expected result |
 |---|---|---|---|---|---|
-| TC-SRV-01 | 5-device concurrent demo | FR-28 | P1 | `make demo` (as delivered: 4 devices; S2 needs `--bad-key`) | Every final DB row matches §4.1 |
+| TC-SRV-01 | 5-device concurrent demo | FR-28 | P1 | `make demo` | Every final DB row matches §4.1 |
 | TC-SRV-02 | Per-device assignment | FR-29 | P1 | `tests/m6_server.sh`: a policy whose serial entry for ZTP-55AC90 assigns cfg v2 and a 10 s keepalive under a tenant grace of 180 s, beside the model entries (the `tests/conf/policy_override.json` fixture overrides NAT values only) | Each device gets the firmware and config of its model, or of its serial override |
 | TC-SRV-03 | DB record fields | FR-30 | P1 | Inspect the dump and `db.jsonl` | Device ID, timestamp, firmware assigned, config version and outcome present for every row |
 | TC-SRV-04 | Dump on demand | FR-31, DEL-11 | P1 | `kill -USR1 <server>` during the demo; SIGINT at the end | The dump is printed both times, in the default PDF format (exact format checks in TC-PDF-02); `--dump-verbose` adds the extra columns **after** Notes only |
@@ -297,7 +297,7 @@ Each case gives its preconditions and steps in short form, followed by the expec
 | TC ID | Title | Req | Pri | Steps / setup | Expected result |
 |---|---|---|---|---|---|
 | TC-PERF-01 | 50 concurrent devices | NFR-05, FR-28 | P1 | `make scale N=50` (`scripts/run_scale.sh`: 4 in 5 devices EDGE-GW-100 upgrading, 1 in 5 legacy), 15% loss; also in the CI `impair-matrix` job | All valid devices OPERATIONAL; all done ≤ 120 s; server peak RSS ≤ 64 MB |
-| TC-PERF-02 | Time to OPERATIONAL | NFR-04 | P1 | 20 runs × the demo (4 devices as delivered) at 20% loss | Median ≤ 60 s, p95 ≤ 90 s |
+| TC-PERF-02 | Time to OPERATIONAL | NFR-04 | P1 | 20 runs × the 5-device demo at 20% loss (the 4 valid devices are timed) | Median ≤ 60 s, p95 ≤ 90 s |
 | TC-PERF-03 | Retransmission overhead against the model | FR-09 | P3 | Counters at 10/20/30% loss | Ratio of transmissions to frames ≤ DESIGN §21.1 Q5 bounds (+10%) |
 | TC-PERF-04 | Soak with no leaks | NFR-07 | P2 | 5 OPERATIONAL devices for 1 h (`make soak`, `scripts/run_soak.sh`; `leaks` on the live processes on macOS; the CI `valgrind` job runs 3 min under memcheck) | No leaks; RSS stable (± 5%). On macOS the check is growth of at most 5%: the kernel compresses an idle process's pages, so resident size *falls* over a soak (seen: 30–60%), and a fall is not a leak |
 
@@ -393,7 +393,7 @@ flowchart LR
 ---
 
 ## 6. Loss and impairment matrix
-Loss, reorder and duplication are configured **per direction**: they are applied at each sender only (DESIGN §16.1), so "15%" means 15% of the datagrams in each direction are lost, not a compounded 28%. The demo (five devices as planned; four as delivered, S2 needs `--bad-key`) is run against each row, with **10 seeds per row** (seeds 1–10), on the local Mac and both CI runners for rows M1–M4, on the local Mac for M5 and M8–M9 (M6 was not run), and on the CI Ubuntu runner only for M7 (netem). CI runs 3 seeds per push and all 10 nightly or on demand.
+Loss, reorder and duplication are configured **per direction**: they are applied at each sender only (DESIGN §16.1), so "15%" means 15% of the datagrams in each direction are lost, not a compounded 28%. The 5-device demo is run against each row, with **10 seeds per row** (seeds 1–10), on the local Mac and both CI runners for rows M1–M4, on the local Mac for M5 and M8–M9 (M6 was not run), and on the CI Ubuntu runner only for M7 (netem). CI runs 3 seeds per push and all 10 nightly or on demand.
 
 | Row | Loss (each direction) | Reorder | Dup | Delay | Pass criterion | Metrics recorded |
 |---|---|---|---|---|---|---|
@@ -431,7 +431,7 @@ For every run: **zero** duplicate DB rows, **zero** duplicate REGISTERs after a 
 |---|---|---|---|---|
 | TC-PERF-01 | 50 devices (spawned by `run_scale.sh`), 15% loss | Until complete | All OPERATIONAL in ≤ 120 s; server RSS ≤ 64 MB; CPU < 1 core | `/usr/bin/time -l` (macOS) / `-v` (Linux) |
 | TC-PERF-01b (P3, exploratory) | 200 devices | Until complete | Record only | Same |
-| TC-PERF-02 | The demo (4 devices as delivered), 20% loss, 20 runs | — | Median ≤ 60 s, p95 ≤ 90 s | Timestamps from the logs |
+| TC-PERF-02 | The 5-device demo, 20% loss, 20 runs (the 4 valid devices timed) | — | Median ≤ 60 s, p95 ≤ 90 s | Timestamps from the logs |
 | TC-PERF-04 | 5 OPERATIONAL devices | 1 h | No leaks, stable RSS | `leaks`, valgrind |
 
 ---
@@ -460,7 +460,7 @@ README checklist (TC-DEL-05..07). Each item must be present **and** must agree w
 | 17 | Where the server and client logs are | DEL-09/10 | ✅ README §14.1 |
 | 18 | Why "keepalives matter in real deployments" (PDF §4) | DEL-12 | ✅ README §12 |
 | 19 | Walkthrough of the Appendix A example with real logs | FR-33 | ✅ README §14.2 |
-| 20 | The DB dump, shown in the PDF example format | FR-31 | ⚠ README §10: 4 of the PDF's 5 rows; the ZTP-84BC19 "Invalid HMAC" row needs `--bad-key` (waived, §12.5) |
+| 20 | The DB dump, shown in the PDF example format | FR-31 | ✅ README §10 (all five rows of the PDF, including ZTP-84BC19 Failed / "Invalid HMAC") |
 | 21 | Deployment prerequisite (outbound UDP 5555/5556 allowed) and NAT ownership; Q4 answer covers every row of DESIGN §21.1 Q4 | FR-36 | ✅ README §11 Q4, §19 |
 | 22 | Configuration files and keys (server.json, device.json, policy.json, profiles), with an example | FR-34 | ✅ README §15 |
 
@@ -620,7 +620,7 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 | **M7** | TC-DEL-01..10, TC-SIM-03/04, the full impairment matrix (§6), and a full regression of every gate. **Scope added 2026-11-12 (owner):** (1) README covers PDF "README Requirements" Q1–Q5, Expected Submission §2 topics, the Bonus section (3 topics + B1–B4) and DEL-12; (2) the committed `logs/db_dump.txt` reproduces the PDF §9 dump, except the ZTP-84BC19 "Invalid HMAC" row, which needs `--bad-key` (PRD R-15) and is submitted under a waiver listed in the README; (3) committed logs: `logs/` (the demo: `server.log`, `device_<serial>.log`, `db_dump.txt`) and `logs/appendix_a/` (the single-device Appendix A journey, ZTP-93AF21, on 127.0.0.1:5555 on the Mac; CI runs it on 10.10.10.5); (4) a configuration reference for every file in `conf/` (keys, types, defaults, ranges); (5) a folder and file map with a one-line purpose and limitations; (6) every regression suite writes `results/<date-time>/<suite>/` (logs plus `summary.txt`, ignored by git), and one final full release run is copied to `evidence/` and committed; (7) CI evidence: a workflow step writes each job's summary as an uploaded report, and `evidence/ci/` records per-job results, run links and dates; (8) instructions for running the full regression and any single suite or case by hand, on the Mac and on Linux. `tests/run_all.sh` named in §3 is `make test`. **Status (2026-11-13): closed.** Release regression `make release` on 0b2e460 (README §17.1, `evidence/release-20261112-220052/`): 24/24 steps PASS with no host sleep, the ASan build 16/16, matrix rows M1–M5, M8, M9 × 10 seeds 100% OPERATIONAL, TC-PERF-01..04, TC-NAT-07/13, and the committed logs regenerated (demo, Appendix A, scenario logs). CI green on 0b2e460, including the 10.10.10.5 Appendix A run whose logs are committed. TC-DEL-01/04 on a fresh clone. Results per case: TEST_REPORT.md (139 PASS, 10 partial, 15 open, 1 waived, 0 failed); §10 is filled in from it. The release runs found and fixed two harness bugs, timing-sensitive demo checks and two device defects in the PMTU black-hole detector (DESIGN §5.8); a final external-style review then found and fixed 11 code defects, the missing forced re-key (DESIGN §8.9) and weak tests (TEST_REPORT §4). **Exceptions:** the 15 open-tooling cases and the CHUNK_REQ half of TC-NAT-12 (§12.5, PRD R-15; the PDF dump's ZTP-84BC19 row is not demonstrated), TC-SIM-04 (waived), and the partial cases listed in TEST_REPORT §5 |
 
 ### 12.2 QA dependencies
-- QA-D1: the test hooks in DESIGN §19.2 (all gated by `--test-hooks`): `--first-session-id`, `--corrupt-chunk`, `--drop-seq`, `--dup-seq`, `--no-discovery`, `--bad-key`, `--replay-test`, `--reuse-nonce`, `--nonce`, `--crash-after-chunks`, `--crash-at`, `--restart-mode`, `--restart-delay`, `--rebind-after`, `--fail-validate`, `--hook-delete-config`, `--no-refetch`, `--hook-bad-fw-version`, plus the simulation flags `--sim-mtu` and `--nat-sim`. These must land with each milestone. **Status (M7, as delivered):** all built except `--bad-key`, `--replay-test`, `--reuse-nonce` and `--nonce` (open tooling, §12.5, PRD R-15) and `--corrupt-chunk` (TC-PROV-07 changes the file on disk instead); `--rekey-at` was added for TC-UNIT-06.
+- QA-D1: the test hooks in DESIGN §19.2 (all gated by `--test-hooks`): `--first-session-id`, `--corrupt-chunk`, `--drop-seq`, `--dup-seq`, `--no-discovery`, `--bad-key`, `--replay-test`, `--reuse-nonce`, `--nonce`, `--crash-after-chunks`, `--crash-at`, `--restart-mode`, `--restart-delay`, `--rebind-after`, `--fail-validate`, `--hook-delete-config`, `--no-refetch`, `--hook-bad-fw-version`, plus the simulation flags `--sim-mtu` and `--nat-sim`. These must land with each milestone. **Status (M7, as delivered):** all built except `--replay-test`, `--reuse-nonce` and `--nonce` (open tooling, §12.5, PRD R-15; `--bad-key` was built at M7) and `--corrupt-chunk` (TC-PROV-07 changes the file on disk instead); `--rekey-at` was added for TC-UNIT-06.
 - QA-D2: **GitHub Actions** on https://github.com/heysunilvk/ztp-project (PRD D-09) as the Linux environment for netem (TC-SIM-03), broadcast (TC-DISC-05 (b)), valgrind and the gcc build. There's no local Linux host or VM, because of limited disk space on the Mac. CI is set up in M1.
 - QA-D3: the Xcode CLT on the macOS host. Satisfied: verified on 2026-11-10 (PRD D-08).
 - QA-D4: `tcpdump` permission on the test host (sudo), for the pcap-based cases.
@@ -650,7 +650,7 @@ The M3 code these tests exercise is built and passes its other tests, and the lo
 
 | Missing tooling | Unblocks | Logic already built (and how it is covered today) |
 |---|---|---|
-| Device hook `--bad-key` (corrupt K_mfg; K_fleet stays correct) | TC-AUTH-03; demo device ZTP-84BC19 (PRD §5.2 S2) | BAD_MAC NAK echoing NONCE_REG; DB "Invalid HMAC"; device retries up to `auth.register_attempts`, then FAILED (code review; DB rules unit-tested in `tests/test_db.c`) |
+| ~~Device hook `--bad-key`~~ **built at M7** (after the final review) | TC-AUTH-03 (now in `tests/m3_register.sh`); demo device ZTP-84BC19 (S2, now in every demo) | — (closed) |
 | Device hook `--replay-test` | TC-AUTH-04, TC-AUTH-05; demo device ZTP-71DD08 (S3) | Duplicate drop in the reliability window (TC-NAT-12, TC-REL-04 pass); BAD_MAC for a frame under another session's K_s; a failure never overwrites a Success row (unit-tested) |
 | Device hooks `--reuse-nonce`, `--nonce N` | TC-AUTH-06; Appendix A nonce 984312 (TC-APX-05) | REGISTER nonce cache → REPLAY NAK (code review) |
 | A tool that bit-flips each byte of a captured REGISTER (and CHUNK_DATA from M4) | TC-AUTH-08 | MAC verification on every frame (TC-UNIT-03 flips every bit of a frame; TC-NAT-06 passes) |

@@ -2,14 +2,15 @@ Device Registration Details
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
 | Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
-| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-13 08:36:09 | Legacy device    |
-| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-13 08:36:09 | —                |
-| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-13 08:36:10 | —                |
-| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 08:36:11 | —                |
+| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-13 14:27:46 | Legacy device    |
+| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-13 14:27:46 | —                |
+| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-13 14:27:46 | —                |
+| ZTP-84BC19 | Failed              | —                 | —              | 2026-11-13 14:27:47 | Invalid HMAC     |
+| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 14:27:48 | —                |
 +------------+---------------------+-------------------+----------------+---------------------+------------------+
 Summary
   Registered successfully : 4   ZTP-19FE77, ZTP-55AC90, ZTP-71DD08, ZTP-93AF21
-  Failed registration     : 0  
+  Failed registration     : 1   ZTP-84BC19 (Invalid HMAC, 3 attempts)
   Firmware / config per device:
     ZTP-19FE77  EDGE-GW-050  v0.9 -> v1.0     cfg v2  cruise_ops  Legacy device
     ZTP-55AC90  EDGE-GW-100  v1.1 (current)   cfg v3  cruise_ops

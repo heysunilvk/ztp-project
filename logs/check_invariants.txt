@@ -1,1 +1,1 @@
-check_invariants: 13 passed, 0 failed (4 devices)
+check_invariants: 14 passed, 0 failed (5 devices)

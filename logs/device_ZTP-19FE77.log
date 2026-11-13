@@ -1,126 +1,141 @@
-2026-11-13T08:36:09.759Z [BOOT] Device starting (boot #1)
-2026-11-13T08:36:09.769Z [BOOT] Soft serial assigned (configuration)
-2026-11-13T08:36:09.769Z [BOOT] Soft serial: ZTP-19FE77
-2026-11-13T08:36:09.769Z [BOOT] Firmware version: v0.9
-2026-11-13T08:36:09.769Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
-2026-11-13T08:36:09.770Z [DISCOVERY] Using static server IP 127.0.0.1:5555
-2026-11-13T08:36:09.770Z [DISCOVERY] Provisioning server found 127.0.0.1:5555 (static)
-2026-11-13T08:36:09.770Z [UDP] HELLO sent (seq=1)
-2026-11-13T08:36:09.775Z [UDP] Session established (session_id=2611286859)
-2026-11-13T08:36:09.775Z [NAT] Keepalive sent
-2026-11-13T08:36:09.777Z [NAT] Keepalive acknowledged (rtt=3 ms)
-2026-11-13T08:36:09.777Z [AUTH] REGISTER: session_id=2611286859 soft_serial=ZTP-19FE77 model=EDGE-GW-050 firmware=v0.9 nonce=16800482662890270258
-2026-11-13T08:36:09.782Z [AUTH] Registration successful
-2026-11-13T08:36:09.782Z [AUTH] Assigned tenant: cruise_ops
-2026-11-13T08:36:09.983Z [UDP] Retransmitting seq=4 (timeout)
-2026-11-13T08:36:09.987Z [PROVISION] Config manifest: v2, 1800 bytes, 2 chunks, sha256=7d8edcc00f98ebb1ff7a6280ce559fc9396933ba44ce7f54effe7e581a499ca4
-2026-11-13T08:36:09.994Z [PROVISION] Receiving config (chunk 1/2)
-2026-11-13T08:36:09.994Z [UDP] Duplicate packet seq=4 ignored
-2026-11-13T08:36:10.013Z [UDP] Duplicate packet seq=2 ignored
-2026-11-13T08:36:10.023Z [PROVISION] Receiving config (chunk 2/2)
-2026-11-13T08:36:10.023Z [PROVISION] Config: 2 chunks written, 0 duplicates ignored
-2026-11-13T08:36:10.025Z [PROVISION] Config checksum verified
-2026-11-13T08:36:10.032Z [UPGRADE] Current: v0.9 -> Target: v1.0
-2026-11-13T08:36:10.057Z [PROVISION] Firmware manifest: v1.0, 49152 bytes, 48 chunks
-2026-11-13T08:36:10.259Z [UDP] Duplicate packet seq=6 ignored
-2026-11-13T08:36:10.259Z [UDP] Retransmitting seq=8 (timeout)
-2026-11-13T08:36:10.270Z [UDP] Received packet seq=11 (out of order, expected=9)
-2026-11-13T08:36:10.270Z [UDP] Buffered packet seq=11
-2026-11-13T08:36:10.270Z [UDP] Received packet seq=14 (out of order, expected=9)
-2026-11-13T08:36:10.270Z [UDP] Buffered packet seq=14
-2026-11-13T08:36:10.271Z [UDP] Received packet seq=13 (out of order, expected=9)
-2026-11-13T08:36:10.271Z [UDP] Buffered packet seq=13
-2026-11-13T08:36:10.273Z [UDP] Received packet seq=15 (out of order, expected=9)
-2026-11-13T08:36:10.273Z [UDP] Buffered packet seq=15
-2026-11-13T08:36:10.275Z [UDP] Received packet seq=16 (out of order, expected=9)
-2026-11-13T08:36:10.275Z [UDP] Buffered packet seq=16
-2026-11-13T08:36:10.299Z [UDP] Delivered seq=10..11 (drained 1 buffered)
-2026-11-13T08:36:10.299Z [PROVISION] Firmware 8/48 (16%)
-2026-11-13T08:36:10.299Z [UDP] Delivered seq=12..16 (drained 4 buffered)
-2026-11-13T08:36:10.304Z [UDP] Duplicate packet seq=12 ignored
-2026-11-13T08:36:10.308Z [UDP] Received packet seq=23 (out of order, expected=17)
-2026-11-13T08:36:10.308Z [UDP] Buffered packet seq=23
-2026-11-13T08:36:10.308Z [UDP] Received packet seq=24 (out of order, expected=17)
-2026-11-13T08:36:10.308Z [UDP] Buffered packet seq=24
-2026-11-13T08:36:10.309Z [UDP] Received packet seq=18 (out of order, expected=17)
-2026-11-13T08:36:10.309Z [UDP] Buffered packet seq=18
-2026-11-13T08:36:10.309Z [UDP] Received packet seq=19 (out of order, expected=17)
-2026-11-13T08:36:10.309Z [UDP] Buffered packet seq=19
-2026-11-13T08:36:10.309Z [UDP] Received packet seq=21 (out of order, expected=17)
-2026-11-13T08:36:10.309Z [UDP] Buffered packet seq=21
-2026-11-13T08:36:10.310Z [UDP] Received packet seq=20 (out of order, expected=17)
-2026-11-13T08:36:10.310Z [UDP] Buffered packet seq=20
-2026-11-13T08:36:10.317Z [UDP] Delivered seq=17..21 (drained 4 buffered)
-2026-11-13T08:36:10.341Z [PROVISION] Firmware 16/48 (33%)
-2026-11-13T08:36:10.349Z [UDP] Delivered seq=22..24 (drained 2 buffered)
-2026-11-13T08:36:10.349Z [UDP] Received packet seq=29 (out of order, expected=26)
-2026-11-13T08:36:10.349Z [UDP] Buffered packet seq=29
-2026-11-13T08:36:10.349Z [UDP] Delivered seq=28..29 (drained 1 buffered)
-2026-11-13T08:36:10.349Z [UDP] Duplicate packet seq=29 ignored
-2026-11-13T08:36:10.385Z [UDP] Received packet seq=31 (out of order, expected=30)
-2026-11-13T08:36:10.385Z [UDP] Buffered packet seq=31
-2026-11-13T08:36:10.385Z [UDP] Received packet seq=35 (out of order, expected=30)
-2026-11-13T08:36:10.385Z [UDP] Buffered packet seq=35
-2026-11-13T08:36:10.385Z [UDP] Received packet seq=36 (out of order, expected=30)
-2026-11-13T08:36:10.385Z [UDP] Buffered packet seq=36
-2026-11-13T08:36:10.386Z [PROVISION] Firmware 24/48 (50%)
-2026-11-13T08:36:10.386Z [UDP] Delivered seq=30..31 (drained 1 buffered)
-2026-11-13T08:36:10.386Z [UDP] Received packet seq=34 (out of order, expected=32)
-2026-11-13T08:36:10.386Z [UDP] Buffered packet seq=34
-2026-11-13T08:36:10.386Z [UDP] Received packet seq=37 (out of order, expected=32)
-2026-11-13T08:36:10.386Z [UDP] Buffered packet seq=37
-2026-11-13T08:36:10.389Z [UDP] Received packet seq=38 (out of order, expected=32)
-2026-11-13T08:36:10.389Z [UDP] Buffered packet seq=38
-2026-11-13T08:36:10.389Z [UDP] Duplicate packet seq=30 ignored
-2026-11-13T08:36:10.390Z [PROVISION] Firmware 32/48 (66%)
-2026-11-13T08:36:10.399Z [UDP] Delivered seq=33..38 (drained 5 buffered)
-2026-11-13T08:36:10.400Z [UDP] Duplicate packet seq=32 ignored
-2026-11-13T08:36:10.401Z [UDP] Received packet seq=40 (out of order, expected=39)
-2026-11-13T08:36:10.401Z [UDP] Buffered packet seq=40
-2026-11-13T08:36:10.401Z [UDP] Received packet seq=43 (out of order, expected=39)
-2026-11-13T08:36:10.401Z [UDP] Buffered packet seq=43
-2026-11-13T08:36:10.401Z [UDP] Received packet seq=44 (out of order, expected=39)
-2026-11-13T08:36:10.401Z [UDP] Buffered packet seq=44
-2026-11-13T08:36:10.401Z [UDP] Received packet seq=46 (out of order, expected=39)
-2026-11-13T08:36:10.401Z [UDP] Buffered packet seq=46
-2026-11-13T08:36:10.402Z [UDP] Delivered seq=39..40 (drained 1 buffered)
-2026-11-13T08:36:10.402Z [UDP] Received packet seq=45 (out of order, expected=42)
-2026-11-13T08:36:10.402Z [UDP] Buffered packet seq=45
-2026-11-13T08:36:10.403Z [UDP] Duplicate packet seq=39 ignored
-2026-11-13T08:36:10.403Z [UDP] Duplicate packet seq=41 ignored
-2026-11-13T08:36:10.403Z [PROVISION] Firmware 40/48 (83%)
-2026-11-13T08:36:10.403Z [UDP] Delivered seq=42..46 (drained 4 buffered)
-2026-11-13T08:36:10.431Z [UDP] Duplicate packet seq=42 ignored
-2026-11-13T08:36:10.630Z [PROVISION] Firmware 48/48 (100%)
-2026-11-13T08:36:10.638Z [PROVISION] Firmware: 48 chunks written, 0 duplicates ignored
-2026-11-13T08:36:10.647Z [PROVISION] Firmware checksum verified
-2026-11-13T08:36:10.650Z [UPGRADE] Image v1.0 staged in slot B (verified; commit after the INSTALLING ACK)
-2026-11-13T08:36:10.832Z [UDP] Retransmitting seq=10 (timeout)
-2026-11-13T08:36:10.832Z [UDP] Retransmitting seq=11 (timeout)
-2026-11-13T08:36:11.233Z [UDP] Retransmitting seq=10 (timeout)
-2026-11-13T08:36:11.233Z [UDP] Retransmitting seq=11 (timeout)
-2026-11-13T08:36:11.244Z [UPGRADE] Upgrade complete, restarting device
-2026-11-13T08:36:11.244Z [UDP] Counters: tx=53 rx=64 retx_timeout=6 retx_fast=0 dup=10 ooo=23 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=10 frames=11
-2026-11-13T08:36:11.251Z [BOOT] Device starting (boot #2)
-2026-11-13T08:36:11.252Z [BOOT] Restart detected (pending upgrade to v1.0)
-2026-11-13T08:36:11.252Z [BOOT] Soft serial loaded
-2026-11-13T08:36:11.252Z [BOOT] Soft serial: ZTP-19FE77
-2026-11-13T08:36:11.252Z [BOOT] Firmware version: v1.0 (slot B)
-2026-11-13T08:36:11.252Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
-2026-11-13T08:36:11.258Z [UDP] Resuming session 2611286859 (ctr=1, proposed epoch 1, stage FW_INSTALLED)
-2026-11-13T08:36:11.297Z [UDP] Session resumed (session_id=2611286859) epoch=1
-2026-11-13T08:36:11.297Z [VALIDATION] Configuration present (v2, sha ok)
-2026-11-13T08:36:11.298Z [VALIDATION] Firmware v1.0 verified
-2026-11-13T08:36:11.298Z [NAT] Keepalive sent
-2026-11-13T08:36:11.301Z [NAT] Keepalive acknowledged (rtt=10 ms)
-2026-11-13T08:36:11.301Z [VALIDATION] Session healthy (rtt=10 ms)
-2026-11-13T08:36:11.503Z [UDP] Retransmitting seq=4 (timeout)
-2026-11-13T08:36:11.512Z [STATE] Device is OPERATIONAL
-2026-11-13T08:36:13.529Z [NAT] Keepalive sent
-2026-11-13T08:36:13.730Z [UDP] Retransmitting seq=5 (timeout)
-2026-11-13T08:36:13.769Z [NAT] Keepalive acknowledged (rtt=240 ms)
-2026-11-13T08:36:15.732Z [NAT] Keepalive sent
-2026-11-13T08:36:15.770Z [NAT] Keepalive acknowledged (rtt=37 ms)
-2026-11-13T08:36:16.508Z [STATE] Exiting after operational hold (run.exit_when_operational, 5 s)
-2026-11-13T08:36:16.508Z [UDP] Counters: tx=9 rx=2 retx_timeout=2 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=35 frames=6
-2026-11-13T08:36:16.508Z [SIM] tx=9 dropped=2 (22.2%) reordered=1 duplicated=0 rx=5
+2026-11-13T14:27:46.565Z [BOOT] Device starting (boot #1)
+2026-11-13T14:27:46.566Z [BOOT] Soft serial assigned (configuration)
+2026-11-13T14:27:46.566Z [BOOT] Soft serial: ZTP-19FE77
+2026-11-13T14:27:46.566Z [BOOT] Firmware version: v0.9
+2026-11-13T14:27:46.566Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
+2026-11-13T14:27:46.566Z [DISCOVERY] Using static server IP 127.0.0.1:5555
+2026-11-13T14:27:46.566Z [DISCOVERY] Provisioning server found 127.0.0.1:5555 (static)
+2026-11-13T14:27:46.566Z [UDP] HELLO sent (seq=1)
+2026-11-13T14:27:46.571Z [UDP] Session established (session_id=28320991)
+2026-11-13T14:27:46.571Z [NAT] Keepalive sent
+2026-11-13T14:27:46.573Z [NAT] Keepalive acknowledged (rtt=3 ms)
+2026-11-13T14:27:46.573Z [AUTH] REGISTER: session_id=28320991 soft_serial=ZTP-19FE77 model=EDGE-GW-050 firmware=v0.9 nonce=18253376279599160910
+2026-11-13T14:27:46.578Z [AUTH] Registration successful
+2026-11-13T14:27:46.578Z [AUTH] Assigned tenant: cruise_ops
+2026-11-13T14:27:46.776Z [UDP] Duplicate packet seq=2 ignored
+2026-11-13T14:27:46.779Z [UDP] Retransmitting seq=4 (timeout)
+2026-11-13T14:27:46.787Z [PROVISION] Config manifest: v2, 1800 bytes, 2 chunks, sha256=7d8edcc00f98ebb1ff7a6280ce559fc9396933ba44ce7f54effe7e581a499ca4
+2026-11-13T14:27:46.986Z [UDP] Duplicate packet seq=3 ignored
+2026-11-13T14:27:46.986Z [UDP] Retransmitting seq=5 (timeout)
+2026-11-13T14:27:47.021Z [UDP] Received packet seq=5 (out of order, expected=4)
+2026-11-13T14:27:47.021Z [UDP] Buffered packet seq=5
+2026-11-13T14:27:47.021Z [PROVISION] Receiving config (chunk 1/2)
+2026-11-13T14:27:47.021Z [PROVISION] Receiving config (chunk 2/2)
+2026-11-13T14:27:47.021Z [PROVISION] Config: 2 chunks written, 0 duplicates ignored
+2026-11-13T14:27:47.024Z [PROVISION] Config checksum verified
+2026-11-13T14:27:47.030Z [UPGRADE] Current: v0.9 -> Target: v1.0
+2026-11-13T14:27:47.030Z [UDP] Delivered seq=4..5 (drained 1 buffered)
+2026-11-13T14:27:47.223Z [UDP] Retransmitting seq=6 (timeout)
+2026-11-13T14:27:47.260Z [PROVISION] Firmware manifest: v1.0, 49152 bytes, 48 chunks
+2026-11-13T14:27:47.262Z [UDP] Received packet seq=11 (out of order, expected=8)
+2026-11-13T14:27:47.262Z [UDP] Buffered packet seq=11
+2026-11-13T14:27:47.263Z [UDP] Received packet seq=10 (out of order, expected=8)
+2026-11-13T14:27:47.263Z [UDP] Buffered packet seq=10
+2026-11-13T14:27:47.264Z [UDP] Received packet seq=9 (out of order, expected=8)
+2026-11-13T14:27:47.265Z [UDP] Buffered packet seq=9
+2026-11-13T14:27:47.265Z [UDP] Received packet seq=12 (out of order, expected=8)
+2026-11-13T14:27:47.265Z [UDP] Buffered packet seq=12
+2026-11-13T14:27:47.265Z [UDP] Received packet seq=13 (out of order, expected=8)
+2026-11-13T14:27:47.265Z [UDP] Buffered packet seq=13
+2026-11-13T14:27:47.267Z [UDP] Received packet seq=15 (out of order, expected=8)
+2026-11-13T14:27:47.267Z [UDP] Buffered packet seq=15
+2026-11-13T14:27:47.294Z [UDP] Delivered seq=8..13 (drained 5 buffered)
+2026-11-13T14:27:47.319Z [UDP] Received packet seq=19 (out of order, expected=14)
+2026-11-13T14:27:47.319Z [UDP] Buffered packet seq=19
+2026-11-13T14:27:47.319Z [UDP] Received packet seq=21 (out of order, expected=14)
+2026-11-13T14:27:47.319Z [UDP] Buffered packet seq=21
+2026-11-13T14:27:47.320Z [UDP] Received packet seq=16 (out of order, expected=14)
+2026-11-13T14:27:47.320Z [UDP] Buffered packet seq=16
+2026-11-13T14:27:47.320Z [UDP] Received packet seq=17 (out of order, expected=14)
+2026-11-13T14:27:47.320Z [UDP] Buffered packet seq=17
+2026-11-13T14:27:47.320Z [UDP] Received packet seq=18 (out of order, expected=14)
+2026-11-13T14:27:47.320Z [UDP] Buffered packet seq=18
+2026-11-13T14:27:47.320Z [UDP] Received packet seq=20 (out of order, expected=14)
+2026-11-13T14:27:47.320Z [UDP] Buffered packet seq=20
+2026-11-13T14:27:47.323Z [PROVISION] Firmware 8/48 (16%)
+2026-11-13T14:27:47.323Z [UDP] Delivered seq=14..21 (drained 7 buffered)
+2026-11-13T14:27:47.326Z [UDP] Duplicate packet seq=17 ignored
+2026-11-13T14:27:47.526Z [UDP] Duplicate packet seq=14 ignored
+2026-11-13T14:27:47.562Z [UDP] Received packet seq=25 (out of order, expected=22)
+2026-11-13T14:27:47.562Z [UDP] Buffered packet seq=25
+2026-11-13T14:27:47.562Z [UDP] Received packet seq=29 (out of order, expected=22)
+2026-11-13T14:27:47.562Z [UDP] Buffered packet seq=29
+2026-11-13T14:27:47.563Z [PROVISION] Firmware 16/48 (33%)
+2026-11-13T14:27:47.572Z [UDP] Received packet seq=24 (out of order, expected=23)
+2026-11-13T14:27:47.572Z [UDP] Buffered packet seq=24
+2026-11-13T14:27:47.572Z [UDP] Received packet seq=26 (out of order, expected=23)
+2026-11-13T14:27:47.572Z [UDP] Buffered packet seq=26
+2026-11-13T14:27:47.578Z [UDP] Delivered seq=23..26 (drained 3 buffered)
+2026-11-13T14:27:47.578Z [UDP] Received packet seq=30 (out of order, expected=27)
+2026-11-13T14:27:47.578Z [UDP] Buffered packet seq=30
+2026-11-13T14:27:47.579Z [UDP] Received packet seq=32 (out of order, expected=27)
+2026-11-13T14:27:47.579Z [UDP] Buffered packet seq=32
+2026-11-13T14:27:47.579Z [UDP] Received packet seq=33 (out of order, expected=27)
+2026-11-13T14:27:47.579Z [UDP] Buffered packet seq=33
+2026-11-13T14:27:47.580Z [UDP] Received packet seq=31 (out of order, expected=27)
+2026-11-13T14:27:47.582Z [UDP] Buffered packet seq=31
+2026-11-13T14:27:47.582Z [UDP] Received packet seq=34 (out of order, expected=27)
+2026-11-13T14:27:47.582Z [UDP] Buffered packet seq=34
+2026-11-13T14:27:47.588Z [PROVISION] Firmware 24/48 (50%)
+2026-11-13T14:27:47.588Z [UDP] Delivered seq=28..34 (drained 6 buffered)
+2026-11-13T14:27:47.612Z [UDP] Received packet seq=38 (out of order, expected=35)
+2026-11-13T14:27:47.612Z [UDP] Buffered packet seq=38
+2026-11-13T14:27:48.215Z [PROVISION] Firmware 32/48 (66%)
+2026-11-13T14:27:48.227Z [UDP] Delivered seq=37..38 (drained 1 buffered)
+2026-11-13T14:27:48.229Z [UDP] Received packet seq=40 (out of order, expected=39)
+2026-11-13T14:27:48.229Z [UDP] Buffered packet seq=40
+2026-11-13T14:27:48.229Z [UDP] Received packet seq=43 (out of order, expected=39)
+2026-11-13T14:27:48.229Z [UDP] Buffered packet seq=43
+2026-11-13T14:27:48.230Z [UDP] Received packet seq=44 (out of order, expected=39)
+2026-11-13T14:27:48.230Z [UDP] Buffered packet seq=44
+2026-11-13T14:27:48.230Z [UDP] Received packet seq=45 (out of order, expected=39)
+2026-11-13T14:27:48.230Z [UDP] Buffered packet seq=45
+2026-11-13T14:27:48.230Z [UDP] Received packet seq=46 (out of order, expected=39)
+2026-11-13T14:27:48.230Z [UDP] Buffered packet seq=46
+2026-11-13T14:27:48.230Z [UDP] Received packet seq=41 (out of order, expected=39)
+2026-11-13T14:27:48.230Z [UDP] Buffered packet seq=41
+2026-11-13T14:27:48.230Z [UDP] Received packet seq=42 (out of order, expected=39)
+2026-11-13T14:27:48.230Z [UDP] Buffered packet seq=42
+2026-11-13T14:27:48.234Z [UDP] Duplicate packet seq=42 ignored
+2026-11-13T14:27:48.436Z [PROVISION] Firmware 40/48 (83%)
+2026-11-13T14:27:48.436Z [UDP] Delivered seq=39..46 (drained 7 buffered)
+2026-11-13T14:27:48.835Z [UDP] Duplicate packet seq=39 ignored
+2026-11-13T14:27:48.840Z [UDP] Received packet seq=49 (out of order, expected=47)
+2026-11-13T14:27:48.840Z [UDP] Buffered packet seq=49
+2026-11-13T14:27:48.840Z [UDP] Received packet seq=50 (out of order, expected=47)
+2026-11-13T14:27:48.840Z [UDP] Buffered packet seq=50
+2026-11-13T14:27:48.840Z [UDP] Received packet seq=53 (out of order, expected=47)
+2026-11-13T14:27:48.840Z [UDP] Buffered packet seq=53
+2026-11-13T14:27:48.841Z [UDP] Delivered seq=48..50 (drained 2 buffered)
+2026-11-13T14:27:48.841Z [UDP] Delivered seq=52..53 (drained 1 buffered)
+2026-11-13T14:27:48.842Z [PROVISION] Firmware 48/48 (100%)
+2026-11-13T14:27:48.851Z [PROVISION] Firmware: 48 chunks written, 0 duplicates ignored
+2026-11-13T14:27:48.859Z [PROVISION] Firmware checksum verified
+2026-11-13T14:27:48.860Z [UPGRADE] Image v1.0 staged in slot B (verified; commit after the INSTALLING ACK)
+2026-11-13T14:27:48.868Z [UDP] Duplicate packet seq=48 ignored
+2026-11-13T14:27:48.868Z [UDP] Duplicate packet seq=47 ignored
+2026-11-13T14:27:48.898Z [UPGRADE] Upgrade complete, restarting device
+2026-11-13T14:27:48.898Z [UDP] Counters: tx=59 rx=62 retx_timeout=3 retx_fast=0 dup=8 ooo=33 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=13 frames=11
+2026-11-13T14:27:48.906Z [BOOT] Device starting (boot #2)
+2026-11-13T14:27:48.907Z [BOOT] Restart detected (pending upgrade to v1.0)
+2026-11-13T14:27:48.907Z [BOOT] Soft serial loaded
+2026-11-13T14:27:48.907Z [BOOT] Soft serial: ZTP-19FE77
+2026-11-13T14:27:48.907Z [BOOT] Firmware version: v1.0 (slot B)
+2026-11-13T14:27:48.907Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
+2026-11-13T14:27:48.913Z [UDP] Resuming session 28320991 (ctr=1, proposed epoch 1, stage FW_INSTALLED)
+2026-11-13T14:27:48.921Z [UDP] Session resumed (session_id=28320991) epoch=1
+2026-11-13T14:27:48.921Z [VALIDATION] Configuration present (v2, sha ok)
+2026-11-13T14:27:48.921Z [VALIDATION] Firmware v1.0 verified
+2026-11-13T14:27:48.921Z [NAT] Keepalive sent
+2026-11-13T14:27:48.923Z [NAT] Keepalive acknowledged (rtt=7 ms)
+2026-11-13T14:27:48.923Z [VALIDATION] Session healthy (rtt=7 ms)
+2026-11-13T14:27:49.125Z [UDP] Retransmitting seq=4 (timeout)
+2026-11-13T14:27:49.133Z [STATE] Device is OPERATIONAL
+2026-11-13T14:27:51.151Z [NAT] Keepalive sent
+2026-11-13T14:27:51.353Z [UDP] Retransmitting seq=5 (timeout)
+2026-11-13T14:27:51.361Z [NAT] Keepalive acknowledged (rtt=209 ms)
+2026-11-13T14:27:53.355Z [NAT] Keepalive sent
+2026-11-13T14:27:53.423Z [NAT] Keepalive acknowledged (rtt=68 ms)
+2026-11-13T14:27:54.127Z [STATE] Exiting after operational hold (run.exit_when_operational, 5 s)
+2026-11-13T14:27:54.127Z [UDP] Counters: tx=9 rx=2 retx_timeout=2 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=15 frames=6
+2026-11-13T14:27:54.127Z [SIM] tx=9 dropped=2 (22.2%) reordered=1 duplicated=0 rx=6

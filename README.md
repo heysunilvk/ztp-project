@@ -15,11 +15,11 @@ Section references like *DESIGN §8.3* point into those documents.
 > - **Implemented:** every numbered requirement of the PDF (§1–§9), the five README questions, Appendix A step by
 >   step, and the whole bonus section (sequence numbers on every message, ACKs and retransmissions, idempotent
 >   processing, loss/reorder/duplication simulated in code and with netem). Multicast discovery is the bonus option.
-> - **Not demonstrated: the PDF dump's failed row** (ZTP-84BC19, "Failed / Invalid HMAC"). The server code path
->   exists and is described (§6, §10), but the test hook that gives a device the wrong key (`--bad-key`) was not
->   built, so no committed run shows a failed registration. The demo runs **four of the PDF's five devices**. The
->   other hostile-traffic tests (forged, replayed or flooded frames) are open for the same reason. This is a waiver
->   by the project owner, listed in §18.
+> - **The demo runs the PDF's five devices**, and the committed dump has the PDF's five rows, including the failed
+>   one: ZTP-84BC19 has a wrong model key (`--bad-key` test hook) and is rejected with "Invalid HMAC" (§10).
+> - **Open:** the hostile-traffic tests (forged, replayed or flooded frames) and the Appendix A literal nonce
+>   984312 need test tools that were not built (`--replay-test`, `--nonce`, `peer_sim` attack modes). The
+>   protection logic is implemented; this is a waiver by the project owner, listed in §18.
 > - **Verify in five minutes:** `make && make demo` (about 30 s), then read [logs/README.md](logs/README.md) and
 >   compare [logs/appendix_a/](logs/appendix_a/) with the PDF's Appendix A (§14.2). Every test case's result, with
 >   a link to its output: [TEST_REPORT.md](TEST_REPORT.md). The full regression: `make release` (§16, §17).
@@ -56,14 +56,12 @@ macOS and the CI runners).
 ```sh
 git clone https://github.com/heysunilvk/ztp-project.git && cd ztp-project
 make              # build ztp-server, ztp-device and the mock artifacts (-Wall -Wextra -Werror)
-make demo         # one server and four devices over a lossy network; writes logs/ and prints PASS/FAIL
+make demo         # one server and five devices over a lossy network; writes logs/ and prints PASS/FAIL
 cat logs/db_dump.txt
 ```
 
-`make demo` takes about 30 s. It runs four of the PDF's five devices concurrently at 15% loss, 10% reordering and
-5% duplication per direction, then checks the dump and every log (section 10). The fifth, ZTP-84BC19 (the PDF's
-failed "Invalid HMAC" row), needs the `--bad-key` test hook, which was not built; the demo detects that, skips the
-device and says so. The logs it writes are the ones
+`make demo` takes about 30 s. It runs the PDF's five devices concurrently at 15% loss, 10% reordering and 5%
+duplication per direction, then checks the dump and every log (section 10). The logs it writes are the ones
 committed in [logs/](logs/).
 
 Running the two programs by hand (two terminals, from the repository root):
@@ -173,7 +171,7 @@ headers, and the build checks that neither binary contains the other's symbols (
 │   └── netspike.c            platform probe: does multicast/broadcast work on this host?
 │
 ├── scripts/
-│   ├── run_demo.sh           the demo (four of the PDF's five devices; S2 needs --bad-key) and its checks (make demo)
+│   ├── run_demo.sh           the five-device demo (S1–S5) and its checks (make demo)
 │   ├── run_matrix.sh         the demo over the impairment matrix rows and seeds (make matrix)
 │   ├── run_scale.sh          N devices at once at 15% loss (make scale)
 │   ├── run_soak.sh           5 devices for an hour: memory growth and leaks (make soak)
@@ -191,7 +189,7 @@ headers, and the build checks that neither binary contains the other's symbols (
 │   ├── pcapcheck/pcapcheck.c checks every frame in a packet capture: valid header, no IP fragments, max size, no seq gaps
 │   └── conf/                 good and bad configuration fixtures
 │
-├── logs/                     committed: the demo (server, 4 devices, dump), appendix_a/ (the PDF's Appendix A, also
+├── logs/                     committed: the demo (server, 5 devices, dump), appendix_a/ (the PDF's Appendix A, also
 │                             on 10.10.10.5 from CI) and scenarios/; logs/README.md explains each file (section 14)
 │   └── appendix_a/           committed: the single-device Appendix A run
 ├── evidence/                 committed: release-<date>/ (the final release regression run) and ci/ (CI run reports)
@@ -396,20 +394,18 @@ Summary
 | PDF row | Demo device | Result here |
 |---|---|---|
 | ZTP-93AF21 Success v1.1 v3 | v1.0, upgrades to v1.1 | Matches |
-| ZTP-84BC19 Failed — — "Invalid HMAC" | needs a device with a wrong key (`--bad-key`) | **Not in this dump: waived** (below) |
+| ZTP-84BC19 Failed — — "Invalid HMAC" | a wrong model key (`--bad-key`): three REGISTERs rejected, then FAILED | Matches |
 | ZTP-71DD08 Success v1.1 v3 | crashes at chunk 40, relaunched, resumes the transfer | Matches |
 | ZTP-55AC90 Success v1.1 v3 | already on v1.1, its NAT rebinding is simulated | Matches |
 | ZTP-19FE77 Success v1.0 v2 "Legacy device" | legacy model EDGE-GW-050 | Matches |
 
 Times are real, so they differ from the PDF's, and rows are listed by device ID (the PDF lists them by time;
-the verbose dump has each device's first-seen and registration times). **Waiver:** the "Invalid HMAC" row needs a device that
-registers with a wrong key, made with the `--bad-key` test hook. That hook belongs to a set of
-attack-simulation test tools that is still open (PRD R-15, QA §12.5). The pieces of that path are
-implemented and tested separately: frames with a wrong MAC are dropped and counted (end to end for spoofed
-frames in TC-NAT-06, and by the fuzzer in TC-SRV-07), and the database records and dumps a Failed
-"Invalid HMAC" verdict (`tests/test_db.c`). What is not exercised end to end is the device-side sequence
-(REGISTER rejected three times, then FAILED; TC-AUTH-03). When the hook exists, `run_demo.sh` picks it up
-automatically and the dump gains the fifth row.
+the verbose dump has each device's first-seen and registration times). **How the failed row is made:** ZTP-84BC19 is started with the
+`--bad-key` test hook, a unit provisioned with the wrong model key. Its fleet key is right, so HELLO and the path
+probe pass; its REGISTER, under a session key derived from the wrong model key, fails the server's HMAC check. The
+server answers REGISTER_NAK "Invalid HMAC" and records a Failed row; the device verifies the NAK, retries with a
+fresh session twice more, and stops in FAILED (`[AUTH] Registration failed: Invalid HMAC (3/3), giving up`). The
+summary lists it under "Failed registration" with its attempt count (TC-AUTH-03, TC-SRV-05).
 
 ---
 
@@ -584,7 +580,7 @@ persisted every 16 chunks instead of every chunk. (DESIGN §22.1)
 
 | Location | Written by | Contents | Committed |
 |---|---|---|---|
-| [logs/](logs/) | `make demo` | `server.log`, `device_<serial>.log` for each of the four demo devices, `db_dump.txt` (dump and summary), `db_dump_verbose.txt`; [logs/README.md](logs/README.md) lists every file | yes |
+| [logs/](logs/) | `make demo` | `server.log`, `device_<serial>.log` for each of the five demo devices, `db_dump.txt` (dump and summary), `db_dump_verbose.txt`; [logs/README.md](logs/README.md) lists every file | yes |
 | [logs/appendix_a/](logs/appendix_a/) | `make appendix-a` | The single-device Appendix A run (ZTP-93AF21, model EDGE-GW-100, v1.0 → v1.1, session id 7421) on 127.0.0.1: `server.log`, `device_ZTP-93AF21.log`, `db_dump.txt`; and `linux-10.10.10.5/`, the same run on the PDF's address in CI | yes |
 | [logs/scenarios/](logs/scenarios/) | `make scenario-logs` | `generated_serial/` (`[BOOT] Soft serial generated`, then `Soft serial loaded` on the next boot) and `session_timeout/` (`[NAT] Session timeout detected`, then a resume without a second REGISTER) | yes |
 | `results/<date-time>/` | `make test`, `make matrix`, `make scale`, `make soak` | Every suite's output, logs and state, and `summary.txt` (section 16.2) | no |
@@ -800,7 +796,7 @@ make scale N=50   # 50 devices at once at 15% loss (TC-PERF-01)
 make soak         # 5 devices for an hour: memory and leaks (TC-PERF-04; macOS `leaks`, or VALGRIND=1 on Linux)
 make longrun      # TC-NAT-07 (30 min idle behind an emulated NAT) and TC-NAT-13 (10 min), in parallel
 make appendix-a   # the Appendix A journey; rewrites logs/appendix_a/
-make demo         # the demo (four devices); rewrites logs/
+make demo         # the five-device demo; rewrites logs/
 ```
 
 Needs: macOS or Linux, a C compiler, GNU make, `sh`, `python3`, and free local UDP ports (the suites use fixed ranges
@@ -895,7 +891,7 @@ scripts and documents. [evidence/README.md](evidence/README.md) lists every file
 |---|---|---|---|
 | `make test` (16 suites) | PASS | 16 min | 1090 unit checks and 633 scenario checks, 0 failed |
 | `make asan` (the same 16) | PASS | 17 min | 0 failed, no sanitizer report |
-| matrix: M1–M5, M8, M9 × 10 seeds | PASS | 24 min | every row 10/10 runs and 40/40 devices OPERATIONAL (4 devices per run); medians 0.3 / 1.6 / 2.7 / 4.3 / 11.0 / 1.4 / 1.6 s |
+| matrix: M1–M5, M8, M9 × 10 seeds | PASS | 24 min | every row 10/10 runs and 40/40 valid devices OPERATIONAL (4 per run; the fifth, ZTP-84BC19, must and does end FAILED); medians 0.3 / 1.6 / 2.7 / 4.3 / 11.0 / 1.4 / 1.6 s |
 | perf02: M4 × 20 (TC-PERF-02) | PASS | 6 min | 80/80 OPERATIONAL, median 3.4 s, p95 8.7 s (limits 60 / 90 s) |
 | scale: 50 devices (TC-PERF-01) | PASS | 26 s | 50 OPERATIONAL in 21 s, server peak RSS 9 MB |
 | soak: 1 h, 5 devices (TC-PERF-04) | PASS | 61 min | RSS lower at the end than after warm-up for all 6 processes, `leaks` 0, 0 session timeouts |
@@ -956,21 +952,19 @@ QA_TEST_PLAN.md defines 165 test cases. Where each one runs:
 
 | Where | Cases |
 |---|---|
-| `make test` on the Mac **and** in CI on Ubuntu (gcc, clang), macOS and both ASan builds | All 20 unit cases (TC-UNIT-*); TC-CFG-01..10; TC-DISC-01..08; TC-SESS-01..06, 08; TC-REL-02..08, 10, 11; TC-NAT-01..06, 08..12 (TC-NAT-12: the KEEPALIVE half); TC-AUTH-01, 02, 09, 12; TC-PROV-01..03, 06..11, 13; TC-UPG-01..11; TC-VAL-01..05; TC-SRV-01..07, 09, 10; TC-APX-01..10; TC-E2E-01; TC-PDF-01..05; TC-LOG-01..04; TC-PERF-03; TC-SIM-01, 02; TC-DEL-03, 08 |
+| `make test` on the Mac **and** in CI on Ubuntu (gcc, clang), macOS and both ASan builds | All 20 unit cases (TC-UNIT-*); TC-CFG-01..10; TC-DISC-01..08; TC-SESS-01..06, 08; TC-REL-02..08, 10, 11; TC-NAT-01..06, 08..12 (TC-NAT-12: the KEEPALIVE half); TC-AUTH-01, 02, 03, 09, 12; TC-PROV-01..03, 06..11, 13; TC-UPG-01..11; TC-VAL-01..05; TC-SRV-01..07, 09, 10; TC-APX-01..10; TC-E2E-01; TC-PDF-01..05; TC-LOG-01..04; TC-PERF-03; TC-SIM-01, 02; TC-DEL-03, 08 |
 | CI only (needs root on Linux) | TC-REL-01 and TC-PROV-04/05 (packet capture checked frame by frame), TC-PROV-12 (loopback MTU 1280), TC-APX-02/03 and TC-PDF-04 on the PDF's 10.10.10.5:5555, TC-DISC-05 (b) broadcast, TC-SIM-03 (netem), the valgrind half of TC-PERF-04 |
 | CI `impair-matrix` and on the Mac (`make matrix`, `make scale`) | TC-REL-09, TC-E2E-02 (rows M1–M4 × 10 seeds), TC-PERF-01 (50 devices), TC-PERF-02 (row M4 × 20) |
 | The Mac only (too long for CI) | TC-PERF-04 (one-hour soak, `make soak`), TC-NAT-07 and TC-NAT-13 (`make longrun`), matrix rows M5, M8, M9 |
 | M7 checks on the final tree | TC-DEL-01, 02, 04..07, 09, 10 (clean build, demo artifacts, README checklist, committed logs) |
 
-**Open: implemented but not exercised end to end (15 cases, plus the CHUNK_REQ half of TC-NAT-12).** Each of these needs a test tool that
-generates hostile or forged traffic: device hooks (`--bad-key`, `--replay-test`, `--reuse-nonce`,
-`--nonce`) and `peer_sim` modes (a rogue server, forged or replayed frames, floods). Those tools were not
+**Open: implemented but not exercised end to end (14 cases, plus the CHUNK_REQ half of TC-NAT-12).** Each of these needs a test tool that
+generates hostile or forged traffic: device hooks (`--replay-test`, `--reuse-nonce`, `--nonce`) and `peer_sim` modes (a rogue server, forged or replayed frames, floods). Those tools were not
 built in this project and remain with the project owner (PRD R-15, QA §12.5). The protocol logic behind every
 case is implemented; how much of it other tests reach is listed in QA §12.5.
 
 | Case | What it would show | Logic covered today by |
 |---|---|---|
-| TC-AUTH-03 | A device with a wrong key: three Invalid HMAC rejections, FAILED, a Failed row (the PDF's ZTP-84BC19) | MAC drop counted (TC-NAT-06, TC-SRV-07); DB verdict and dump (`tests/test_db.c`) |
 | TC-AUTH-04, 05 | A captured REGISTER replayed into the same session and spliced into another | Duplicate drop in the receive window (TC-REL-04, TC-NAT-12); per-session keys |
 | TC-AUTH-06 | A reused REGISTER nonce is rejected | Nonce cache (code review) |
 | TC-AUTH-07 | A replayed resume is rejected | Resume counter check (code review) |
@@ -986,12 +980,11 @@ case is implemented; how much of it other tests reach is listed in QA §12.5.
 | TC-SRV-08 | 300 half-open sessions hit `SERVER_BUSY` | Half-open cap and TTL (TTL tested in M2) |
 | TC-SRV-11 | 20,000 failing registrations stay under the failed-row cap | Cap and eviction unit-tested at 1,000 rows over a cap of 100 |
 
-Also not exercised end to end: the demo's S2 device (ZTP-84BC19) and the replays of its S3 device (the S3
-crash-and-resume part runs); the Appendix A Step 5 nonce literal 984312.
+Also not exercised end to end: the replays of the demo's S3 device (the S3 crash-and-resume part runs) and the
+Appendix A Step 5 nonce literal 984312. (The wrong-key device, TC-AUTH-03 and the demo's S2, runs: `--bad-key`.)
 
 **Waived.** TC-SIM-04 (macOS dummynet) needs `sudo` to replace the firewall rules and was not run; TC-SIM-03
-(netem on CI) and the in-code simulator cover the same behaviour. The ZTP-84BC19 row of the §9 dump
-(section 10) is waived with TC-AUTH-03.
+(netem on CI) and the in-code simulator cover the same behaviour.
 
 The result of every case, where it ran and the output that shows it: [TEST_REPORT.md](TEST_REPORT.md) (139 PASS,
 10 partial, 15 open, 1 waived, 0 failed). Per requirement: the traceability matrix in QA §10.
@@ -1018,9 +1011,8 @@ The result of every case, where it ran and the output that shows it: [TEST_REPOR
    (TC-SIM-04) was not run, since it needs `sudo` to change the firewall rules.
 9. **Demo timers are aggressive.** With 2 s keepalives, false session timeouts happen at high loss; they are
    recovered by resume but make the logs noisier than production would be.
-10. **The attack-simulation test tooling is incomplete** (section 18): some security behaviours are
-    implemented but not exercised end to end, and the PDF dump's failed row (ZTP-84BC19, "Invalid HMAC") is not
-    demonstrated by any committed run.
+10. **The attack-simulation test tooling is incomplete** (section 18): forged, replayed and flooded traffic is
+    handled by implemented and reviewed logic but not exercised end to end. (The wrong-key device is: `--bad-key`.)
 11. **The MAC is truncated to 128 bits** (standard practice), and firmware is authenticated only by the
     transport, not signed separately (DESIGN §18.3).
 12. **Server restarts:** half-open sessions (not yet registered) are not persisted, so a device that was
