@@ -1,0 +1,51 @@
+2026-11-13T06:40:17.923Z [TEST] TEST HOOK ACTIVE: --rebind-after
+2026-11-13T06:40:17.926Z [BOOT] Device starting (boot #1)
+2026-11-13T06:40:17.926Z [BOOT] Soft serial assigned (configuration)
+2026-11-13T06:40:17.928Z [BOOT] Soft serial: ZTP-55AC90
+2026-11-13T06:40:17.929Z [BOOT] Firmware version: v1.1
+2026-11-13T06:40:17.929Z [CONFIG] profile=demo file=conf/device.json sha256=e8cbe5d0c8a7ae35e351d81883e861606483a78e8ec3e80fad5a5284a0942389 keepalive=2s grace=- window=8 max_dgram=1200
+2026-11-13T06:40:17.929Z [DISCOVERY] Using static server IP 127.0.0.1:42555
+2026-11-13T06:40:17.929Z [DISCOVERY] Provisioning server found 127.0.0.1:42555 (static)
+2026-11-13T06:40:17.929Z [UDP] HELLO sent (seq=1)
+2026-11-13T06:40:18.431Z [UDP] Retransmitting seq=1 (timeout)
+2026-11-13T06:40:18.434Z [UDP] Session established (session_id=834570464)
+2026-11-13T06:40:18.435Z [NAT] Keepalive sent
+2026-11-13T06:40:18.440Z [NAT] Keepalive acknowledged (rtt=6 ms)
+2026-11-13T06:40:18.440Z [AUTH] REGISTER: session_id=834570464 soft_serial=ZTP-55AC90 model=EDGE-GW-100 firmware=v1.1 nonce=4920484480643980389
+2026-11-13T06:40:18.451Z [AUTH] Registration successful
+2026-11-13T06:40:18.451Z [AUTH] Assigned tenant: cruise_ops
+2026-11-13T06:40:18.464Z [PROVISION] Config manifest: v3, 2310 bytes, 3 chunks, sha256=e0a7b0d079200c3e67a33e59b778feb77afff2553fdd9a0c87473e143c23e01b
+2026-11-13T06:40:18.467Z [PROVISION] Receiving config (chunk 1/3)
+2026-11-13T06:40:18.467Z [PROVISION] Receiving config (chunk 2/3)
+2026-11-13T06:40:18.467Z [PROVISION] Receiving config (chunk 3/3)
+2026-11-13T06:40:18.467Z [PROVISION] Config: 3 chunks written, 0 duplicates ignored
+2026-11-13T06:40:18.468Z [PROVISION] Config checksum verified
+2026-11-13T06:40:18.474Z [UPGRADE] Firmware v1.1 is current, no upgrade required
+2026-11-13T06:40:18.474Z [VALIDATION] Configuration present (v3, sha ok)
+2026-11-13T06:40:18.474Z [VALIDATION] Firmware v1.1 verified
+2026-11-13T06:40:18.474Z [NAT] Keepalive sent
+2026-11-13T06:40:18.669Z [UDP] Retransmitting seq=7 (timeout)
+2026-11-13T06:40:18.704Z [NAT] Keepalive acknowledged (rtt=236 ms)
+2026-11-13T06:40:18.704Z [VALIDATION] Session healthy (rtt=236 ms)
+2026-11-13T06:40:18.713Z [STATE] Device is OPERATIONAL
+2026-11-13T06:40:20.731Z [NAT] Keepalive sent
+2026-11-13T06:40:20.734Z [NAT] Keepalive acknowledged (rtt=3 ms)
+2026-11-13T06:40:20.929Z [SIM] NAT: --rebind-after: new source address 0.0.0.0:58206
+2026-11-13T06:40:22.734Z [NAT] Keepalive sent
+2026-11-13T06:40:22.936Z [UDP] Retransmitting seq=10 (timeout)
+2026-11-13T06:40:22.942Z [NAT] Keepalive acknowledged (rtt=209 ms)
+2026-11-13T06:40:24.938Z [NAT] Keepalive sent
+2026-11-13T06:40:24.943Z [NAT] Keepalive acknowledged (rtt=6 ms)
+2026-11-13T06:40:26.939Z [NAT] Keepalive sent
+2026-11-13T06:40:26.945Z [NAT] Keepalive acknowledged (rtt=5 ms)
+2026-11-13T06:40:28.941Z [NAT] Keepalive sent
+2026-11-13T06:40:28.949Z [NAT] Keepalive acknowledged (rtt=7 ms)
+2026-11-13T06:40:30.942Z [NAT] Keepalive sent
+2026-11-13T06:40:30.977Z [NAT] Keepalive acknowledged (rtt=35 ms)
+2026-11-13T06:40:32.944Z [NAT] Keepalive sent
+2026-11-13T06:40:33.146Z [UDP] Retransmitting seq=15 (timeout)
+2026-11-13T06:40:33.150Z [NAT] Keepalive acknowledged (rtt=206 ms)
+2026-11-13T06:40:33.710Z [STATE] Exiting after operational hold (run.exit_when_operational, 15 s)
+2026-11-13T06:40:33.710Z [UDP] Counters: tx=20 rx=7 retx_timeout=4 retx_fast=0 dup=0 ooo=0 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 timeouts=0 srtt_ms=11 frames=15
+2026-11-13T06:40:33.710Z [SIM] tx=20 dropped=4 (20.0%) reordered=1 duplicated=0 rx=17
+2026-11-13T06:40:33.710Z [SIM] NAT: blocked=0 inbound_dropped=0

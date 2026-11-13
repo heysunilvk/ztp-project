@@ -1,0 +1,14 @@
+m2 peer_sim tests (ports 26555/26556/26557)
+    peer_sim: 1000 handshakes: 0 duplicate, 0 zero, 0 sequential neighbours, runs=526 (expected 501, z=1.60)
+    peer_sim: (a) no reply to a KEEPALIVE for unknown sid 2020885699
+    peer_sim: (b) ERROR SESSION_UNKNOWN, Nd' echo matches
+    peer_sim: (b') no reply to a resume HELLO with a bad K_dev MAC
+    peer_sim: session 1624396504: sending KEEPALIVE seq 3, then seq 2 (RETX), then seq 2 again
+    peer_sim: acks after each step: 1, 3, 3; KEEPALIVE_ACKs 2, ACKs 2
+    peer_sim: seq 101 (rcv_ack + 100): replies 0, highest ack -1
+    peer_sim: seq 2 afterwards: ack 2 (1 KEEPALIVE_ACK)
+    peer_sim: bad MAC from another port: 0 replies there; real peer got ack 2 (1 KEEPALIVE_ACK)
+    peer_sim: replayed valid frame from another port: 1 ACK there; real peer then got ack 3
+    peer_sim: flood: sent=10000 tx_dropped=1496 offers_received=7266
+    loss %: peer TX 14.96, server TX 14.56, peer->server end to end 14.96, server->peer end to end 14.56
+m2 peer_sim tests: 29 passed, 0 failed

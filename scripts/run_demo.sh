@@ -37,7 +37,10 @@ HAVE_BAD_KEY=0; echo "$HELP" | grep -q -- '--bad-key' && HAVE_BAD_KEY=1
 HAVE_REPLAY=0; echo "$HELP" | grep -q -- '--replay-test' && HAVE_REPLAY=1
 
 # 1. clean state and logs; artifacts
-rm -rf "$L" "$S"
+# remove what an earlier demo wrote (top-level files only): logs/ also holds README.md, appendix_a/ and scenarios/,
+# which other targets write and which are committed
+rm -f "$L"/*.log "$L"/*.out "$L"/*.txt "$L"/*.bak 2> /dev/null
+rm -rf "$S"
 mkdir -p "$L" "$S"
 "$BIN/mkartifacts" --out artifacts > /dev/null || { echo "run_demo: mkartifacts failed"; exit 1; }
 

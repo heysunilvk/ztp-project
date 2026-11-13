@@ -1,0 +1,3 @@
+row  runs    operational   median    p95     result
+M4   20/20   80/80         3.4s      8.7s    PASS
+matrix PASS

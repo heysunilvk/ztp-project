@@ -1,0 +1,5 @@
+m6 fuzz tests (100000 datagrams x seeds 1 2 3)
+  seed 1: 100000 inputs (random 19893, header 19997, hello 20134, session 25004, discover 14972) in 1617 ms; peak 57 sessions, 0 left after expiry; malformed +57216, unknown +7394, stale +1101, mac_fail +9142,
+  seed 2: 100000 inputs (random 20050, header 20090, hello 20032, session 24966, discover 14862) in 1393 ms; peak 56 sessions, 0 left after expiry; malformed +56922, unknown +7597, stale +1059, mac_fail +9211,
+  seed 3: 100000 inputs (random 20139, header 20036, hello 19928, session 24875, discover 15022) in 1499 ms; peak 56 sessions, 0 left after expiry; malformed +57486, unknown +7524, stale +1049, mac_fail +9131,
+m6 fuzz tests: 21 passed, 0 failed

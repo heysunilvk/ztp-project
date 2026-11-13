@@ -1,0 +1,3 @@
+m5 upgrade tests (ports 30555/30556)
+  TC-NAT-10 (strict): skipped (127.0.0.2 is not local: add an lo0 alias on macOS)
+m5 upgrade tests: 162 passed, 0 failed

@@ -1,0 +1,186 @@
+2026-11-13T06:40:17.792Z [CONFIG] profile=demo file=conf/server.json sha256=8b744a14daeeccef907752832f26e76810bec90e86eaf4441f8ab79edda168cc keepalive=2s grace=30s window=8 max_dgram=1200
+2026-11-13T06:40:17.793Z [PROVISION] Artifact 1: config v3, 2310 bytes, sha256=e0a7b0d079200c3e…
+2026-11-13T06:40:17.793Z [PROVISION] Artifact 2: firmware v1.1, 65536 bytes, sha256=c6861e6d6f876733…
+2026-11-13T06:40:17.793Z [PROVISION] Artifact 3: config v2, 1800 bytes, sha256=7d8edcc00f98ebb1…
+2026-11-13T06:40:17.793Z [PROVISION] Artifact 4: firmware v1.0, 49152 bytes, sha256=2d1a937e3095f8a4…
+2026-11-13T06:40:17.793Z [BOOT] Server listening on 0.0.0.0:42555 (discovery 0.0.0.0:42556, group 239.255.90.90)
+2026-11-13T06:40:17.933Z [UDP] [sid=3700889795 ZTP-19FE77] HELLO seq=1 received (serial ZTP-19FE77, EDGE-GW-050, v0.9), HELLO_ACK seq=1 sent
+2026-11-13T06:40:17.933Z [UDP] [sid=820354807 ZTP-71DD08] HELLO seq=1 received (serial ZTP-71DD08, EDGE-GW-100, v1.0), HELLO_ACK seq=1 sent
+2026-11-13T06:40:17.939Z [NAT] [sid=3700889795 ZTP-19FE77] Keepalive (path probe) acknowledged
+2026-11-13T06:40:17.939Z [UDP] [sid=3700889795 ZTP-19FE77] Session established
+2026-11-13T06:40:17.962Z [DISCOVERY] DISCOVER from ZTP-93AF21 (127.0.0.1:51836), attempt 1: OFFER sent (server 127.0.0.1:42555)
+2026-11-13T06:40:17.967Z [UDP] [sid=3324116775 ZTP-93AF21] HELLO seq=1 received (serial ZTP-93AF21, EDGE-GW-100, v1.0), HELLO_ACK seq=1 sent
+2026-11-13T06:40:17.979Z [AUTH] [sid=3700889795 ZTP-19FE77] Registration successful
+2026-11-13T06:40:17.980Z [AUTH] [sid=3700889795 ZTP-19FE77] Assigned tenant: cruise_ops, fw v1.0, config 2
+2026-11-13T06:40:17.980Z [PROVISION] [sid=3700889795 ZTP-19FE77] Policy: EDGE-GW-050 -> fw v1.0, cfg 2, keepalive 2 s, grace 30 s (source: profile:demo)
+2026-11-13T06:40:17.980Z [DB]   ZTP-19FE77 Success fw=v1.0 cfg=2
+2026-11-13T06:40:17.985Z [PROVISION] [sid=3700889795 ZTP-19FE77] Sending config 2 (2 chunks)
+2026-11-13T06:40:18.005Z [NAT] [sid=3324116775 ZTP-93AF21] Keepalive (path probe) acknowledged
+2026-11-13T06:40:18.005Z [UDP] [sid=3324116775 ZTP-93AF21] Session established
+2026-11-13T06:40:18.015Z [AUTH] [sid=3324116775 ZTP-93AF21] Registration successful
+2026-11-13T06:40:18.016Z [AUTH] [sid=3324116775 ZTP-93AF21] Assigned tenant: cruise_ops, fw v1.1, config 3
+2026-11-13T06:40:18.016Z [PROVISION] [sid=3324116775 ZTP-93AF21] Policy: EDGE-GW-100 -> fw v1.1, cfg 3, keepalive 2 s, grace 30 s (source: profile:demo)
+2026-11-13T06:40:18.016Z [DB]   ZTP-93AF21 Success fw=v1.1 cfg=3
+2026-11-13T06:40:18.023Z [PROVISION] [sid=3324116775 ZTP-93AF21] Sending config 3 (3 chunks)
+2026-11-13T06:40:18.186Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=3 (timeout)
+2026-11-13T06:40:18.225Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=5 (timeout)
+2026-11-13T06:40:18.270Z [PROVISION] [sid=3324116775 ZTP-93AF21] Config v3 delivered and verified by the device (max in flight 3)
+2026-11-13T06:40:18.293Z [PROVISION] [sid=3324116775 ZTP-93AF21] Sending firmware v1.1 (64 chunks)
+2026-11-13T06:40:18.335Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=9 (fast, sack)
+2026-11-13T06:40:18.335Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=10 (fast, sack)
+2026-11-13T06:40:18.335Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=11 (fast, sack)
+2026-11-13T06:40:18.339Z [UDP] [sid=3324116775 ZTP-93AF21] Duplicate packet seq=8 ignored
+2026-11-13T06:40:18.340Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=13 (fast, sack)
+2026-11-13T06:40:18.375Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=17 (fast, sack)
+2026-11-13T06:40:18.375Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=18 (fast, sack)
+2026-11-13T06:40:18.375Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=20 (fast, sack)
+2026-11-13T06:40:18.375Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=21 (fast, sack)
+2026-11-13T06:40:18.424Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=5 (timeout)
+2026-11-13T06:40:18.433Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=1 (timeout)
+2026-11-13T06:40:18.433Z [UDP] [sid=834570464 ZTP-55AC90] HELLO seq=1 received (serial ZTP-55AC90, EDGE-GW-100, v1.1), HELLO_ACK seq=1 sent
+2026-11-13T06:40:18.435Z [PROVISION] [sid=3700889795 ZTP-19FE77] Config v2 delivered and verified by the device (max in flight 2)
+2026-11-13T06:40:18.435Z [PROVISION] [sid=3700889795 ZTP-19FE77] Sending firmware v1.0 (48 chunks)
+2026-11-13T06:40:18.437Z [NAT] [sid=834570464 ZTP-55AC90] Keepalive (path probe) acknowledged
+2026-11-13T06:40:18.437Z [UDP] [sid=834570464 ZTP-55AC90] Session established
+2026-11-13T06:40:18.439Z [NAT] [sid=820354807 ZTP-71DD08] Keepalive (path probe) acknowledged
+2026-11-13T06:40:18.439Z [UDP] [sid=820354807 ZTP-71DD08] Session established
+2026-11-13T06:40:18.445Z [AUTH] [sid=820354807 ZTP-71DD08] Registration successful
+2026-11-13T06:40:18.445Z [AUTH] [sid=820354807 ZTP-71DD08] Assigned tenant: cruise_ops, fw v1.1, config 3
+2026-11-13T06:40:18.445Z [PROVISION] [sid=820354807 ZTP-71DD08] Policy: EDGE-GW-100 -> fw v1.1, cfg 3, keepalive 2 s, grace 30 s (source: profile:demo)
+2026-11-13T06:40:18.445Z [DB]   ZTP-71DD08 Success fw=v1.1 cfg=3
+2026-11-13T06:40:18.451Z [AUTH] [sid=834570464 ZTP-55AC90] Registration successful
+2026-11-13T06:40:18.451Z [AUTH] [sid=834570464 ZTP-55AC90] Assigned tenant: cruise_ops, fw v1.1, config 3
+2026-11-13T06:40:18.451Z [PROVISION] [sid=834570464 ZTP-55AC90] Policy: EDGE-GW-100 -> fw v1.1, cfg 3, keepalive 2 s, grace 30 s (source: profile:demo)
+2026-11-13T06:40:18.451Z [DB]   ZTP-55AC90 Success fw=v1.1 cfg=3
+2026-11-13T06:40:18.459Z [PROVISION] [sid=820354807 ZTP-71DD08] Sending config 3 (3 chunks)
+2026-11-13T06:40:18.463Z [PROVISION] [sid=834570464 ZTP-55AC90] Sending config 3 (3 chunks)
+2026-11-13T06:40:18.474Z [PROVISION] [sid=834570464 ZTP-55AC90] Config v3 delivered and verified by the device (max in flight 3)
+2026-11-13T06:40:18.577Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=17 (timeout)
+2026-11-13T06:40:18.577Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=21 (timeout)
+2026-11-13T06:40:18.608Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=25 (fast, sack)
+2026-11-13T06:40:18.608Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=26 (fast, sack)
+2026-11-13T06:40:18.614Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=32 (fast, sack)
+2026-11-13T06:40:18.625Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=40 (fast, sack)
+2026-11-13T06:40:18.625Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=42 (fast, sack)
+2026-11-13T06:40:18.629Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=44 (fast, sack)
+2026-11-13T06:40:18.633Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=47 (fast, sack)
+2026-11-13T06:40:18.635Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=6 (timeout)
+2026-11-13T06:40:18.676Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=7 (fast, sack)
+2026-11-13T06:40:18.676Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=8 (fast, sack)
+2026-11-13T06:40:18.676Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=10 (fast, sack)
+2026-11-13T06:40:18.680Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=55 (fast, sack)
+2026-11-13T06:40:18.680Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=56 (fast, sack)
+2026-11-13T06:40:18.680Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=57 (fast, sack)
+2026-11-13T06:40:18.685Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=12 (fast, sack)
+2026-11-13T06:40:18.686Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=62 (fast, sack)
+2026-11-13T06:40:18.686Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=63 (fast, sack)
+2026-11-13T06:40:18.686Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=65 (fast, sack)
+2026-11-13T06:40:18.704Z [PROVISION] [sid=820354807 ZTP-71DD08] Config v3 delivered and verified by the device (max in flight 3)
+2026-11-13T06:40:18.704Z [PROVISION] [sid=820354807 ZTP-71DD08] Sending firmware v1.1 (64 chunks)
+2026-11-13T06:40:18.708Z [STATE] [sid=834570464 ZTP-55AC90] OPERATIONAL
+2026-11-13T06:40:18.719Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=21 (fast, sack)
+2026-11-13T06:40:18.755Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=26 (fast, sack)
+2026-11-13T06:40:18.887Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=62 (timeout)
+2026-11-13T06:40:18.887Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=63 (timeout)
+2026-11-13T06:40:18.901Z [UDP] [sid=820354807 ZTP-71DD08] Duplicate packet seq=7 ignored
+2026-11-13T06:40:18.904Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=7 (timeout)
+2026-11-13T06:40:18.916Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=10 (fast, sack)
+2026-11-13T06:40:18.916Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=12 (fast, sack)
+2026-11-13T06:40:18.949Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=30 (timeout)
+2026-11-13T06:40:18.952Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=18 (fast, sack)
+2026-11-13T06:40:18.953Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=33 (timeout)
+2026-11-13T06:40:18.956Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=26 (timeout)
+2026-11-13T06:40:18.967Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=30 (fast, sack)
+2026-11-13T06:40:19.031Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=27 (fast, sack)
+2026-11-13T06:40:19.031Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=28 (fast, sack)
+2026-11-13T06:40:19.170Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=37 (timeout)
+2026-11-13T06:40:19.180Z [UDP] [sid=3700889795 ZTP-19FE77] Duplicate packet seq=9 ignored
+2026-11-13T06:40:19.183Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=39 (fast, sack)
+2026-11-13T06:40:19.234Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=35 (timeout)
+2026-11-13T06:40:19.237Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=36 (timeout)
+2026-11-13T06:40:19.237Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=39 (timeout)
+2026-11-13T06:40:19.240Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=47 (fast, sack)
+2026-11-13T06:40:19.241Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=50 (fast, sack)
+2026-11-13T06:40:19.282Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=36 (fast, sack)
+2026-11-13T06:40:19.283Z [UDP] [sid=820354807 ZTP-71DD08] Duplicate packet seq=9 ignored
+2026-11-13T06:40:19.288Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=63 (timeout)
+2026-11-13T06:40:19.289Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=43 (fast, sack)
+2026-11-13T06:40:19.307Z [UDP] [sid=3700889795 ZTP-19FE77] Received packet seq=11 (out of order, expected=10)
+2026-11-13T06:40:19.307Z [UDP] [sid=3700889795 ZTP-19FE77] Buffered packet seq=11
+2026-11-13T06:40:19.307Z [PROVISION] [sid=3700889795 ZTP-19FE77] Firmware v1.0 delivered and verified by the device (max in flight 8)
+2026-11-13T06:40:19.310Z [UPGRADE] [sid=3700889795 ZTP-19FE77] Device installing v1.0, awaiting resume (grace 30 s)
+2026-11-13T06:40:19.310Z [UDP] [sid=3700889795 ZTP-19FE77] Delivered seq=10..11 (drained 1 buffered)
+2026-11-13T06:40:19.321Z [NAT] [sid=820354807 ZTP-71DD08] Peer address changed 127.0.0.1:51634 -> 127.0.0.1:54496 (rebinding)
+2026-11-13T06:40:19.322Z [AUTH] [sid=820354807 ZTP-71DD08] Resume accepted (ctr=1, epoch=1), no re-registration
+2026-11-13T06:40:19.478Z [UDP] [sid=3700889795 ZTP-19FE77] Duplicate packet seq=11 ignored
+2026-11-13T06:40:19.495Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=71 (timeout)
+2026-11-13T06:40:19.505Z [NAT] [sid=3700889795 ZTP-19FE77] Peer address changed 127.0.0.1:52190 -> 127.0.0.1:58210 (rebinding)
+2026-11-13T06:40:19.508Z [AUTH] [sid=3700889795 ZTP-19FE77] Resume accepted (ctr=1, epoch=1), no re-registration
+2026-11-13T06:40:19.523Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=1 (timeout)
+2026-11-13T06:40:19.524Z [UPGRADE] [sid=3700889795 ZTP-19FE77] Device running v1.0 after the upgrade
+2026-11-13T06:40:19.531Z [STATE] [sid=3700889795 ZTP-19FE77] OPERATIONAL
+2026-11-13T06:40:19.534Z [PROVISION] [sid=820354807 ZTP-71DD08] Sending firmware v1.1 (64 chunks)
+2026-11-13T06:40:19.535Z [PROVISION] [sid=3324116775 ZTP-93AF21] Firmware v1.1 delivered and verified by the device (max in flight 8)
+2026-11-13T06:40:19.538Z [UPGRADE] [sid=3324116775 ZTP-93AF21] Device installing v1.1, awaiting resume (grace 30 s)
+2026-11-13T06:40:19.574Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=11 (fast, sack)
+2026-11-13T06:40:19.574Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=12 (fast, sack)
+2026-11-13T06:40:19.574Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=13 (fast, sack)
+2026-11-13T06:40:19.574Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=14 (fast, sack)
+2026-11-13T06:40:19.574Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=15 (fast, sack)
+2026-11-13T06:40:19.607Z [NAT] [sid=3324116775 ZTP-93AF21] Peer address changed 127.0.0.1:51836 -> 127.0.0.1:57873 (rebinding)
+2026-11-13T06:40:19.610Z [AUTH] [sid=3324116775 ZTP-93AF21] Resume accepted (ctr=1, epoch=1), no re-registration
+2026-11-13T06:40:19.620Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=22 (fast, sack)
+2026-11-13T06:40:19.730Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=2 (timeout)
+2026-11-13T06:40:19.808Z [UDP] [sid=3324116775 ZTP-93AF21] Retransmitting seq=1 (timeout)
+2026-11-13T06:40:19.818Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=28 (timeout)
+2026-11-13T06:40:19.819Z [UPGRADE] [sid=3324116775 ZTP-93AF21] Device running v1.1 after the upgrade
+2026-11-13T06:40:19.820Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=22 (timeout)
+2026-11-13T06:40:19.849Z [STATE] [sid=3324116775 ZTP-93AF21] OPERATIONAL
+2026-11-13T06:40:19.945Z [PROVISION] [sid=820354807 ZTP-71DD08] Firmware v1.1 delivered and verified by the device (max in flight 8)
+2026-11-13T06:40:19.948Z [UPGRADE] [sid=820354807 ZTP-71DD08] Device installing v1.1, awaiting resume (grace 30 s)
+2026-11-13T06:40:19.990Z [NAT] [sid=820354807 ZTP-71DD08] Peer address changed 127.0.0.1:54496 -> 127.0.0.1:51404 (rebinding)
+2026-11-13T06:40:19.993Z [AUTH] [sid=820354807 ZTP-71DD08] Resume accepted (ctr=2, epoch=2), no re-registration
+2026-11-13T06:40:20.131Z [UDP] [sid=3700889795 ZTP-19FE77] Retransmitting seq=2 (timeout)
+2026-11-13T06:40:20.161Z [UDP] [sid=3700889795 ZTP-19FE77] Duplicate packet seq=4 ignored
+2026-11-13T06:40:20.192Z [UDP] [sid=820354807 ZTP-71DD08] Retransmitting seq=1 (timeout)
+2026-11-13T06:40:20.200Z [UPGRADE] [sid=820354807 ZTP-71DD08] Device running v1.1 after the upgrade
+2026-11-13T06:40:20.817Z [UDP] [sid=820354807 ZTP-71DD08] Duplicate packet seq=2 ignored
+2026-11-13T06:40:20.819Z [UDP] [sid=820354807 ZTP-71DD08] Duplicate packet seq=3 ignored
+2026-11-13T06:40:21.479Z [STATE] [sid=820354807 ZTP-71DD08] OPERATIONAL
+Device Registration Details
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+| Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            |
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-13 06:40:17 | Legacy device    |
+| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 06:40:18 | —                |
+| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-13 06:40:18 | —                |
+| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-13 06:40:18 | —                |
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+2026-11-13T06:40:22.938Z [NAT] [sid=834570464 ZTP-55AC90] Peer address changed 127.0.0.1:54209 -> 127.0.0.1:58206 (rebinding)
+2026-11-13T06:40:22.938Z [NAT] [sid=834570464 ZTP-55AC90] Rebinding after 2 s idle: NAT idle timeout is probably below keepalive_interval (2 s); consider lowering it
+2026-11-13T06:40:24.358Z [UDP] [sid=3700889795 ZTP-19FE77] Duplicate packet seq=6 ignored
+2026-11-13T06:40:26.177Z [UDP] [sid=820354807 ZTP-71DD08] Duplicate packet seq=6 ignored
+2026-11-13T06:40:29.909Z [NAT] [sid=3324116775 ZTP-93AF21] Session idle, entering grace
+2026-11-13T06:40:30.360Z [NAT] [sid=3700889795 ZTP-19FE77] Session idle, entering grace
+2026-11-13T06:40:32.179Z [NAT] [sid=820354807 ZTP-71DD08] Session idle, entering grace
+2026-11-13T06:40:33.712Z [BOOT] Server stopping
+Device Registration Details
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+| Device ID  | Registration Status | Firmware Assigned | Config Version | Registration Time   | Notes            |
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+| ZTP-19FE77 | Success             | v1.0              | v2             | 2026-11-13 06:40:17 | Legacy device    |
+| ZTP-93AF21 | Success             | v1.1              | v3             | 2026-11-13 06:40:18 | —                |
+| ZTP-71DD08 | Success             | v1.1              | v3             | 2026-11-13 06:40:18 | —                |
+| ZTP-55AC90 | Success             | v1.1              | v3             | 2026-11-13 06:40:18 | —                |
++------------+---------------------+-------------------+----------------+---------------------+------------------+
+Summary
+  Registered successfully : 4   ZTP-19FE77, ZTP-93AF21, ZTP-71DD08, ZTP-55AC90
+  Failed registration     : 0  
+  Firmware / config per device:
+    ZTP-19FE77  EDGE-GW-050  v0.9 -> v1.0     cfg v2  cruise_ops  Legacy device
+    ZTP-93AF21  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
+    ZTP-71DD08  EDGE-GW-100  v1.0 -> v1.1     cfg v3  cruise_ops
+    ZTP-55AC90  EDGE-GW-100  v1.1 (current)   cfg v3  cruise_ops
+  Protocol counters: rx=79 tx=330 retx_timeout=26 retx_fast=44 dup=10 ooo=1 out_of_window=0 mac_fail=0 replay_rejected=0 rate_limited=0
+2026-11-13T06:40:33.724Z [UDP] Counters: tx=330 rx=79 retx_timeout=26 retx_fast=44 dup=10 ooo=1 out_of_window=0 rx_malformed=0 rx_unknown=0 rx_stale=0 mac_fail=0 replay_rejected=0 rate_limited=0 mtu_stepdowns=0 sessions_peak=4 srtt_ms=16 frames=222
+2026-11-13T06:40:33.724Z [SIM] tx=334 dropped=51 (15.3%) reordered=35 duplicated=7 rx=232

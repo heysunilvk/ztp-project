@@ -1,4 +1,0 @@
-soak: warm-up done (60 s), RSS (kB): 1040 848 832 848 848 864; soaking 3600 s
-soak: RSS (kB) at the end: 976 800 784 800 800 816
-soak: 9155 keepalives, 0 session timeouts
-soak PASS

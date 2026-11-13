@@ -1,0 +1,23 @@
+ZTP regression run asan
+started:  2026-11-12 22:17:26 PST
+commit:   0b2e460
+host:     Darwin arm64, Apple clang version 16.0.0 (clang-1600.0.26.6)
+build:    build-asan
+
+suite            result   time  output
+unit             PASS      24s  unit tests: 1090 checks, 0 failed
+pcapcheck        PASS       1s  pcapcheck selftest: a non-ZTP datagram on the port     -> ok
+cli_config       PASS       3s  cli config tests: 49 passed, 0 failed
+m2_session       PASS     122s  m2 session tests: 69 passed, 0 failed
+m2_peer          PASS      66s  m2 peer_sim tests: 29 passed, 0 failed
+m3_register      PASS      52s  m3 registration tests: 37 passed, 0 failed
+m4_provision     PASS      85s  m4 provisioning tests: 76 passed, 0 failed
+m5_upgrade       PASS      77s  m5 upgrade tests: 162 passed, 0 failed
+m5_gate          PASS     309s  m5 gate tests: 98 passed, 0 failed
+check_appendix_a PASS     116s  Appendix A checks: 32 passed, 0 failed (Step 5 nonce value not checked: --nonce is open tooling, QA §12.5)
+m6_fuzz          PASS       5s  m6 fuzz tests: 21 passed, 0 failed
+m6_server        PASS      17s  m6 server tests: 16 passed, 0 failed
+m6_demo          PASS      18s  demo PASS (34 checks, seed 42)
+m6_perf03        PASS     126s  m6 TC-PERF-03: 3 passed, 0 failed
+check_pdf05      PASS       4s  TC-PDF-05: 7 passed, 0 failed
+separation       PASS       0s  separation OK

@@ -225,13 +225,13 @@ for mode in emsgsize blackhole; do
 done
 expect_line "$T/m_emsgsize.log" "Server reduced the datagram limit to 508 (MTU_REDUCED)" "TC-PROV-13 (b) fill frame"
 
-# --- TC-PROV-10: a device whose own limit is below the server's (net.max_datagram 1000) is not a black hole:
+# --- TC-PROV-13 (negative): a device whose own limit is below the server's (net.max_datagram 1000) is not a black hole:
 # the server fits the chunk size to it (512 B) and does not step the session down to 508 (§5.8) ------------
 start_server md
 run_device md1 40 --serial ZTP-93AF22 --set net.max_datagram=1000
-[ "$DEV_RC" -eq 0 ] && ok || bad "TC-PROV-10 (device limit 1000): device exit $DEV_RC"
-expect_line "$T/md1.log" "Firmware manifest: v1.1, 65536 bytes, 128 chunks" "TC-PROV-10 (device limit 1000)"
-has "$T/md.log" "datagram limit now 508" && bad "TC-PROV-10: the server stepped down for a device limit of 1000" || ok
+[ "$DEV_RC" -eq 0 ] && ok || bad "TC-PROV-13 (device limit 1000): device exit $DEV_RC"
+expect_line "$T/md1.log" "Firmware manifest: v1.1, 65536 bytes, 128 chunks" "TC-PROV-13 (device limit 1000)"
+has "$T/md.log" "datagram limit now 508" && bad "TC-PROV-13: the server stepped down for a device limit of 1000" || ok
 stop_server
 
 echo "m4 provisioning tests: $pass passed, $fail failed"
