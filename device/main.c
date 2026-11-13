@@ -20,7 +20,7 @@ static void dev_usage(void)
           "                  [--test-hooks [--drop-seq tx:N[,N]] [--dup-seq tx:N] [--rebind-after S] [--rekey-at SEQ]\n"
           "                                [--crash-at POINT] [--crash-after-chunks N] [--restart-mode exec|exit]\n"
           "                                [--restart-delay S] [--fail-validate] [--hook-delete-config] [--no-refetch]\n"
-          "                                [--hook-bad-fw-version V] [--hook-hold-health-probe S]]\n"
+          "                                [--hook-bad-fw-version V] [--hook-hold-health-probe S] [--bad-key]]\n"
           "                  [shorthand flags below]\n",
           stderr);
     cfg_print_flags(stderr, CFG_DEVICE);
@@ -115,6 +115,9 @@ int main(int argc, char **argv)
         } else if (!strcmp(f, "--hook-bad-fw-version") && i + 1 < argc) {
             snprintf(d->hook_bad_fw_version, sizeof d->hook_bad_fw_version, "%s", argv[++i]);
             hook_names[nhooks++] = "--hook-bad-fw-version";
+        } else if (!strcmp(f, "--bad-key")) {
+            d->hook_bad_key = true;
+            hook_names[nhooks++] = "--bad-key";
         } else if (!strcmp(f, "--rekey-at") && i + 1 < argc) {
             long v = atol(argv[++i]);
             if (v < 8) { fprintf(stderr, "--rekey-at: expected a sequence number >= 8\n"); return EX_USAGE_CODE; }
@@ -231,6 +234,10 @@ int main(int argc, char **argv)
     }
 
     dev_factory_keys(c->identity.model, d->k_fleet, d->k_mfg);
+    /* --bad-key (TC-AUTH-03, demo S2): a unit provisioned with the wrong model key. The fleet key is right, so
+     * HELLO and the path probe pass under K_boot; the REGISTER, under a K_s derived from this K_mfg, fails the
+     * server's HMAC check: "Invalid HMAC" (DESIGN §10.3) */
+    if (d->hook_bad_key) d->k_mfg[0] ^= 0x5A;
     ztp_derive_kboot(d->k_fleet, d->k_boot);
 
     char err[256];

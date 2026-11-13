@@ -43,13 +43,15 @@ for r in $ROWS; do
             sh scripts/run_demo.sh > "$d/demo.txt" 2>&1; then okruns=$((okruns + 1)); fi
         s=$((s + 1))
     done
-    # every valid device's time to OPERATIONAL (its log's first line to its last OPERATIONAL line)
+    # every valid device's time to OPERATIONAL (its log's first line to its last OPERATIONAL line). ZTP-84BC19 (S2)
+    # is not a valid device: it has the wrong key and must end FAILED, which its run's demo checks
     stats=$(python3 -I - "$OUT" "$r" <<'PY'
 import datetime, glob, sys, statistics
 out, row = sys.argv[1], sys.argv[2]
 def ts(l): return datetime.datetime.strptime(l[:23], "%Y-%m-%dT%H:%M:%S.%f")
 times, total, opn = [], 0, 0
 for f in sorted(glob.glob("%s/%s.*/logs/device_*.log" % (out, row))):
+    if f.endswith("device_ZTP-84BC19.log"): continue
     lines = [l for l in open(f, errors="replace") if l[:2] == "20"]
     if not lines: continue
     total += 1

@@ -131,6 +131,22 @@ n=$(count "$T/d5.log" "[AUTH] REGISTER:")
 stop_server
 grep -q '^| ZTP-200200 | Failed .*| No policy  *|$' "$T/s5.dump" && ok || bad "TC-AUTH-12: DB row"
 
+# --- TC-AUTH-03: a wrong model key (--bad-key): three Invalid HMAC rejections, FAILED, a Failed row ----------
+# The fleet key is right, so HELLO and the path probe pass; each REGISTER fails the server's HMAC check and gets a
+# REGISTER_NAK the device verifies; after auth.register_attempts (3) the device gives up. (The PDF's ZTP-84BC19.)
+start_server s6 db6
+run_device d6 60 --serial ZTP-84BC19 --model EDGE-GW-100 --fw v1.0 --test-hooks --bad-key
+[ "$DEV_RC" -eq 1 ] && ok || bad "TC-AUTH-03: device exit $DEV_RC, want 1 (FAILED)"
+for k in 1 2; do expect_line "$T/d6.log" "[AUTH] Registration failed: Invalid HMAC ($k/3)" TC-AUTH-03; done
+expect_line "$T/d6.log" "[AUTH] Registration failed: Invalid HMAC (3/3), giving up" TC-AUTH-03
+expect_line "$T/d6.log" "[STATE] Device is FAILED (reason: Invalid HMAC)" TC-AUTH-03
+has "$T/d6.log" "[AUTH] Registration successful" && bad "TC-AUTH-03: registered with a wrong key" || ok
+n=$(count "$T/s6.log" "ZTP-84BC19] Registration failed: Invalid HMAC")
+[ "$n" -eq 3 ] && ok || bad "TC-AUTH-03: the server logged $n Invalid HMAC failures, want 3"
+stop_server
+grep -q '^| ZTP-84BC19 | Failed .*| Invalid HMAC  *|$' "$T/s6.dump" && ok || bad "TC-AUTH-03: no Failed / Invalid HMAC DB row"
+grep -q 'Failed registration     : 1 .*ZTP-84BC19' "$T/s6.dump" && ok || bad "TC-AUTH-03: summary does not list the failure"
+
 # --- TC-CFG-09: startup checks ------------------------------------------------------------------------
 sed 's|artifacts/fw_EDGE-GW-100_v1.1.bin|artifacts/missing.bin|' conf/policy.json > "$T/policy_missing.json"
 "$SRV" --set paths.log="$T/c1.log" --set paths.db="$T/c.jsonl" --policy "$T/policy_missing.json" --run-for 1 > "$T/c1.out" 2>&1

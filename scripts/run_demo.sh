@@ -203,7 +203,11 @@ dupes=$(grep '^| ZTP-' "$D" | awk -F'|' '{ print $2 }' | sort | uniq -d)
 # TC-SRV-05: the summary
 nok=4; nfail=0; [ $HAVE_BAD_KEY = 1 ] && nfail=1
 grep -q "Registered successfully : $nok" "$D" && ok || bad "TC-SRV-05: summary does not list $nok successes"
-[ $HAVE_BAD_KEY = 1 ] || skip "TC-SRV-05 failure count (needs S2)"
+if [ $HAVE_BAD_KEY = 1 ]; then
+    grep -q "Failed registration     : $nfail .*ZTP-84BC19" "$D" && ok || bad "TC-SRV-05: summary does not list $nfail failure (ZTP-84BC19)"
+else
+    skip "TC-SRV-05 failure count (needs S2)"
+fi
 
 # TC-SRV-09: provisioning from at least 3 sessions interleaves in the server log. Every session line from the
 # first to the last [PROVISION] line counts: the [PROVISION] lines alone are a few per session, and on a fast
