@@ -585,7 +585,7 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 
 ### 11.4 Reporting
 - Per milestone: a one-page test summary (passed, failed, blocked; new defects; risks).
-- At release: `TEST_REPORT.md` with the traceability matrix filled in, the impairment matrix results (time and retx ratio per row), and the perf numbers.
+- At release: [`TEST_REPORT.md`](TEST_REPORT.md) (written at M7) with the traceability matrix filled in, the impairment matrix results (time and retx ratio per row), and the perf numbers.
 
 ---
 

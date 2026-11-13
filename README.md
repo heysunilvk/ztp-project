@@ -7,7 +7,8 @@ dependencies beyond libc, runs on macOS and Linux, and uses UDP only.
 
 This README answers the assignment ("UDP‑Based Zero Touch Provisioning (ZTP) Assignment.pdf", here *the PDF*).
 The detailed documents behind it are [PRD_ZTP.md](PRD_ZTP.md) (requirements), [DESIGN.md](DESIGN.md)
-(architecture and protocol) and [QA_TEST_PLAN.md](QA_TEST_PLAN.md) (test plan); PDF copies are in [pdf/](pdf/).
+(architecture and protocol), [QA_TEST_PLAN.md](QA_TEST_PLAN.md) (test plan) and [TEST_REPORT.md](TEST_REPORT.md)
+(the result of every test case); PDF copies are in [pdf/](pdf/).
 Section references like *DESIGN §8.3* point into those documents.
 
 **Contents**
@@ -100,6 +101,7 @@ headers, and the build checks that neither binary contains the other's symbols (
 ├── PRD_ZTP.md                product requirements: requirement IDs, scenarios S1–S5, milestones, risks (R-15: open tooling)
 ├── DESIGN.md                 architecture, wire protocol, state machines, configuration model, README drafts
 ├── QA_TEST_PLAN.md           test strategy, every test case (TC-*), the impairment matrix, gates and the open-tooling register
+├── TEST_REPORT.md            release test report: the result, where it ran and the evidence for each of the 165 cases
 ├── UDP‑Based Zero Touch Provisioning (ZTP) Assignment.pdf   the assignment
 ├── pdf/                      PDF exports of the three documents above (regenerated from the .md files)
 ├── Makefile                  build, test, demo, matrix, scale, soak, longrun, asan (GNU Make 3.81-compatible)
@@ -841,6 +843,9 @@ there can be copied into a root shell on any Linux machine.
 
 ## 17. Test evidence and CI
 
+[TEST_REPORT.md](TEST_REPORT.md) gathers the results below by test case: one row per case with its result,
+where it ran and a link to the output.
+
 ### 17.1 The release run
 [evidence/release-20261112/](evidence/release-20261112/) holds the final release regression: `make release` on
 commit **b936db3** (the submitted code), on the development Mac (Darwin arm64, Apple clang 16.0.0), 2026-11-12
@@ -946,7 +951,8 @@ crash-and-resume part runs); the Appendix A Step 5 nonce literal 984312.
 (netem on CI) and the in-code simulator cover the same behaviour. The ZTP-84BC19 row of the §9 dump
 (section 10) is waived with TC-AUTH-03.
 
-The per-case status, with the requirement each case traces to, is the traceability matrix in QA §10.
+The result of every case, where it ran and the output that shows it: [TEST_REPORT.md](TEST_REPORT.md) (143 PASS,
+6 partial, 15 open, 1 waived, 0 failed). Per requirement: the traceability matrix in QA §10.
 
 ---
 
