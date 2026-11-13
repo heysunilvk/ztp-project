@@ -38,6 +38,9 @@ typedef struct srv_session {
     bool     established_logged;
     bool     ks_verified;             /* a frame under K_s has been verified (REGISTER) */
     bool     doomed;                  /* free after the current datagram (terminal reply sent) */
+    uint32_t nak_seq;                 /* the REGISTER that failed K_s (§10.3), 0 if none */
+    uint16_t nak_len;                 /* its REGISTER_NAK, resent to that REGISTER's retransmissions */
+    uint8_t  nak[ZTP_MIN_DGRAM];
     uint32_t last_resume_ctr;
     uint64_t nd_resume, ns_resume;    /* the accepted resume (§12.3 rule 1) */
     bool     resuming;                /* the HELLO being delivered is a resume */
@@ -76,7 +79,10 @@ typedef struct {
     uint64_t expires_ms;
     uint16_t len;
     uint8_t  bytes[ZTP_MIN_DGRAM];    /* terminal replies are small */
+    struct sockaddr_in dst;           /* where the reply went: resent only there */
+    uint8_t  resends;                 /* bounded (SRV_TOMB_RESENDS) */
 } srv_tombstone_t;
+#define SRV_TOMB_RESENDS 3
 
 typedef struct {
     uint32_t ip;

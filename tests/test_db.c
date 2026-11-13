@@ -1,6 +1,7 @@
 /* Server registration DB (DESIGN §14.4, §14.5): verdict rules (§10.3), failed-row cap
  * (TC-SRV-11 logic), journal replay and compaction (TC-SRV-06 logic), dump format (TC-SRV-03). */
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "db.h"
@@ -35,7 +36,7 @@ static void test_verdicts(void)
     srv_db_t db;
     char err[200];
     CHECK_EQ_INT(db_open(&db, path, 10000, err, sizeof err), 0);
-    uint64_t t0 = 1762785130412ull;
+    uint64_t t0 = (uint64_t)time(NULL) * 1000u - 3600u * 1000u;   /* an hour ago: within the 24 h kept for deletions */
     db_register_ok(&db, "ZTP-93AF21", "EDGE-GW-100", "A1", "v1.0", "v1.1", 3, "cruise_ops", "", "127.0.0.1:1", t0);
     db_rec_t *r = db_get(&db, "ZTP-93AF21");
     CHECK(r && r->status == DB_SUCCESS && r->attempts == 1 && r->stage == SST_REGISTERED);
@@ -68,6 +69,10 @@ static void test_verdicts(void)
     s2.sid = 9930;
     db_session(&db, &s2, t0 + 21);
     db_session_deleted(&db, 9930, "ZTP-93AF21", t0 + 22);
+    db_sess_t s3 = s;   /* deleted more than 24 h ago: dropped at the next open (the journal does not grow forever) */
+    s3.sid = 5555;
+    db_session(&db, &s3, t0 - 30u * 3600u * 1000u);
+    db_session_deleted(&db, 5555, "ZTP-93AF21", t0 - 30u * 3600u * 1000u + 1);
 
     /* replay restores everything */
     reopen(&db, false, 10000);
@@ -101,6 +106,17 @@ static void test_verdicts(void)
     fclose(f);
     reopen(&db, false, 10000);
     CHECK(db_get(&db, "ZTP-84BC19") != NULL);
+    /* the next event after a torn line starts on its own line, so it survives the next replay (it would
+     * otherwise be appended to the torn fragment and lost with it) */
+    db_register_ok(&db, "ZTP-AAAA01", "EDGE-GW-100", "A1", "v1.0", "v1.1", 3, "t", "", NULL, t0 + 40);
+    reopen(&db, false, 10000);
+    CHECK(db_get(&db, "ZTP-AAAA01") != NULL);
+    /* bytes outside printable ASCII are escaped, so the line still parses on replay and after compaction */
+    db_register_ok(&db, "ZTP-AAAA02", "EDGE-GW-100", "\xe9\x01", "v1.0", "v1.1", 3, "t", "", NULL, t0 + 41);
+    reopen(&db, false, 10000);
+    CHECK(db_get(&db, "ZTP-AAAA02") != NULL);
+    reopen(&db, true, 10000);
+    CHECK(db_get(&db, "ZTP-AAAA02") != NULL && db_get(&db, "ZTP-AAAA01") != NULL);
     db_close(&db, false);
 }
 

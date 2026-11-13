@@ -187,6 +187,8 @@ static void test_validation(void)
     CHECK_EQ_INT(load_server_text("{\"nat\": {\"grace_s\": 100}}", false), 78);            /* < 2*20*3 */
     CHECK_EQ_INT(load_server_text("{\"nat\": {\"server_idle_intervals\": 2, \"dead_intervals\": 3}}", false), 78);
     CHECK_EQ_INT(load_server_text("{\"limits\": {\"max_half_open\": 2000}}", false), 78);
+    CHECK_EQ_INT(load_server_text("{\"limits\": {\"max_sessions\": 2000}}", false), 78);   /* > 3/4 of the session table */
+    CHECK_EQ_INT(load_server_text("{\"limits\": {\"max_sessions\": 1536}}", false), 0);
     CHECK_EQ_INT(load_server_text("{\"net\": {\"discovery_port\": 5555}}", false), 78);
     CHECK_EQ_INT(load_server_text("{\"sim\": {\"loss\": 1.5}}", false), 78);
     CHECK_EQ_INT(load_server_text("{\"sim\": {\"mtu\": 50}}", false), 78);

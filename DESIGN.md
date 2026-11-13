@@ -361,7 +361,9 @@ ztp/
 │   ├── protocol.[ch]        constants, header encode/decode, TLV codec, MAC apply/verify
 │   ├── reliable.[ch]        per-peer reliability engine (TX window, RTO, RX reorder, SACK, dedup)
 │   ├── sha256.c hmac.c crypto.h   SHA-256, HMAC-SHA256, KDF helpers, ct_memeq()
-│   ├── rand.[ch]            CSPRNG wrapper (/dev/urandom or arc4random_buf)
+│   ├── rand.[ch]            CSPRNG wrapper (arc4random_buf on macOS and the BSDs, /dev/urandom on Linux)
+│   ├── net.[ch]             UDP sockets, multicast/broadcast options, address helpers
+│   ├── hooks.[ch]           test-hook plumbing (--test-hooks gate, one-shot markers, seq lists)
 │   ├── netsim.[ch]          loss/reorder/duplicate/delay shim around sendto()/recvfrom()
 │   ├── timer.[ch]           monotonic clock and min-heap timer queue
 │   ├── log.[ch]             tagged, millisecond-timestamped logs to stdout and a file
@@ -371,38 +373,40 @@ ztp/
 │   └── util.[ch]            atomic file write, hex, version compare
 ├── device/                  → ztp-device
 │   ├── main.c               CLI, lifecycle, execv() restart
-│   ├── fsm.[ch]             device state machine (§15)
+│   ├── dev.h                the device's state, FSM states and internal API (§15)
+│   ├── fsm.c                device state machine and main loop (§15)
+│   ├── keys.c               factory keys (demo: derived in code) and K_boot
 │   ├── discovery.c          static, multicast and broadcast discovery (§6)
 │   ├── session.c            HELLO, resume, keepalive, liveness (§7, §9, §12.3)
-│   ├── transfer.c           chunk bitmap: persistence, next missing run, chunk-size conversion (§11.4, §5.8)
+│   ├── transfer.[ch]        chunk bitmap: persistence, next missing run, chunk-size conversion (§11.4, §5.8)
 │   ├── provision.c          per-file transfer FSM: manifest, CHUNK_REQ, writes, hash verify, black hole (§11.5)
 │   ├── natsim.c             NAT emulator and --rebind-after (§9.8)
 │   ├── upgrade.c            A/B slots, install, rollback (§12)
-│   ├── validate.c           validation checks (§13)
+│   ├── validate.[ch]        validation checks (§13)
 │   └── persist.c            device.state load/store (§15.3)
 ├── server/                  → ztp-server
 │   ├── main.c               CLI, sockets, poll() loop, signal self-pipe (§14.1)
-│   ├── session.[ch]         session table, lifecycle, grace timers (§14.2)
-│   ├── auth.c               key derivation, verification, nonce cache, rate limit (§10)
-│   ├── policy.c             policy file and assignment (§14.3)
-│   ├── artifacts.c          manifests and chunk reads (§11)
+│   ├── srv.h                the server's state, session struct and internal API
+│   ├── session.c            session table, lifecycle, grace timers (§14.2)
+│   ├── auth.[ch]            keys, verification helpers, nonce cache, rate limit (§10)
+│   ├── policy.[ch]          policy file and assignment (§14.3)
+│   ├── artifacts.[ch]       manifests and chunk reads (§11)
 │   ├── handlers.c           per-message-type dispatch
-│   └── db.c                 in-memory DB, JSONL journal, dump and summary (§14.4–14.5)
+│   ├── fuzz.[ch]            --self-fuzz datagram fuzzer (TC-SRV-07)
+│   └── db.[ch]              in-memory DB, JSONL journal, dump and summary (§14.4–14.5)
 ├── tools/mkartifacts.c      deterministic mock firmware and configs; --test-set boundary files; --fw one image with a valid header; --keys demo keys
 ├── tools/netspike.c         M1 multicast/broadcast platform spike
 ├── tests/peer_sim/, tests/pcapcheck/   QA protocol peer and pcap checker (QA §3)
 ├── conf/server.json device.json policy.json keys.json   runtime configuration (§25)
 ├── conf/profiles/{server,device}/  default, demo, strict-nat, cgnat, lan, metered overlays, one file per side (§25.7)
-├── scripts/run_demo.sh  run_matrix.sh  run_scale.sh  run_soak.sh  run_release.sh  ci_evidence.sh   (netem runs inline in CI; no dummynet script)
+├── scripts/run_demo.sh  run_matrix.sh  run_scale.sh  run_soak.sh  run_release.sh  run_scenario_logs.sh  ci_evidence.sh   (netem runs inline in CI; no dummynet script)
 ├── tests/                   unit tests (C) and integration scripts (sh)
 ├── .github/workflows/ci.yml GitHub Actions matrix: ubuntu-latest + macos-latest (§19.4)
-├── logs/                    produced by `make demo` (and logs/appendix_a/ by `make appendix-a`), committed for the submission
+├── logs/                    produced by `make demo`, `make appendix-a` and `make scenario-logs`, committed for the submission (logs/README.md)
 ├── evidence/                the release regression's results and the CI reports, committed
 └── results/                 one folder per test run (not committed)
 ```
 *As built (M7).* README §3 lists every file with its purpose. The planned `fsm.h`, `session.h`, `scripts/netem.sh`, `dummynet.sh`, `pcapcheck.sh` and `tests/fuzz_decode.c` were not created: the device FSM shares `dev.h`, netem runs inline in the CI workflow, the pcap checker is the C tool `tests/pcapcheck/`, and the datagram fuzzer is the server hook `--self-fuzz` (`server/fuzz.c`).
-```
-```
 
 **Separation rule.** `device/` and `server/` never include each other's headers. Both depend only on `common/`. The CI check is that `nm ztp-device` contains no `srv_*` symbols, and vice versa (TC-DEL-03). Everything except each `main.c` is built into `libztpserver.a` / `libztpdevice.a`, so the unit tests can link both sides. The rule applies to the binaries, not to the test runner.
 
@@ -766,7 +770,7 @@ The 1200 B limit is safe on any compliant IPv6 path and on IPv4 paths with MTU �
 2. **Holes are filled in order, without renumbering.** Every unacknowledged CHUNK_DATA above the limit is retransmitted, at the same seq, as a **fill frame**: CHUNK_DATA with `data_len = 0` and flag bit `MTU_REDUCED` (bit 0 of the CHUNK_DATA `flags` byte, §5.4.2), which makes it 52 B. The receiver delivers fill frames in order like any other, so the sequence space stays gap-free. A fill frame doesn't mark its chunk as received. Chunk requests the server has **queued but not yet sequenced** at the old size are **dropped** at the step-down; the device re-requests those chunks after the re-manifest.
 3. **Signalling.**
    - On EMSGSIZE the server initiates. The `MTU_REDUCED` flag on the first fill frame delivered tells the device (event E27).
-   - On a black hole the device initiates. It sends MANIFEST_REQ with `MAX_DGRAM = 508`. The server lowers its session limit at once and fills its stuck frames, as in step 2.
+   - On a black hole the device initiates. It sends MANIFEST_REQ with `MAX_DGRAM = 508`. The server lowers its session limit at once and fills its stuck frames, as in step 2. Only 508 is this signal: a device whose own `net.max_datagram` is lower than the server's (say 1000) sends that value, and the server just picks a chunk size that fits it (512 B), with no step-down (TC-PROV-10).
 4. **Re-manifest.**
    - The device sends MANIFEST_REQ (`MAX_DGRAM = 508`) for the current file.
    - The server **always** answers with `CHUNK_SIZE` = the largest power of two ≤ min(MAX_DGRAM, session limit) − 52, which is 256.
@@ -1016,7 +1020,7 @@ seq 2 is lost again → RTO doubles (for example 400 → 800 ms) → third attem
 The second copy hits `s ≤ rcv_ack` → dropped and re-ACKed. The counter `rx_dup` is increased. The application never sees it.
 
 ### 8.9 Sequence wraparound
-Comparisons use serial-number arithmetic (RFC 1982): `seq_lt(a,b) = (int32_t)(a-b) < 0`. A sequence space resets to 1 on every epoch. At 1000 frames/s, wrapping 2³¹ takes about 24 days. For safety, the device forces a re-key (resume) when `next_seq > 2³⁰`, so wraparound is defined but never reached in practice (TC-UNIT-06).
+Comparisons use serial-number arithmetic (RFC 1982): `seq_lt(a,b) = (int32_t)(a-b) < 0`. A sequence space resets to 1 on every epoch. At 1000 frames/s, wrapping 2³¹ takes about 24 days. For safety, the device forces a re-key (resume) when its `next_seq` or the server's sequence it has received passes 2³⁰, with nothing in flight and not mid-upgrade: the resume starts a new epoch, which restarts both sequence spaces at 1, so wraparound is defined but never reached in practice. Log: `[UDP] Sequence numbers passed 1073741824: re-keying with a resume (new epoch)`. The test hook `--rekey-at SEQ` lowers the threshold so `tests/m5_upgrade.sh` exercises it (TC-UNIT-06).
 
 ### 8.10 Retransmission timer logic (sender side)
 ```mermaid
@@ -1127,7 +1131,7 @@ There's no NAT hardware, so the device gains a **NAT emulator** (`device/natsim.
 - `change_ip_at_s`: at time T, re-bind to a different source IP (for example 127.0.0.2; on Linux all of 127/8 is local, on macOS this needs a lo0 alias).
 - `block_server_port`: drop every datagram to the server's port, which emulates a firewall rule.
 
-A real NAT is also available on the CI Linux runner, as an optional P2 job: network namespaces plus `iptables -t nat MASQUERADE`, with `nf_conntrack_udp_timeout` set low (QA §14).
+*Planned, not built:* a real-NAT CI job (network namespaces plus `iptables -t nat MASQUERADE`, with `nf_conntrack_udp_timeout` set low) was a P2 option (QA §14). NAT behaviour is tested with the device's emulator above.
 
 ---
 
@@ -1203,11 +1207,13 @@ sequenceDiagram
     D->>S: KEEPALIVE path probe (MAC K_boot ok)
     S-->>D: KEEPALIVE_ACK
     D->>S: REGISTER, MAC under a K_s derived from the wrong K_mfg
-    Note right of S: REGISTER MAC fails in a HALF_OPEN session, a verified credential failure for the claimed serial
+    Note right of S: REGISTER MAC fails in a HALF_OPEN session, from the session's address, naming its serial
     S-->>D: REGISTER_NAK BAD_MAC, detail Invalid HMAC, NONCE_REG echo (MAC K_boot, terminal)
-    Note right of S: DB upsert Failed, notes Invalid HMAC, failed_attempts plus 1, session discarded
+    Note right of S: DB upsert Failed, notes Invalid HMAC, failed_attempts plus 1, session kept until its half-open TTL
     Note left of D: NAK verified with K_boot and nonce matches, attempt 1 of 3, back off, fresh HELLO
 ```
+
+**Why the session is kept after an Invalid HMAC (as built, M7 review).** A REGISTER that fails K_s proves only that the MAC is wrong, not who sent it: a device with the wrong model key and a forged frame look the same. So the failure is recorded only for a well-formed REGISTER that names the session's serial, arrives from the session's own address, and is the session's first failure. The session is **not** discarded: a forged frame from an on-path observer (the session id is cleartext in the HELLO_ACK) cannot end a genuine device's registration, whose valid REGISTER still succeeds. The wrong-key device itself backs off and opens a fresh session (the NAK it verifies tells it to); the abandoned half-open session expires after `nat.half_open_ttl_s`. Retransmissions of the failed REGISTER get the same NAK. The residual risk is that such an observer can add a failed attempt to a serial's row; it cannot change a Success or block one.
 
 **Every registration outcome is defined:**
 | Case | Detected at | Server reply (key) | DB effect | Device action | Log (device) |
@@ -1429,7 +1435,7 @@ Each crash point has a hook value, `--crash-at <point>`, which TC-UPG-07 tests o
 | `post-exec`: after the exec, before the resume | The same | Resume |
 | `resume-sent`: right after the resume HELLO leaves (TC-UPG-11 (a)) | The same, with `resume_ctr` and `proposed_epoch` already persisted | The next boot proposes a higher ctr and epoch, accepted whether or not the server accepted the first (§12.3) |
 
-*As built (M5).* `--crash-at download` aborts after the 20th firmware chunk written by the current process, and `--crash-after-chunks N` after the N-th (chunks already on disk from an earlier run don't count). A crash hook calls `abort()` after closing the log, so the log shows `[ERROR] TEST HOOK FIRED: crash-at <point>` as its last line. If `execv` itself fails, the device logs the error and exits 75, so a supervisor can restart it.
+*As built (M5).* `--crash-at download` aborts after the 20th firmware chunk written by the current process, and `--crash-after-chunks N` after the N-th (chunks already on disk from an earlier run don't count). A crash hook calls `abort()` after closing the log, so the log shows `[TEST] TEST HOOK FIRED: crash-at <point>` as its last line. If `execv` itself fails, the device logs the error and exits 75, so a supervisor can restart it.
 
 ### 12.5 Rollback
 If validation on the new firmware fails (§13), for example a version mismatch or the test hook `--fail-validate`:
@@ -1554,7 +1560,11 @@ At startup each artifact is loaded, sized and hashed. A missing or unreadable ar
 | **notes** (registration outcome and policy; shown in the default dump) | str | "Legacy device", "Invalid HMAC", "Unknown model" |
 | provisioning_notes (verbose dump only) | str | "Transfer resumed", "Resumed after upgrade", "Re-registered after session expiry", "Rolled back after failed validation", "Datagram limit reduced to 508" |
 
-**Durability:** every change is appended as one JSON line to `state/db.jsonl` (`fflush` + `fsync`, or `F_FULLFSYNC` on macOS, on registration and session events; buffered for stage events). At startup the server replays the journal to rebuild memory, so **records survive server restarts**, and duplicate detection keeps working across them (TC-SRV-06). The journal is compacted on clean shutdown.
+**Durability:** every change is appended as one JSON line to `state/db.jsonl` (`fflush` + `fsync`, or `F_FULLFSYNC` on macOS, on registration and session events; buffered for stage events). At startup the server replays the journal to rebuild memory, so **records survive server restarts**, and duplicate detection keeps working across them (TC-SRV-06). The journal is compacted on clean shutdown. As built (M7 review):
+- **No ACK without the fsync.** If the synced write behind a registration fails (disk full, I/O error), the server answers REGISTER_NAK `SERVER_BUSY` ("storage unavailable") instead of REGISTER_ACK, and logs it; the device backs off and retries. Registrations are refused this way until a synced write succeeds again.
+- **Torn last line.** A crash can leave a partial last line; replay skips it, and the server then ends that line with a newline before appending, so the next event does not merge into the fragment and get lost with it.
+- **Printable identity strings.** SERIAL, MODEL, FW_VER and HW_REV must be printable ASCII on the wire (a HELLO or REGISTER with anything else is dropped or rejected), and the journal escapes any other byte (`\u00XX`) as a second line of defence, so every line stays valid JSON for replay.
+- **Bounded session history.** Deleted sessions are kept for 24 hours (the window in which a re-registration is noted "after session expiry") and dropped at startup and at compaction, so the journal does not grow with every session ever seen.
 ```json
 {"ts":"2026-11-10T14:32:10.412Z","serial":"ZTP-93AF21","ev":"REGISTER_OK","model":"EDGE-GW-100","fw_initial":"v1.0","fw_assigned":"v1.1","cfg":3,"tenant":"cruise_ops","src":"127.0.0.1:50123"}
 {"ts":"2026-11-10T14:32:10.413Z","ev":"SESSION","sid":7421,"serial":"ZTP-93AF21","model":"EDGE-GW-100","epoch":0,"last_resume_ctr":1,"state":"REGISTERED","max_dgram":1200}
@@ -1942,7 +1952,7 @@ At 20% loss per direction, the expected number of transmissions per reliable fra
 2026-11-10T14:32:10.123Z [UDP] HELLO sent (seq=1)                                   <- device
 2026-11-10T14:32:10.125Z [UDP] [sid=7421 ZTP-93AF21] Session established            <- server
 ```
-- Tags: `[BOOT] [DISCOVERY] [UDP] [NAT] [AUTH] [PROVISION] [UPGRADE] [VALIDATION] [STATE]` (all from the PDF), plus `[SIM]` (impairments), `[DB]` (server records), `[CONFIG]` (effective configuration, §25.9) and `[ERROR]`.
+- Tags: `[BOOT] [DISCOVERY] [UDP] [NAT] [AUTH] [PROVISION] [UPGRADE] [VALIDATION] [STATE]` (all from the PDF), plus `[SIM]` (impairments), `[DB]` (server records), `[CONFIG]` (effective configuration, §25.9), `[ERROR]`, and `[TEST]` (a test hook is active or fired; only with `--test-hooks`).
 - Levels: `-v` (debug: every frame), the default (lifecycle events and every retransmission, out-of-order and duplicate event, as in the bonus examples), `-q` (warnings only).
 - Every server log line about a session carries `[sid=<id> <serial>]` right after the tag, so one device's interleaved lines can be followed with `grep`.
 
@@ -2028,7 +2038,7 @@ These are the non-PDF lines that tests assert on. Each one is a `logmsg.h` const
 | `[VALIDATION] Configuration check failed (<why>): fetching it again` / `[VALIDATION] Configuration check failed (<why>)` | device | Config check fails: re-fetch once / then FAILED | §13 |
 | `[VALIDATION] Firmware check failed: running <v>, target <t>` | device | Rollback (after an upgrade) or FAILED | §13, §12.5 |
 | `[VALIDATION] Session not healthy yet (rtt=<n> ms, srtt=<m> ms): probing again` / `[VALIDATION] Session not healthy within val.deadline_s (<d> s)` | device | Health probe too slow / deadline reached | §13.1 |
-| `[ERROR] TEST HOOK FIRED: <name>` / `[UPGRADE] Restart delayed by <s> s (test hook)` | both / device | A one-shot hook acts (§19.2) / `--restart-delay` | §19.2 |
+| `[TEST] TEST HOOK FIRED: <name>` / `[UPGRADE] Restart delayed by <s> s (test hook)` | both / device | A one-shot hook acts (§19.2) / `--restart-delay` | §19.2 |
 | `[DISCOVERY] DISCOVER sent to <group-or-bcast>:<port> (<mode>, attempt <i>/<n>)` / `[DISCOVERY] No valid OFFER after <n> DISCOVER attempts: falling back to the static address` | device | Each attempt / fallback (E4) | §6.2 |
 | `[DISCOVERY] DISCOVER from <serial> (<ip>:<port>), attempt <i>: OFFER sent (server <ip>:<port>)` | server | DISCOVER verified | §6.2 |
 | `[UDP] Reconnecting in <t> s (<reason>)` | device | Backoff with full jitter before re-discovery (E6a, E6c, E22) | §9.3 |
@@ -2067,6 +2077,9 @@ Assets: device identity, config integrity, firmware integrity, the integrity of 
 2. **No confidentiality.** Configs may contain secrets (SNMP communities, VPN keys). The fix is AEAD or DTLS (N-01).
 3. **No forward secrecy.** There is no Diffie-Hellman, so a K_mfg compromise lets an attacker check MACs on recorded traffic. The impact is limited because nothing is encrypted anyway.
 4. **Firmware is authenticated by the transport, not signed.** A compromised server can push any image. The fix is an Ed25519 signature checked by the device (N-02).
+5. **Replayed resume HELLO just after a server restart** (found in the M7 review, accepted). A restarted server has no cached HELLO_ACK, so an on-path observer who captured the device's last accepted resume HELLO can replay it once: the server re-accepts it (same counter, same nonces, same K_s) and moves the session's peer to the replaying address. The real device's next frames are then out of window, its session times out, and it resumes with a new counter, which recovers it. The effect is a transient stall, the same one the restart itself already causes for a device that was mid-stream; no state is lost and nothing is accepted from the attacker. Persisting the cached reply, or requiring a strictly newer counter after a restart, would remove it.
+6. **A forged REGISTER can add a failed attempt** to a serial's DB row (§10.3, "why the session is kept"): an on-path observer can make one REGISTER per session fail the MAC. It cannot change a Success, abort the genuine registration or write anything else.
+7. **Hostile-traffic tests are open.** The protections above are implemented, and reviewed, but the tools that would exercise them end to end (forged, replayed or flooded traffic) were not built (QA §12.5, PRD R-15); README §18 lists, for each, which other tests reach the logic.
 
 ---
 
@@ -2120,21 +2133,22 @@ ztp-device --state-dir DIR [--model MODEL] [--fw VERSION] [--serial ZTP-XXXXXX]
 ```
 `--model`, `--fw` and `--serial` set `identity.model`, `identity.factory_fw` and `identity.serial`; `--exit-when-operational` sets `run.exit_when_operational = true`. `--reset-state` is an operator action, not a test hook: it deletes the state directory before boot, to recover a FAILED device.
 
-**Test hooks.** They are compiled into both binaries but **refused (exit 64) unless `--test-hooks` is also given**, on both sides, so a production invocation can't enable one by accident. **Every one-shot hook fires at most once per state directory.** These are the crash hooks, `--replay-test`, `--hook-delete-config`, `--hook-bad-fw-version`, `--fail-validate`, `--rebind-after` and `--drop-seq`/`--dup-seq`. When one fires, it writes its name to the marker file before acting (an atomic write): `<state-dir>/hooks.fired` for the device, and `state/server.hooks.fired` (next to `db.jsonl`) for the server. The same argv is re-executed after `execv` or a supervisor relaunch, and the marker stops the hook from firing again, so `--crash-at post-exec` crashes exactly once. Every hook logs `[ERROR] TEST HOOK ACTIVE: <name>` at startup.
+**Test hooks.** They are compiled into both binaries but **refused (exit 64) unless `--test-hooks` is also given**, on both sides, so a production invocation can't enable one by accident. **Every one-shot hook fires at most once per state directory.** These are the crash hooks, `--replay-test`, `--hook-delete-config`, `--hook-bad-fw-version`, `--fail-validate`, `--rebind-after` and `--drop-seq`/`--dup-seq`. When one fires, it writes its name to the marker file before acting (an atomic write): `<state-dir>/hooks.fired` for the device, and `state/server.hooks.fired` (next to `db.jsonl`) for the server. The same argv is re-executed after `execv` or a supervisor relaunch, and the marker stops the hook from firing again, so `--crash-at post-exec` crashes exactly once. Every hook logs `[TEST] TEST HOOK ACTIVE: <name>` at startup.
 | Hook | Binary | Effect | Used by |
 |---|---|---|---|
 | `--first-session-id N` | server | The first session gets id N (e.g. 7421), so Appendix A is reproducible | TC-APX-03, Appendix A |
 | `--self-fuzz N [--fuzz-seed S]` | server | After the normal startup, feed N generated datagrams (random bytes, valid headers with random fields, genuine and mutated K_boot HELLOs, KEEPALIVE/ACK frames for live sessions with random seq/ack/sack, DISCOVERs) straight into the control and discovery handlers on a virtual clock, then shut down normally; exit 1 if a session cap is exceeded (`server/fuzz.c`) | TC-SRV-07 |
-| `--corrupt-chunk IDX` | server | Flip one byte of chunk IDX when serving it | TC-PROV-07 |
+| `--corrupt-chunk IDX` | server | *Not built:* TC-PROV-07 corrupts the artifact file on disk instead (the server serves what is on disk) | TC-PROV-07 |
 | `--drop-seq tx:N[,N…]` / `--dup-seq tx:N` | both | Drop the first transmission of TX seq N (and any listed after it) / send one extra copy of the retransmission of seq N | TC-SESS-02/03, TC-REL-02..04/07 / TC-REL-03 |
 | `--no-discovery` | server | Don't open the discovery socket | TC-DISC-06 |
-| `--bad-key` | device | Corrupt the device's **K_mfg** (a counterfeit or mis-provisioned unit); K_fleet stays correct | Demo S2, TC-AUTH-03 |
-| `--replay-test` | device | Re-send its own captured REGISTER: (a) unchanged into the live session; (b) spliced into a second, never-registered half-open session (header session_id rewritten) (§10.4) | Demo S3, TC-AUTH-04/05 |
-| `--reuse-nonce` / `--nonce N` | device | Re-use the previous NONCE_REG / use a fixed NONCE_REG (e.g. 984312) | TC-AUTH-06 / Appendix A, TC-APX-05 |
+| `--bad-key` | device | *Not built (open tooling, PRD R-15, QA §12.5).* Would corrupt the device's **K_mfg** (a counterfeit or mis-provisioned unit); K_fleet stays correct | Demo S2, TC-AUTH-03 |
+| `--replay-test` | device | *Not built (open tooling, PRD R-15).* Would re-send its own captured REGISTER: (a) unchanged into the live session; (b) spliced into a second, never-registered half-open session (header session_id rewritten) (§10.4) | Demo S3, TC-AUTH-04/05 |
+| `--reuse-nonce` / `--nonce N` | device | *Not built (open tooling, PRD R-15).* Would re-use the previous NONCE_REG / use a fixed NONCE_REG (e.g. 984312) | TC-AUTH-06 / Appendix A, TC-APX-05 |
 | `--crash-after-chunks N` | device | `abort()` after **this process** has stored N firmware chunks (chunks already on disk from a previous run don't count) | Demo S3, TC-PROV-08 |
 | `--crash-at download\|downloaded\|verified\|committed\|post-exec\|resume-sent` | device | `abort()` at that upgrade crash point (§12.4), or just after sending a resume HELLO (§12.3) | TC-UPG-07, TC-UPG-11 |
 | `--restart-mode exec\|exit` / `--restart-delay S` | device | Restart by `execv` or by `exit(75)` for a supervisor / wait S before restarting | TC-UPG-02 / TC-UPG-08 |
 | `--rebind-after S` | device | Re-open the socket after S seconds (a new source port) | Demo S4, TC-NAT-05 |
+| `--rekey-at SEQ` | device | Use SEQ instead of 2³⁰ as the forced re-key threshold (§8.9), so a test reaches it in seconds | TC-UNIT-06 |
 | `--fail-validate` | device | Make the firmware check fail after the upgrade | TC-UPG-09 |
 | `--hook-delete-config` / `--no-refetch` | device | Delete `config.json` before VALIDATE / don't re-fetch it | TC-VAL-02 |
 | `--hook-hold-health-probe S` | device | Hold the first health probe for S seconds after the other checks pass (logs `Health probe held for S s`), so a test can stop the server at the start of VALIDATE | TC-VAL-04 |
@@ -2178,12 +2192,12 @@ Every job keeps `results/` (`RESULTS` is set for the whole workflow), posts each
 
 - **Status (2026-11-11, M5).** Running on every push: `build-test` (Ubuntu gcc and clang, macOS clang; unit, CLI, session, `peer_sim`, registration, provisioning and upgrade tests (`tests/m5_upgrade.sh`), with broadcast TC-DISC-05 (b) on Ubuntu), `asan` (both platforms), `platform-linux` (multicast/broadcast probes, the netem availability check, the TC-REL-01 capture of the session, provisioning and upgrade tests checked by `tests/pcapcheck`, the strict TC-NAT-10 case, which needs 127.0.0.2, the Appendix A reference run on 10.10.10.5:5555 with a capture (`tests/check_appendix_a.sh`: TC-APX-01..10, TC-PDF-04), and TC-PROV-12 on `lo` with MTU 1280 instead of the planned veth `mtu` job) and `platform-macos`. `make test` also runs `tests/m5_gate.sh` and three Appendix A seeds on both platforms; `make longrun` runs TC-NAT-07/13 (40 min, not per push).
 - **Status (M6).** `make test` also runs the server fuzz (`tests/m6_fuzz.sh`, 3 × 100,000 datagrams; 3 × 334,000 in the `asan` job), `tests/m6_server.sh`, one demo (`tests/m6_demo.sh`), TC-PERF-03 and TC-PDF-05. New jobs: `impair-matrix` (both platforms: the demo over rows M1–M4, 3 seeds per push, 10 nightly, and TC-PERF-02 nightly), `impair-netem` (Ubuntu: row M7, the demo under netem on `lo`), and `valgrind` (Ubuntu: a 3-minute soak with the server and one device under memcheck). A nightly schedule (03:17 UTC) runs the 10-seed variants. Local: `make soak` (TC-PERF-04, 1 h with `leaks`) and `make longrun`; `make scale N=50` (TC-PERF-01) runs in CI too. On macOS the long local targets and `make test` hold a `caffeinate -i` assertion (`KEEP_AWAKE` in the Makefile), because the Mac's idle sleep freezes an unattended run. **Not created:** the optional `nat-real` job (a Linux conntrack MASQUERADE NAT); the NAT emulator and rebinding hooks cover the same behaviour (TC-NAT-05/08/09/10).
-- **Cost and footprint:** about 5–8 runner-minutes per push. Free for public repositories; 2,000 min/month on the free plan for private ones. Zero local disk.
+- **Cost and footprint:** about 100 runner-minutes per push (11 jobs in parallel, about 20 minutes of wall-clock time); a manual or nightly run with the 10-seed matrix about 140. Free for public repositories; 2,000 min/month on the free plan for private ones. Zero local disk.
 - **Triggers:** every push and pull request, plus `workflow_dispatch` to run the full matrix on demand.
 - **Evidence (M7):** each job uploads its `results/` as an artifact (90 days); the `evidence` job's Markdown report is committed to `evidence/ci/` on nightly and manual runs, and the release regression run on the Mac is committed to `evidence/` (README §17).
 - **Make 3.81 / 4.x:** the same Makefile is used on both runners, which also enforces the Make 3.81 compatibility rule (§19.1).
 
-> **Reviewer note.** Hosted runners are shared VMs, so timing can be noisy. CI asserts on counts and states, not durations; the performance targets (TC-PERF-02) are measured on the Mac. Whether the `sch_netem` module loads on the hosted kernel is checked in M1 (PRD R-11). If it doesn't, TC-SIM-03 is waived, and the in-code netsim and dummynet cover the requirement.
+> **Reviewer note.** Hosted runners are shared VMs, so timing can be noisy. CI asserts on counts and states, not durations; the performance targets (TC-PERF-02) are measured on the Mac. The M1 probe confirmed that `sch_netem` loads on the hosted kernel (PRD R-11), so TC-SIM-03 runs on every push.
 
 ---
 
@@ -2304,8 +2318,8 @@ Specifically: a lost HELLO or REGISTER is retransmitted with identical bytes and
 7. A single-instance server with no HA and a file-backed DB. The nonce cache is lost on restart (mitigated, §10.4). Half-open sessions are not persisted, so a REGISTER in flight during a server restart is simply repeated (no duplicate row).
 8. 24-bit soft serials risk collisions at fleet scale (§6.1).
 9. The JSON parser deliberately implements only a subset: UTF-8 strings without `\u` surrogate pairs, numbers limited to 64-bit integers and decimals, nesting depth ≤ 16, file size ≤ 64 KiB. YAML is not supported (§25.2).
-10. The in-code simulation doesn't model bursty or queue-induced loss. netem covers this, but only on the CI Linux runner; dummynet on macOS adds OS-level loss and delay, but not reordering or duplication.
-11. Not tested on real customer NAT devices, real flash or real power loss; these are emulated or simulated (the optional CI conntrack NAT job is the closest).
+10. The in-code simulation doesn't model bursty or queue-induced loss. netem covers this (correlated loss, row M7), but only on the CI Linux runner. dummynet on macOS was not used (TC-SIM-04 waived).
+11. Not tested on real customer NAT devices, real flash or real power loss; these are emulated or simulated (the planned CI conntrack NAT job was not built).
 12. RX buffer of 32 × 1200 B per session (memory could be cut by sizing it to W).
 13. There is no local Linux environment. Linux builds, netem, valgrind and the reduced-MTU tests run only on GitHub Actions (§19.4), so Linux-specific problems show up on push, not on a local run.
 14. The NAT's idle timeout is inferred by the server, not measured, and keepalive intervals are not tuned automatically (§9.7). Outbound UDP must be allowed by the customer's firewall; there is no non-UDP fallback.
@@ -2353,6 +2367,8 @@ These were the open questions for reviewers. On 2026-11-10 the owner **adopted t
 ---
 
 ## 24. Project timeline, dependencies and assumptions (summary)
+> **As delivered.** The schedule below is the original estimate, written before development started (16 Nov – 9 Dec 2026). The work was done earlier: design 10 Nov, M1–M6 10–12 Nov, M7 (release regression, README, test report) 12–13 Nov 2026. The dates of each gate are in QA §11 and the git history. The scope and order of the milestones were followed as planned; the changes are recorded in the gate rows.
+
 *The owner is [PRD §11–§12](PRD_ZTP.md#11-release-plan-milestones-and-timeline). This section summarises it from the architecture side.*
 
 | Phase | Design sections built | Effort | Dates (start Mon 2026-11-16) | Architectural checkpoint at the gate |
@@ -2534,7 +2550,7 @@ Every profile below satisfies the §25.8 rules (checked by TC-CFG-07). Each prof
 | `nat.keepalive_min_s` ≤ `keepalive_interval_s` ≤ `keepalive_max_s` (device) | 1 ≤ min; max ≤ 3600 |
 | `nat.dead_intervals`, `server_idle_intervals` | 2..10, and `server_idle_intervals ≥ dead_intervals` |
 | `nat.grace_s` | ≥ 2 × keepalive × server_idle_intervals; ≤ 3600 |
-| `limits.*` | > 0; `max_half_open ≤ max_sessions` |
+| `limits.*` | > 0; `max_sessions ≤ 1536` (3/4 of the 2048-slot session table); `max_half_open ≤ max_sessions` |
 | `sim.loss`, `sim.reorder`, `sim.dup` | 0.0..1.0 |
 | `sim.mtu` | 0 (off) or 68..1500 |
 | ports | 1..65535; `server_port ≠ discovery_port` |

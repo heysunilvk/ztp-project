@@ -99,7 +99,8 @@ static void jstr(char *out, size_t cap, size_t *n, const char *key, const char *
     *n += (size_t)snprintf(out + *n, cap - *n, ",\"%s\":\"", key);
     for (; *v && *n + 8 < cap; v++) {
         if (*v == '"' || *v == '\\') { out[(*n)++] = '\\'; out[(*n)++] = *v; }
-        else if ((unsigned char)*v < 0x20) *n += (size_t)snprintf(out + *n, cap - *n, "\\u%04x", (unsigned char)*v);
+        else if ((unsigned char)*v < 0x20 || (unsigned char)*v >= 0x7f)   /* control and non-ASCII bytes: the */
+            *n += (size_t)snprintf(out + *n, cap - *n, "\\u%04x", (unsigned char)*v);   /* line stays valid JSON */
         else out[(*n)++] = *v;
     }
     *n += (size_t)snprintf(out + *n, cap - *n, "\"");
@@ -118,19 +119,31 @@ static size_t jbegin(char *out, size_t cap, const char *ev, uint64_t ms)
     return (size_t)snprintf(out, cap, "{\"ts\":\"%s\",\"ms\":%llu,\"ev\":\"%s\"", ts, (unsigned long long)ms, ev);
 }
 
+/* A synced write is on disk before the caller's ACK can leave (§12.3 rule 2, §14.4); its outcome is kept in
+ * db->sync_failed so the caller can refuse to ACK (db_synced). */
 static void jwrite(srv_db_t *db, char *line, size_t n, bool sync)
 {
     if (db->replaying || !db->journal) return;
     snprintf(line + n, 8, "}\n");
-    fputs(line, db->journal);
+    bool ok = fputs(line, db->journal) >= 0;
     if (sync) {
-        fflush(db->journal);
+        ok = fflush(db->journal) == 0 && ok;
 #ifdef F_FULLFSYNC
-        if (fcntl(fileno(db->journal), F_FULLFSYNC) != 0) fsync(fileno(db->journal));
+        if (ok && fcntl(fileno(db->journal), F_FULLFSYNC) != 0) ok = fsync(fileno(db->journal)) == 0;
 #else
-        fsync(fileno(db->journal));
+        if (ok) ok = fsync(fileno(db->journal)) == 0;
 #endif
+        if (!ok && !db->sync_failed) LOGW(T_DB, "Journal %s: write failed (%s): registrations are refused until it recovers", db->path, strerror(errno));
+        if (ok && db->sync_failed) LOGI(T_DB, "Journal %s: writes succeed again", db->path);
+        db->sync_failed = !ok;
+    } else if (!ok && !db->sync_failed) {
+        LOGW(T_DB, "Journal %s: write failed (%s)", db->path, strerror(errno));
     }
+}
+
+bool db_synced(const srv_db_t *db)
+{
+    return !db->sync_failed;
 }
 
 /* ---- records ---- */
@@ -319,6 +332,19 @@ void db_seen(srv_db_t *db, const char *serial, const char *src, uint64_t now)
 
 /* ---- sessions ---- */
 
+/* A deleted session is kept only for the 24 h in which a re-registration of its serial is noted as "after
+ * session expiry" (handlers.c); older ones are dropped at open and at compaction, so the table and the
+ * journal hold the live sessions plus one day of deletions, not every session ever seen. */
+#define DB_DELETED_KEEP_MS (24u * 3600u * 1000u)
+
+static void prune_sessions(srv_db_t *db, uint64_t now)
+{
+    size_t k = 0;
+    for (size_t i = 0; i < db->nsess; i++)
+        if (!db->sess[i].deleted || now - db->sess[i].ts_ms < DB_DELETED_KEEP_MS) db->sess[k++] = db->sess[i];
+    db->nsess = k;
+}
+
 static db_sess_t *sess_slot(srv_db_t *db, uint32_t sid)
 {
     for (size_t i = 0; i < db->nsess; i++)
@@ -477,12 +503,15 @@ int db_open(srv_db_t *db, const char *path, int max_failed, char *err, size_t er
     char *slash = strrchr(dir, '/');
     if (slash && slash != dir) { *slash = '\0'; mkdir(dir, 0755); }
     FILE *in = fopen(path, "r");
+    bool torn = false;   /* the file ends without a newline: a write cut short by a crash */
     if (in) {
         db->replaying = true;
         char line[4096];
         unsigned ln = 0, bad = 0;
         while (fgets(line, sizeof line, in)) {
             ln++;
+            size_t l = strlen(line);
+            torn = l == 0 || line[l - 1] != '\n';
             json_error_t je;
             json_doc_t *d = json_parse(line, strlen(line), &je);
             if (!d) { bad++; continue; }   /* a torn last line after a crash is skipped */
@@ -491,6 +520,7 @@ int db_open(srv_db_t *db, const char *path, int max_failed, char *err, size_t er
         }
         fclose(in);
         db->replaying = false;
+        prune_sessions(db, (uint64_t)time(NULL) * 1000u);
         LOGI(T_DB, "Journal %s replayed: %u lines (%u skipped), %zu records, %zu sessions", path, ln, bad, db->nrecs,
              db->nsess);
     }
@@ -498,6 +528,10 @@ int db_open(srv_db_t *db, const char *path, int max_failed, char *err, size_t er
     if (!db->journal) {
         snprintf(err, errsz, "db: cannot open %s: %s", path, strerror(errno));
         return -1;
+    }
+    if (torn) {   /* end the torn line, or the next event would be appended to it and lost with it on replay */
+        fputs("\n", db->journal);
+        fflush(db->journal);
     }
     return 0;
 }
@@ -511,6 +545,7 @@ void db_close(srv_db_t *db, bool compact)
         size_t cap = 4096 + db->nrecs * 1024 + db->nsess * 512, n = 0;
         char *buf = malloc(cap);
         uint64_t now = (uint64_t)time(NULL) * 1000u;
+        prune_sessions(db, now);
         for (size_t i = 0; buf && i < db->nrecs; i++) {
             const db_rec_t *r = &db->recs[i];
             char line[1536];

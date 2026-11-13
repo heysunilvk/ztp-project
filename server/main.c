@@ -34,8 +34,9 @@ static void srv_usage(void)
           "                  [--test-hooks [--first-session-id N] [--drop-seq tx:N[,N]] [--dup-seq tx:N]\n"
           "                                [--self-fuzz N [--fuzz-seed S]]\n"
           "                                [--no-discovery]]\n"
-          "                  [flags from DESIGN §19.2]\n",
+          "                  [shorthand flags below]\n",
           stderr);
+    cfg_print_flags(stderr, CFG_SERVER);
 }
 
 static void mkdir_parent(const char *path)
@@ -204,7 +205,7 @@ int main(int argc, char **argv)
     mkdir_parent(c->paths.log);
     if (log_open(c->paths.log, false, true) != 0)
         fprintf(stderr, "ztp-server: cannot open log %s: %s (stdout only)\n", c->paths.log, strerror(errno));
-    for (int i = 0; i < nhooks; i++) LOGW(T_ERROR, LM_ERROR_TEST_HOOK, hook_names[i]);
+    for (int i = 0; i < nhooks; i++) LOGW(T_TEST, LM_ERROR_TEST_HOOK, hook_names[i]);
     cfg_log_summary(&s->cfg);
 
     char err[512];

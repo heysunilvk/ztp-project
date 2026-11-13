@@ -35,7 +35,7 @@ SERVER_BIN := $(BUILD)/ztp-server
 DEVICE_BIN := $(BUILD)/ztp-device
 TEST_BIN   := $(BUILD)/unit-tests
 
-.PHONY: all server device test demo appendix-a release matrix scale soak longrun asan debug clean clean-logs check-separation spike artifacts
+.PHONY: all server device test demo appendix-a scenario-logs release matrix scale soak longrun asan debug clean clean-logs check-separation spike artifacts
 
 # The default goal: a plain `make` builds both binaries and the artifacts (TC-DEL-01).
 all:
@@ -152,6 +152,10 @@ matrix: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 appendix-a: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 	APX_SEEDS=0 APX_LOGS=logs/appendix_a $(SUITE) appendix_a sh tests/check_appendix_a.sh $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS) 127.0.0.1 5555
 
+# Committed log evidence for a generated soft serial and for session-timeout detection (logs/scenarios/).
+scenario-logs: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
+	$(SUITE) scenario_logs sh scripts/run_scenario_logs.sh
+
 # The release regression (QA §11.2): test, asan, the whole matrix, PERF-01/02/04, longrun, demo and
 # appendix-a into one results folder (about 2.5 h; QUICK=1 skips the soak and longrun).
 # The release run's default folder is results/<date-time>-release; RESULTS=... on the command line or in the
@@ -166,6 +170,7 @@ longrun: $(SERVER_BIN) $(DEVICE_BIN) $(MKARTIFACTS)
 
 # TC-DEL-03: device and server share only common/.
 check-separation: $(SERVER_BIN) $(DEVICE_BIN)
+	@nm $(DEVICE_BIN) > /dev/null && nm $(SERVER_BIN) > /dev/null || { echo "FAIL: nm cannot read the binaries"; exit 1; }
 	@if nm $(DEVICE_BIN) | grep -q ' [TtDdBb] _*srv_'; then echo "FAIL: srv_ symbols in ztp-device"; exit 1; fi
 	@if nm $(SERVER_BIN) | grep -q ' [TtDdBb] _*dev_'; then echo "FAIL: dev_ symbols in ztp-server"; exit 1; fi
 	@if grep -l '#include *"\.\./server/' device/*.c device/*.h 2>/dev/null; then echo "FAIL: device includes server headers"; exit 1; fi

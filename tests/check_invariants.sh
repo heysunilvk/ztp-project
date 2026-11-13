@@ -12,7 +12,11 @@ pass=0
 fail=0
 ok()  { pass=$((pass + 1)); }
 bad() { echo "  FAIL: $1"; fail=$((fail + 1)); }
-sha() { shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
+sha() {   # SHA-256 of a file; a missing file or tool gives a unique non-hash, so two of them never compare equal
+    if command -v shasum > /dev/null 2>&1; then h=$(shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1)
+    else h=$(sha256sum "$1" 2>/dev/null | cut -d' ' -f1); fi
+    echo "${h:-no-hash:$1}"
+}
 val() { sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1; }
 
 D="$L/db_dump.txt"

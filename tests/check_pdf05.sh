@@ -24,7 +24,8 @@ hits=$(grep -rnE '\bhttps?://|\bHTTP/|SOCK_STREAM|(^|[^_A-Za-z0-9])(listen|accep
        common server device tools tests 2>/dev/null)
 [ -z "$hits" ] && ok || bad "HTTP or TCP in the code: $hits"
 for b in "$SRV" "$DEV"; do
-    nm -u "$b" 2>/dev/null | grep -qE '^_?(listen|accept|accept4)$' && bad "$(basename "$b") links listen()/accept()" || ok
+    # macOS nm -u prints _listen; GNU nm prints "U listen@GLIBC_2.2.5": match the bare symbol either way
+    nm -u "$b" 2>/dev/null | grep -qE '(^|[[:space:]])_?(listen|accept|accept4)(@.*)?$' && bad "$(basename "$b") links listen()/accept()" || ok
 done
 # at runtime: no TCP sockets (the binaries open UDP only)
 T=${SUITE_DIR:-${RESULTS:+$RESULTS/check_pdf05}}; T=${T:-${TMPDIR:-/tmp}/ztp-pdf05.$$}   # kept under RESULTS (make test)

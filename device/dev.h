@@ -154,6 +154,7 @@ typedef struct {
 
     /* NAT emulator (natsim.c, §9.8) */
     int         hook_rebind_after_s;
+    uint32_t    hook_rekey_at;      /* --rekey-at N: the forced re-key threshold instead of 2^30 (TC-UNIT-06) */
     struct {
         uint64_t start_ms, last_out_ms, blocked, rx_dropped;
         bool     mapped, flushed, reboot_done, ip_done, rebind_done;

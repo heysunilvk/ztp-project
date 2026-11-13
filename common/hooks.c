@@ -41,7 +41,7 @@ bool hooks_fire_once(hooks_t *h, const char *name)
         }
         free(text);
     }
-    LOGI(T_ERROR, "TEST HOOK FIRED: %s", name);
+    LOGI(T_TEST, "TEST HOOK FIRED: %s", name);
     return true;
 }
 

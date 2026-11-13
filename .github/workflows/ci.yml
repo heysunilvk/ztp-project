@@ -168,7 +168,9 @@ jobs:
           sudo tcpdump -i lo -U -w apx.pcap 'udp and host 10.10.10.5' 2> /dev/null &
           sleep 2
           rc=0
-          APX_PCAP=apx.pcap sh tests/check_appendix_a.sh build/ztp-server build/ztp-device build/mkartifacts 10.10.10.5 5555 > apx.txt 2>&1 || rc=$?
+          # APX_LOGS: the reference run's server and device logs and dumps, uploaded with results/ and committed
+          # to logs/appendix_a/linux-10.10.10.5/ (the Mac's committed run uses 127.0.0.1)
+          APX_LOGS=$RESULTS/appendix_a_10.10.10.5 APX_PCAP=apx.pcap sh tests/check_appendix_a.sh build/ztp-server build/ztp-device build/mkartifacts 10.10.10.5 5555 > apx.txt 2>&1 || rc=$?
           cat apx.txt
           sudo pkill -INT tcpdump || true
           sudo ip addr del 10.10.10.5/32 dev lo

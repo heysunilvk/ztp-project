@@ -165,6 +165,15 @@ void dev_xfer_on_manifest(device_t *d, const uint8_t *p, uint16_t n)
 
     /* CHECK_PARTIAL (§11.5) */
     int rc = dev_xfermap_load(x->mappath, x->sha256, size, &x->map);
+    struct stat pst;
+    if (rc == XFERMAP_OK && (stat(x->part, &pst) != 0 || (uint64_t)pst.st_size != size)) {
+        /* the bitmap without its .part: a crash after the verified file was renamed into place and before the
+         * new stage was saved. The bitmap describes data that is no longer there: start over (not a hash
+         * failure, which would cost one of xfer.hash_attempts) */
+        LOGI(T_PROVISION, "The partial %s is missing: starting it again", kind_name(kind));
+        discard_partial(d);
+        rc = XFERMAP_ABSENT;
+    }
     if (rc == XFERMAP_MISMATCH) {
         LOGI(T_PROVISION, "The %s on the server changed since the partial download: discarding it", kind_name(kind));
         discard_partial(d);
@@ -456,8 +465,11 @@ void dev_xfer_timer(device_t *d)
     }
     uint64_t full = (uint64_t)d->cfg.c.net.pmtu_blackhole_s * 1000u, quiet = d->now - x->req_acked_ms;
     if (!x->probed && quiet >= full / 2) {
+        uint32_t before = d->ka_seq;
         dev_send_keepalive(d, KA_PERIODIC);
-        x->probed = true;
+        /* only a probe that actually left counts (it has a new seq): one queued behind a full send window has
+         * none, and ka_seq == 0 below would then read as "acknowledged"; the next timer tick tries again */
+        x->probed = d->ka_seq != 0 && d->ka_seq != before;
     } else if (x->probed && quiet >= full && d->ka_seq == 0) {   /* the probe was ACKed: small frames pass */
         if (!x->bh_rerequested) {
             LOGI(T_UDP, LM_UDP_MTU_REREQUEST, (unsigned)(quiet / 1000u));

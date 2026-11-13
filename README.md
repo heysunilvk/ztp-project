@@ -11,6 +11,19 @@ The detailed documents behind it are [PRD_ZTP.md](PRD_ZTP.md) (requirements), [D
 (the result of every test case); PDF copies are in [pdf/](pdf/).
 Section references like *DESIGN §8.3* point into those documents.
 
+> **For reviewers: status in brief**
+> - **Implemented:** every numbered requirement of the PDF (§1–§9), the five README questions, Appendix A step by
+>   step, and the whole bonus section (sequence numbers on every message, ACKs and retransmissions, idempotent
+>   processing, loss/reorder/duplication simulated in code and with netem). Multicast discovery is the bonus option.
+> - **Not demonstrated: the PDF dump's failed row** (ZTP-84BC19, "Failed / Invalid HMAC"). The server code path
+>   exists and is described (§6, §10), but the test hook that gives a device the wrong key (`--bad-key`) was not
+>   built, so no committed run shows a failed registration. The demo runs **four of the PDF's five devices**. The
+>   other hostile-traffic tests (forged, replayed or flooded frames) are open for the same reason. This is a waiver
+>   by the project owner, listed in §18.
+> - **Verify in five minutes:** `make && make demo` (about 30 s), then read [logs/README.md](logs/README.md) and
+>   compare [logs/appendix_a/](logs/appendix_a/) with the PDF's Appendix A (§14.2). Every test case's result, with
+>   a link to its output: [TEST_REPORT.md](TEST_REPORT.md). The full regression: `make release` (§16, §17).
+
 **Contents**
 1. [Quick start](#1-quick-start)
 2. [Where the PDF's requirements are answered](#2-where-the-pdfs-requirements-are-answered)
@@ -43,12 +56,14 @@ macOS and the CI runners).
 ```sh
 git clone https://github.com/heysunilvk/ztp-project.git && cd ztp-project
 make              # build ztp-server, ztp-device and the mock artifacts (-Wall -Wextra -Werror)
-make demo         # one server and five devices over a lossy network; writes logs/ and prints PASS/FAIL
+make demo         # one server and four devices over a lossy network; writes logs/ and prints PASS/FAIL
 cat logs/db_dump.txt
 ```
 
-`make demo` takes about 30 s. It runs the PDF's five devices concurrently at 15% loss, 10% reordering and 5%
-duplication per direction, then checks the dump and every log (section 10). The logs it writes are the ones
+`make demo` takes about 30 s. It runs four of the PDF's five devices concurrently at 15% loss, 10% reordering and
+5% duplication per direction, then checks the dump and every log (section 10). The fifth, ZTP-84BC19 (the PDF's
+failed "Invalid HMAC" row), needs the `--bad-key` test hook, which was not built; the demo detects that, skips the
+device and says so. The logs it writes are the ones
 committed in [logs/](logs/).
 
 Running the two programs by hand (two terminals, from the repository root):
@@ -103,8 +118,9 @@ headers, and the build checks that neither binary contains the other's symbols (
 ├── QA_TEST_PLAN.md           test strategy, every test case (TC-*), the impairment matrix, gates and the open-tooling register
 ├── TEST_REPORT.md            release test report: the result, where it ran and the evidence for each of the 165 cases
 ├── UDP‑Based Zero Touch Provisioning (ZTP) Assignment.pdf   the assignment
-├── pdf/                      PDF exports of the three documents above (regenerated from the .md files)
-├── Makefile                  build, test, demo, matrix, scale, soak, longrun, asan (GNU Make 3.81-compatible)
+├── pdf/                      PDF exports of PRD, DESIGN, QA_TEST_PLAN and TEST_REPORT (regenerated from the .md files)
+├── Makefile                  build and every run: test, demo, appendix-a, scenario-logs, matrix, scale, soak, longrun,
+│                             release, asan, debug, check-separation, spike, clean, clean-logs (GNU Make 3.81-compatible)
 ├── .github/workflows/ci.yml  GitHub Actions: 8 jobs on Ubuntu and macOS (section 17)
 ├── .gitignore                build outputs, state/, results/
 │
@@ -113,7 +129,7 @@ headers, and the build checks that neither binary contains the other's symbols (
 │   ├── reliable.[ch]         reliability engine: send window, RTO, SACK, fast retransmit, reorder buffer, duplicates
 │   ├── netsim.[ch]           in-code loss, reordering, duplication, delay, jitter and small-MTU simulation
 │   ├── sha256.c, hmac.c, crypto.h   SHA-256, HMAC-SHA256, key derivation, constant-time compare
-│   ├── rand.[ch]             CSPRNG (arc4random_buf on macOS, getrandom on Linux)
+│   ├── rand.[ch]             CSPRNG (arc4random_buf on macOS and the BSDs, /dev/urandom on Linux)
 │   ├── net.[ch]              UDP sockets, multicast and broadcast; IPv4 only
 │   ├── timer.[ch]            monotonic clock and timer heap
 │   ├── json.[ch]             strict JSON parser (64 KiB, depth 16; no YAML)
@@ -157,10 +173,12 @@ headers, and the build checks that neither binary contains the other's symbols (
 │   └── netspike.c            platform probe: does multicast/broadcast work on this host?
 │
 ├── scripts/
-│   ├── run_demo.sh           the five-device demo and its checks (make demo)
+│   ├── run_demo.sh           the demo (four of the PDF's five devices; S2 needs --bad-key) and its checks (make demo)
 │   ├── run_matrix.sh         the demo over the impairment matrix rows and seeds (make matrix)
 │   ├── run_scale.sh          N devices at once at 15% loss (make scale)
 │   ├── run_soak.sh           5 devices for an hour: memory growth and leaks (make soak)
+│   ├── run_release.sh        the release regression: every suite, ASan, matrix, perf, soak, long runs, logs (make release)
+│   ├── run_scenario_logs.sh  writes logs/scenarios/: a generated serial, a session timeout (make scenario-logs)
 │   └── ci_evidence.sh        turns a CI run into a Markdown report (needs curl and jq)
 │
 ├── tests/
@@ -170,15 +188,17 @@ headers, and the build checks that neither binary contains the other's symbols (
 │   ├── check_appendix_a.sh   the Appendix A journey, step by step (also writes logs/appendix_a/)
 │   ├── check_logs.sh, check_invariants.sh, check_pdf05.sh   log, invariant and "UDP only" checks
 │   ├── peer_sim/peer_sim.c   a scripted protocol peer for negative tests
-│   ├── pcapcheck/pcapcheck.c checks every frame in a packet capture (sizes, sequence numbers, MACs)
+│   ├── pcapcheck/pcapcheck.c checks every frame in a packet capture: valid header, no IP fragments, max size, no seq gaps
 │   └── conf/                 good and bad configuration fixtures
 │
-├── logs/                     committed: the demo's server.log, device_<serial>.log ×5, db_dump.txt (section 14)
+├── logs/                     committed: the demo (server, 4 devices, dump), appendix_a/ (the PDF's Appendix A, also
+│                             on 10.10.10.5 from CI) and scenarios/; logs/README.md explains each file (section 14)
 │   └── appendix_a/           committed: the single-device Appendix A run
-├── evidence/                 committed: the final release regression run and the CI reports (section 17)
+├── evidence/                 committed: release-<date>/ (the final release regression run) and ci/ (CI run reports)
+│                             with evidence/README.md as the index (section 17)
 │
 ├── artifacts/                generated by make: mock firmware and configs the policy points at
-├── build/, build-asan/       generated: objects and binaries (ztp-server, ztp-device are symlinks to build/)
+├── build/, build-asan/, build-debug/   generated: objects and binaries (ztp-server, ztp-device are symlinks to build/)
 ├── state/                    generated: server journal and device state directories
 └── results/                  generated, not committed: one folder per test run (section 16.2)
 ```
@@ -272,9 +292,15 @@ The control flow follows the PDF's Appendix A (DESIGN §4.5 has the full sequenc
 ## 7. Configuration and firmware provisioning
 
 - **Artifacts.** `mkartifacts` writes deterministic mock files into `artifacts/`: the configuration
-  `cfg_v3.json` (the PDF's example: `interfaces`, `mtu`, `keepalive_interval`), the legacy `cfg_v2.json`, and
+  `cfg_v3.json`, the legacy `cfg_v2.json`, and
   64 KiB firmware images with a small header naming the model and version. `conf/policy.json` says which one
-  each model gets.
+  each model gets. `cfg_v3.json` contains the PDF's example configuration word for word (`interfaces`, `mtu`,
+  `keepalive_interval`) plus realistic extra settings (tenant, NTP, syslog, VLANs, 44 ACL entries and a login
+  banner padded with spaces). The padding is deliberate: the PDF's example alone is about 100 bytes, one chunk,
+  while Appendix A shows `chunk 1/3` to `3/3`, so the file is sized to 2310 bytes, three 1024-byte chunks. The
+  device validates the file's keys and stores it; the values describe the provisioned device (its WAN/LAN
+  interfaces, its own keepalive setting) and are not applied to the ZTP session, whose keepalive interval comes
+  from the server's policy in the HELLO_ACK (section 12).
 - **Pull transfer (DESIGN §11.2).** The device asks for a manifest (size, chunk size, SHA-256), then
   requests missing chunks in batches of up to 32. The server reads chunks from the file and keeps no transfer
   state, so it can serve any number of devices and survives its own restart.
@@ -302,7 +328,8 @@ The control flow follows the PDF's Appendix A (DESIGN §4.5 has the full sequenc
   The log shows `[UPGRADE] Upgrade complete, restarting device`, then `[BOOT] Restart detected`.
 - **Resume without duplicate registration.** At boot the device sees `pending_reboot`, resumes its session
   ([section 5](#5-udp-session-management)) and **does not send REGISTER**. The server keeps the single DB
-  row and logs "Resumed after upgrade". This is checked in every demo run (no REGISTER after a restart, one
+  row, logs `Device running v1.1 after the upgrade`, and notes "Resumed after upgrade" in the verbose dump
+  (`db_dump_verbose.txt`). This is checked in every demo run (no REGISTER after a restart, one
   row per device).
 - **Rollback (DESIGN §12.5).** If validation fails after the upgrade, the device switches back to the old
   slot, restarts, and reports the failure.
@@ -451,7 +478,7 @@ configuration is required; the NAT and firewall stay the customer's or ISP's.
 | 10% | ≤ 1.23 | 1.15 | Mostly fast retransmits; barely visible |
 | 20% | ≤ 1.56 | 1.35 | A few timeout stalls; time to OPERATIONAL still far under 60 s |
 | 30% | ≤ 2.04 | 1.72 | Slower; an occasional session failure, then an automatic resume |
-| 50% | ≤ 4.00 | — | Frequent session failures; still converges thanks to resume, slowly |
+| 50% | ≤ 4.00 | not run | Expected: frequent session failures, converging slowly through resumes. Matrix row M6 (50%) is not part of the release run, so this row is a prediction, not a measurement |
 
 In detail: a lost HELLO or REGISTER is retransmitted with identical bytes and answered idempotently; lost
 chunks are re-sent individually (SACK, fast retransmit); a lost ACK is repaired by the next cumulative ACK or
@@ -459,8 +486,8 @@ by the re-ACK a duplicate triggers; a lost keepalive is retransmitted until the 
 production timers a false "dead session" needs about 14 consecutive failed round trips; loss beyond the retry
 budget tears the session down and the device resumes it with jittered backoff, keeping every chunk it has.
 Loss never corrupts state: frames are MAC-checked, handlers are idempotent and progress is written
-atomically. Measured on the demo at 15% loss (matrix row M4 × 20 runs on the Mac): median 3.9 s and p95 11.5
-s from first boot to OPERATIONAL. (DESIGN §8, §9.3, §11.4)
+atomically. Measured on the demo at 20% loss with 10% reordering and 5% duplication (matrix row M4 × 20 runs on the Mac,
+TC-PERF-02): median 3.8 s and p95 9.3 s from first boot to OPERATIONAL. (DESIGN §8, §9.3, §11.4)
 
 ---
 
@@ -486,7 +513,7 @@ The PDF (§4) asks why this is important in real deployments:
    trip), and the interval is set per deployment for battery-powered or metered links.
 
 Measured: an OPERATIONAL device with the production timers (20 s keepalive, 3 intervals) at 20% loss per
-direction ran 30 minutes with no false session timeout (TC-NAT-07); the one-hour, five-device soak exchanged
+direction ran 30 minutes with no false session timeout (TC-NAT-07); the one-hour, five-device soak (five copies of the upgrading device, not the demo's S1–S5) exchanged
 9155 keepalives with no timeouts (TC-PERF-04); and devices behind the NAT emulator survive mapping expiry,
 NAT reboots, rebinding and IP changes (TC-NAT-08..10).
 
@@ -556,8 +583,9 @@ persisted every 16 chunks instead of every chunk. (DESIGN §22.1)
 
 | Location | Written by | Contents | Committed |
 |---|---|---|---|
-| [logs/](logs/) | `make demo` | `server.log`, `device_<serial>.log` for each of the five devices, `db_dump.txt` (dump and summary), `db_dump_verbose.txt` | yes |
-| [logs/appendix_a/](logs/appendix_a/) | `make appendix-a` | The single-device Appendix A run (ZTP-93AF21, model EDGE-GW-100, v1.0 → v1.1, session id 7421): `server.log`, `device_ZTP-93AF21.log`, `db_dump.txt` | yes |
+| [logs/](logs/) | `make demo` | `server.log`, `device_<serial>.log` for each of the four demo devices, `db_dump.txt` (dump and summary), `db_dump_verbose.txt`; [logs/README.md](logs/README.md) lists every file | yes |
+| [logs/appendix_a/](logs/appendix_a/) | `make appendix-a` | The single-device Appendix A run (ZTP-93AF21, model EDGE-GW-100, v1.0 → v1.1, session id 7421) on 127.0.0.1: `server.log`, `device_ZTP-93AF21.log`, `db_dump.txt`; and `linux-10.10.10.5/`, the same run on the PDF's address in CI | yes |
+| [logs/scenarios/](logs/scenarios/) | `make scenario-logs` | `generated_serial/` (`[BOOT] Soft serial generated`, then `Soft serial loaded` on the next boot) and `session_timeout/` (`[NAT] Session timeout detected`, then a resume without a second REGISTER) | yes |
 | `results/<date-time>/` | `make test`, `make matrix`, `make scale`, `make soak` | Every suite's output, logs and state, and `summary.txt` (section 16.2) | no |
 | [evidence/](evidence/) | copied from one release run | The release regression's `results/` folder and the CI reports (section 17) | yes |
 
@@ -568,7 +596,8 @@ Running the binaries by hand writes `logs/server.log` and `logs/device_<serial>.
 `make appendix-a` runs the PDF's Appendix A with its exact values: ZTP-93AF21, EDGE-GW-100, firmware v1.0,
 static server on port 5555, first session id 7421 (a test hook makes it reproducible). On the Mac it uses
 127.0.0.1:5555, because the PDF's 10.10.10.5 would need a `sudo` address alias; CI runs it on 10.10.10.5
-(job `platform-linux`). Each PDF line appears verbatim in [logs/appendix_a/device_ZTP-93AF21.log](logs/appendix_a/device_ZTP-93AF21.log):
+(job `platform-linux`). Each PDF line appears in [logs/appendix_a/device_ZTP-93AF21.log](logs/appendix_a/device_ZTP-93AF21.log), in order, as
+the start of a line (some lines add detail after the PDF's words, such as `(rtt=0 ms)` or `epoch=1`):
 
 ```
 # Step 1
@@ -610,8 +639,9 @@ Fixing it needs the `--nonce` hook, which is part of the open tooling (section 1
 ### 14.3 Format
 Each line is `<UTC time, ISO 8601 with milliseconds> [TAG] message`, for example
 `2026-11-12T05:50:40.842Z [BOOT] Soft serial: ZTP-93AF21`; server lines about a session add `[sid=… serial]`. Tags: `BOOT`, `DISCOVERY`, `UDP`, `NAT`,
-`AUTH`, `PROVISION`, `UPGRADE`, `VALIDATION`, `STATE`, `CONFIG`, `SIM`, `ERROR`. The PDF's lines are printed
-word for word; extra detail follows them. At exit each process prints its counters (frames, retransmissions
+`AUTH`, `PROVISION`, `UPGRADE`, `VALIDATION`, `STATE`, `DB`, `CONFIG`, `SIM`, `ERROR`, and `TEST` (a test hook,
+only with `--test-hooks`; the demo uses some, for example the forced session id 7421 and the S3 crash). The PDF's
+lines start with the PDF's words; some add detail after them. At exit each process prints its counters (frames, retransmissions
 by timeout and fast retransmit, duplicates, out-of-order frames, MAC failures). `-v` adds debug lines
 (every simulated drop, every ACK).
 
@@ -626,7 +656,7 @@ by timeout and fast retransmit, duplicates, out-of-order frames, MAC failures). 
 | `conf/server.json` | server | Network, NAT/session timers, reliability, transfer, limits, paths, logging, simulation |
 | `conf/device.json` | device | "Factory defaults": identity, discovery, NAT bounds, reliability, transfer, validation, paths, simulation |
 | `conf/policy.json` | server | Firmware/config assignment per model or serial; optional NAT overrides per tenant, model, serial |
-| `conf/keys.json` | server | `fleet` key and one key per model, 32 hex digits each. Must be mode 0600 (the server refuses otherwise; `make` sets it) |
+| `conf/keys.json` | server | `fleet` key and one key per model, 64 hex digits (32 bytes) each. Must be mode 0600 (the server refuses otherwise; `make` sets it) |
 | `conf/profiles/server/<name>.json`, `conf/profiles/device/<name>.json` | each side | Overlays applied after the file with `--profile <name>` |
 | `<state-dir>/config.json` | device | The provisioned configuration (from the server) |
 
@@ -637,7 +667,7 @@ advertises the keepalive, dead-interval and grace values in HELLO_ACK; the devic
 `nat.keepalive_min_s..keepalive_max_s`. `--print-config` prints the merged result with the source of every
 value. Unknown keys, wrong types and out-of-range values stop the program at startup with exit code 78 and a
 message naming the key and file (`--config-lenient` turns unknown keys into warnings). Files are strict JSON
-(no comments; `"_comment"` keys are ignored).
+(no comments; keys starting with `_`, such as `"_comment"`, are ignored).
 
 ### 15.2 Keys
 
@@ -680,7 +710,7 @@ message naming the key and file (`--config-lenient` turns unknown keys into warn
 | `xfer.tx_queue_max` | S | int | 64 | 1–4096 | Chunks queued per session |
 | `xfer.persist_every_chunks` | D | int | 16 | 1–4096 | How often the chunk bitmap is saved |
 | `xfer.hash_attempts` | D | int | 2 | 1–10 | Downloads of a file whose hash fails |
-| `limits.max_sessions` | S | int | 1024 | 1–1000000 | Concurrent sessions |
+| `limits.max_sessions` | S | int | 1024 | 1–1536 | Concurrent sessions (the session table has 2048 slots and is kept at most 3/4 full) |
 | `limits.max_half_open` | S | int | 256 | 1–1000000 † (≤ max_sessions) | Sessions not yet registered |
 | `limits.max_failed_records` | S | int | 10000 | 1–10000000 | Failed rows kept |
 | `limits.hello_rate_per_ip` / `hello_burst` | S | int | 10 / 20 | 1–1000000 | HELLO rate limit per source IP (token bucket) |
@@ -695,11 +725,11 @@ message naming the key and file (`--config-lenient` turns unknown keys into warn
 | `sim.loss`, `sim.reorder`, `sim.dup` | S D | number | 0 | 0–1 | Simulated loss, reordering, duplication (sender side) |
 | `sim.reorder_delay_ms`, `sim.delay_ms`, `sim.jitter_ms` | S D | int | 30, 0, 0 | 0–10000 | Simulated delays |
 | `sim.mtu` / `sim.mtu_mode` | S D | int / enum | 0 / emsgsize | 0 or 68–1500 / emsgsize, blackhole | Simulated path MTU |
-| `sim.seed` | S D | int | 0 | 64-bit | PRNG seed for the simulation |
-| `sim.nat.idle_timeout_s`, `reboot_at_s`, `change_ip_at_s` | D | number | 0 | 0–86400 | NAT emulator: mapping expiry, NAT reboot, IP change (0 = off) |
+| `sim.seed` | S D | unsigned 64-bit int | 0 | 0–2⁶⁴−1 | PRNG seed for the simulation |
+| `sim.nat.idle_timeout_s` / `reboot_at_s`, `change_ip_at_s` | D | number / int | 0 | 0–86400 | NAT emulator: mapping expiry, NAT reboot, IP change (0 = off) |
 | `sim.nat.block_server_port` | D | bool | false | — | NAT emulator: block the server port |
 | `identity.model` / `hw_rev` / `factory_fw` | D | string | EDGE-GW-100 / A1 / v1.0 | — | Device metadata |
-| `identity.serial` | D | string or null | null | `ZTP-` + 6 hex digits | null = generate on first boot |
+| `identity.serial` | D | string or null | null | `ZTP-` + 6 uppercase hex digits | null = generate on first boot |
 | `discovery.mode` | D | enum | mcast | mcast, bcast, static | How to find the server |
 | `discovery.server` | D | host:port | 10.10.10.5:5555 | — | Static server address |
 | `discovery.mcast_group`, `mcast_iface_addr`, `bcast_addr` | D | IPv4 | 239.255.90.90, 0.0.0.0, 255.255.255.255 | — | Discovery addresses |
@@ -714,7 +744,10 @@ message naming the key and file (`--config-lenient` turns unknown keys into warn
 `rto_min_ms ≤ rto_initial_ms ≤ rto_max_ms`; `server_port ≠ discovery_port`; `max_half_open ≤ max_sessions`;
 `chunk_size` a power of two and ≤ `max_datagram − 52`; `server_idle_intervals ≥ dead_intervals`;
 `grace_s ≥ 2 × keepalive_interval_s × server_idle_intervals`; on the device
-`keepalive_min_s ≤ keepalive_interval_s ≤ keepalive_max_s`; `sim.mtu` is 0 or at least 68. Every policy entry is
+`keepalive_min_s ≤ keepalive_interval_s ≤ keepalive_max_s`, `reconnect_min_s ≤ reconnect_max_s`,
+`discovery.discovery_port` differs from the port in `discovery.server`, `identity.factory_fw` is a version like
+`v1.0`, `identity.model` is not empty, and `paths.log` holds at most one `%s` (the serial) and no other `%`;
+`sim.mtu` is 0 or at least 68; on the server `limits.max_sessions ≤ 1536`. Every policy entry is
 checked the same way after its NAT overrides are applied, and every `firmware_file` and `config_file` it names
 must exist and parse.
 
@@ -755,7 +788,7 @@ example with overrides is `tests/conf/policy_override.json`.
 ### 16.1 Full regression
 
 ```sh
-make test         # every suite in 16.3 on the release build (about 15 min)
+make test         # the 16 suites of the table in 16.3 marked `make test`, plus the pcapcheck selftest (about 15 min)
 make release      # the release regression: everything below into one results folder (about 2.5 h)
 make asan         # the same with AddressSanitizer + UndefinedBehaviorSanitizer (build-asan/)
 make matrix ROWS="M1 M2 M3 M4" SEEDS=10   # the demo over impairment rows and seeds (QA §6)
@@ -763,12 +796,13 @@ make scale N=50   # 50 devices at once at 15% loss (TC-PERF-01)
 make soak         # 5 devices for an hour: memory and leaks (TC-PERF-04; macOS `leaks`, or VALGRIND=1 on Linux)
 make longrun      # TC-NAT-07 (30 min idle behind an emulated NAT) and TC-NAT-13 (10 min), in parallel
 make appendix-a   # the Appendix A journey; rewrites logs/appendix_a/
-make demo         # the five-device demo; rewrites logs/
+make demo         # the demo (four devices); rewrites logs/
 ```
 
 Needs: macOS or Linux, a C compiler, GNU make, `sh`, `python3`, and free local UDP ports (the suites use fixed ranges
 between 20000 and 60000). No root, no network access beyond loopback. On macOS the long targets keep the Mac
-awake with `caffeinate -i` (an idle sleep freezes timed tests). On Linux, `make soak VALGRIND=1` needs
+awake with `caffeinate -is` (an idle or system sleep freezes timed tests; a closed laptop lid still sleeps the Mac,
+and `make release` fails itself if `pmset` logged a sleep during the run). On Linux, `make soak VALGRIND=1` needs
 `valgrind`. Only one regression should run on a machine at a time.
 
 ### 16.2 Where the results go
@@ -815,8 +849,8 @@ Each suite is a script that takes the binaries as arguments; run it from the rep
 | scale, soak, longrun | `sh scripts/run_scale.sh 50`, `SOAK_S=600 sh scripts/run_soak.sh`, `sh tests/m5_longrun.sh …` | TC-PERF-01, TC-PERF-04, TC-NAT-07/13 |
 
 A suite prints `FAIL: TC-…: reason` for each failing check and a `N passed, M failed` line; the exit status is
-0 only if everything passed. To check a single case, run the suite that contains it (none takes more than
-about three minutes) and look for its ID in the output, or read the case's steps in QA_TEST_PLAN.md and run
+0 only if everything passed. To check a single case, run the suite that contains it (most take one to two minutes;
+`m5_gate` about five) and look for its ID in the output, or read the case's steps in QA_TEST_PLAN.md and run
 them by hand as in [section 1](#1-quick-start): every scenario is the two binaries with flags, for example
 the S3 crash and resume:
 
@@ -848,7 +882,7 @@ where it ran and a link to the output.
 
 ### 17.1 The release run
 [evidence/release-20261112/](evidence/release-20261112/) holds the final release regression: `make release` on
-commit **b936db3** (the submitted code), on the development Mac (Darwin arm64, Apple clang 16.0.0), 2026-11-12
+commit **b936db3** (its device and server code is what was submitted then; see the note below the table), on the development Mac (Darwin arm64, Apple clang 16.0.0), 2026-11-12
 16:16–18:55 PST, with no sleep during the run (checked against `pmset`'s log). [evidence/README.md](evidence/README.md)
 lists every file.
 
@@ -896,12 +930,12 @@ netem and valgrind jobs, and the evidence report):
 
 | Commit | Run | Result |
 |---|---|---|
-| 821d134 | [43252475092](https://github.com/heysunilvk/ztp-project/actions/runs/43252475092) | 12/12 jobs green |
-| a1c5bd3 | [43285234948](https://github.com/heysunilvk/ztp-project/actions/runs/43285234948) | 12/12 jobs green |
+| 821d134 | [43252475092](https://github.com/heysunilvk/ztp-project/actions/runs/43252475092) | 12/12 jobs green (11 test jobs and the `evidence` job) |
+| a1c5bd3 | [43285234948](https://github.com/heysunilvk/ztp-project/actions/runs/43285234948) | 12/12 jobs green (11 test jobs and the `evidence` job) |
 | b936db3 | [43335677454](https://github.com/heysunilvk/ztp-project/actions/runs/43335677454) | every test step passed; `build-test (macos)` failed on its *Upload results* step, a transient storage error. Uploads have since been marked `continue-on-error`, so the tests alone decide a job |
 | dc3c139 | [43355813851](https://github.com/heysunilvk/ztp-project/actions/runs/43355813851) | 11/12 green; `impair-matrix (macos)` failed one demo check, TC-SRV-09, on M2 seed 1 (all 12 devices OPERATIONAL). The check counted session switches over the few `[PROVISION]` lines only; it now counts every session line in the provisioning window. On all 91 release-run server logs the new count passes with a margin of 8 or more switches, where the old one's smallest margin was 2 |
-| cfcb3fa | [43358206325](https://github.com/heysunilvk/ztp-project/actions/runs/43358206325) | 12/12 jobs green (push) |
-| ddfc8fb | [43364354282](https://github.com/heysunilvk/ztp-project/actions/runs/43364354282) | 12/12 jobs green, manual run with the nightly seed counts: matrix M1–M4 × 10 seeds on Ubuntu and macOS (40/40 OPERATIONAL in every row), TC-PERF-02 M4 × 20, TC-PERF-01 50 devices. Committed report: [evidence/ci/2026-11-13-ddfc8fb-run47.md](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
+| cfcb3fa | [43358206325](https://github.com/heysunilvk/ztp-project/actions/runs/43358206325) | 12/12 jobs green (push; 11 test jobs and `evidence`) |
+| ddfc8fb | [43364354282](https://github.com/heysunilvk/ztp-project/actions/runs/43364354282) | 12/12 jobs green (the committed report says "all 11 jobs passed": it cannot report on its own `evidence` job), manual run with the nightly seed counts: matrix M1–M4 × 10 seeds on Ubuntu and macOS (40/40 OPERATIONAL in every row), TC-PERF-02 M4 × 20, TC-PERF-01 50 devices. Committed report: [evidence/ci/2026-11-13-ddfc8fb-run47.md](evidence/ci/2026-11-13-ddfc8fb-run47.md) |
 
 Later runs: https://github.com/heysunilvk/ztp-project/actions. A new committed report: Actions → ci → Run workflow
 (or `gh workflow run ci.yml --ref main`); nightly runs add one too.
@@ -920,7 +954,7 @@ QA_TEST_PLAN.md defines 165 test cases. Where each one runs:
 | The Mac only (too long for CI) | TC-PERF-04 (one-hour soak, `make soak`), TC-NAT-07 and TC-NAT-13 (`make longrun`), matrix rows M5, M8, M9 |
 | M7 checks on the final tree | TC-DEL-01, 02, 04..07, 09, 10 (clean build, demo artifacts, README checklist, committed logs) |
 
-**Open: implemented but not exercised end to end (16 cases).** Each of these needs a test tool that
+**Open: implemented but not exercised end to end (15 cases, plus the CHUNK_REQ half of TC-NAT-12).** Each of these needs a test tool that
 generates hostile or forged traffic: device hooks (`--bad-key`, `--replay-test`, `--reuse-nonce`,
 `--nonce`) and `peer_sim` modes (a rogue server, forged or replayed frames, floods). Those tools were not
 built in this project and remain with the project owner (PRD R-15, QA §12.5). The protocol logic behind every
@@ -977,6 +1011,21 @@ The result of every case, where it ran and the output that shows it: [TEST_REPOR
 9. **Demo timers are aggressive.** With 2 s keepalives, false session timeouts happen at high loss; they are
    recovered by resume but make the logs noisier than production would be.
 10. **The attack-simulation test tooling is incomplete** (section 18): some security behaviours are
-    implemented but not exercised end to end.
+    implemented but not exercised end to end, and the PDF dump's failed row (ZTP-84BC19, "Invalid HMAC") is not
+    demonstrated by any committed run.
+11. **The MAC is truncated to 128 bits** (standard practice), and firmware is authenticated only by the
+    transport, not signed separately (DESIGN §18.3).
+12. **Server restarts:** half-open sessions (not yet registered) are not persisted, so a device that was
+    mid-handshake starts again; no config or policy hot reload (restart the server to change them). A replayed
+    resume HELLO just after a restart can stall a session briefly until it resumes again (DESIGN §18.3, item 5).
+13. **Linux is tested only in CI.** There was no local Linux machine: Linux builds, netem, valgrind and the
+    reduced-MTU test run on GitHub Actions. Planned CI jobs for a 576-byte MTU path and a real conntrack NAT
+    were not built (QA §3).
+14. **The NAT's idle timeout is inferred, not measured,** and keepalive intervals are configured, not tuned
+    automatically (DESIGN §9.7). UDP only: there is no fallback when outbound UDP is blocked; the device logs a
+    hint instead.
+15. **Test coverage is uneven in places** (TEST_REPORT.md lists each case): matrix row M6 (50% loss) was not run,
+    some cases run only on one platform (for example broadcast discovery and strict-IP resume only on Linux CI),
+    and the suites print failures and totals rather than one line per passed case.
 
 The full list of tradeoffs, with the alternatives considered, is DESIGN §22; future work is DESIGN §22.3.

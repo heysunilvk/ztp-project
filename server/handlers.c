@@ -110,6 +110,15 @@ static srv_tombstone_t *tomb_find(srv_t *s, uint32_t sid, const char *serial, ui
     return NULL;
 }
 
+/* Identity strings from the wire (SERIAL, MODEL, FW_VER, HW_REV) are stored, journaled and printed in the dump:
+ * only printable ASCII is accepted (DESIGN §6.2 formats are all ASCII) */
+static bool id_text_ok(const char *v)
+{
+    for (; *v; v++)
+        if ((unsigned char)*v < 0x20 || (unsigned char)*v > 0x7e) return false;
+    return true;
+}
+
 static srv_tombstone_t *tomb_new(srv_t *s, uint32_t sid, const char *serial, uint64_t nonce)
 {
     srv_tombstone_t *t = &s->tomb[s->tomb_next];
@@ -120,6 +129,7 @@ static srv_tombstone_t *tomb_new(srv_t *s, uint32_t sid, const char *serial, uin
     snprintf(t->serial, sizeof t->serial, "%s", serial);
     t->nonce = nonce;
     t->expires_ms = s->now + (uint64_t)s->cfg.c.nat.half_open_ttl_s * 1000u;
+    t->dst = s->cur_src;
     return t;
 }
 
@@ -226,7 +236,7 @@ static void on_fresh_hello(srv_t *s, const uint8_t *buf, size_t len, const ztp_h
     tlv_get_str(&t, TAG_MODEL, model, sizeof model);
     tlv_get_str(&t, TAG_FW_VER, fw, sizeof fw);
     tlv_get_u64(&t, TAG_NONCE_DEV, &nd);
-    if (!*serial || !*model) {
+    if (!*serial || !*model || !id_text_ok(serial) || !id_text_ok(model) || !id_text_ok(fw)) {
         s->c.rx_malformed++;
         return;
     }
@@ -420,7 +430,9 @@ static void on_manifest_req(srv_session_t *ss, uint32_t seq, const tlv_set_t *t)
         send_bad_request(ss, seq, "MANIFEST_REQ needs FILE_KIND (1 or 2) and MAX_DGRAM");
         return;
     }
-    if (want < ss->max_dgram && want >= ZTP_MIN_DGRAM) step_down(ss, false);   /* black hole seen by the device */
+    /* §5.8: MAX_DGRAM = 508 is the device's black-hole signal: step the session down. Any other smaller value
+     * is just the device's own limit (net.max_datagram): the chunk size below fits it, nothing else changes */
+    if (want == ZTP_MIN_DGRAM && ss->max_dgram > ZTP_MIN_DGRAM) step_down(ss, false);
     const srv_artifact_t *a = assigned(ss, kind);
     if (!a) {
         send_bad_request(ss, seq, "no artifact of this kind is assigned");
@@ -585,6 +597,10 @@ static void on_register(srv_session_t *ss, uint32_t seq, const tlv_set_t *t)
         send_bad_request(ss, seq, "SERIAL, MODEL or NONCE_SRV differs from the HELLO");
         return;
     }
+    if (!id_text_ok(fw) || !id_text_ok(hw)) {
+        send_bad_request(ss, seq, "FW_VER and HW_REV must be printable ASCII");
+        return;
+    }
     if (ss->st != SS_HALF_OPEN) {   /* a second REGISTER in a registered session: same answer, no new attempt */
         send_register_ack(ss, true);
         return;
@@ -634,6 +650,12 @@ static void on_register(srv_session_t *ss, uint32_t seq, const tlv_set_t *t)
     if (already)   /* §12.3 fallbacks: a registered device registered again (verbose dump note only) */
         db_prov_note(&s->db, serial, expired ? "Re-registered after session expiry" : "Re-registered", wall);
     srv_sess_journal(s, ss);
+    if (!db_synced(&s->db)) {   /* §14.4: no REGISTER_ACK without the record on disk; the device backs off */
+        log_sess(LOG_WARN, T_AUTH, ss->session_id, serial, "Registration not acknowledged: the journal write failed");
+        db_prov_note(&s->db, serial, "Not acknowledged: journal write failed", wall);   /* kept in memory for the dump */
+        send_nak(s, ss, RC_SERVER_BUSY, "storage unavailable", nreg);   /* the device retries after a backoff */
+        return;
+    }
     send_register_ack(ss, already);
     log_sess(LOG_INFO, T_AUTH, ss->session_id, serial, LM_AUTH_REG_OK);
     log_sess(LOG_INFO, T_AUTH, ss->session_id, serial, LM_AUTH_SRV_TENANT, ss->assign.tenant, ss->assign.firmware,
@@ -782,7 +804,6 @@ static void on_resume(srv_t *s, srv_session_t *ss, const uint8_t *buf, size_t le
 
 static void on_unknown_resume(srv_t *s, const uint8_t *buf, size_t len, const ztp_hdr_t *h, const struct sockaddr_in *src)
 {
-    if (!srv_rate_ok(s, src)) return;
     char model[17], serial[17];
     const uint8_t *pl = buf + ZTP_HDR_LEN;
     if (!tlv_peek_str(pl, h->payload_len, TAG_MODEL, model, sizeof model) ||
@@ -797,6 +818,9 @@ static void on_unknown_resume(srv_t *s, const uint8_t *buf, size_t len, const zt
     int ok = ztp_mac_verify(buf, len, k_dev);
     secure_zero(k_dev, sizeof k_dev);
     if (!ok) { s->c.mac_fail++; return; }
+    /* the per-IP limit is spent only by authenticated requests: a spoofed or forged datagram fails the MAC
+     * above and cannot drain the tokens of a NATed site's devices (it costs one HMAC, no reply) */
+    if (!srv_rate_ok(s, src)) return;
     tlv_set_t t;
     uint64_t nd2 = 0;
     if (tlv_parse(pl, h->payload_len, &t) != ZTP_OK || !tlv_get_u64(&t, TAG_NONCE_DEV, &nd2)) {
@@ -842,11 +866,17 @@ void srv_on_ctl_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct 
             on_unknown_resume(s, buf, len, &h, src);
             return;
         }
-        if (h.type == ZT_REGISTER)   /* a retransmitted REGISTER after a NAK: resend the identical NAK */
+        /* a retransmitted REGISTER after a NAK: resend the identical NAK. The REGISTER cannot be verified here
+         * (its session is gone), so the resend goes only to the address the NAK first went to, at most
+         * SRV_TOMB_RESENDS times: no reflection to a spoofed source, no unbounded replies */
+        if (h.type == ZT_REGISTER)
             for (int i = 0; i < SRV_TOMBSTONES; i++) {
                 srv_tombstone_t *t = &s->tomb[i];
                 if (t->used && t->sid == h.session_id && t->expires_ms > s->now && t->len) {
-                    srv_send(s, s->ctl_fd, t->bytes, t->len, src);
+                    if (addr_eq(src, &t->dst) && t->resends < SRV_TOMB_RESENDS) {
+                        t->resends++;
+                        srv_send(s, s->ctl_fd, t->bytes, t->len, src);
+                    }
                     return;
                 }
             }
@@ -884,20 +914,40 @@ void srv_on_ctl_datagram(srv_t *s, const uint8_t *buf, size_t len, const struct 
     }
     if (!ztp_mac_verify(buf, len, key)) {
         s->c.mac_fail++;
-        if (h.type == ZT_REGISTER && ss->st == SS_HALF_OPEN && rel_classify(ss->rel, h.seq) == REL_RX_NEW) {
-            /* §10.3: a REGISTER failing K_s in a half-open session is a verified credential failure for
-             * the claimed serial: record it, NAK under K_boot echoing NONCE_REG, discard the session */
+        /* §10.3: a REGISTER failing K_s in a half-open session is recorded as a credential failure for the
+         * claimed serial and NAKed under K_boot, echoing NONCE_REG. A wrong-key device and a forged frame
+         * look the same here (only the absence of a valid MAC is proven), so the failure must not be able to
+         * end a genuine registration: it counts only from the session's own address, for a well-formed
+         * REGISTER naming the session's serial, once per session, and the session is kept (a genuine
+         * REGISTER can still succeed; the half-open TTL reclaims it otherwise). Retransmissions of that
+         * REGISTER get the same NAK. */
+        if (h.type == ZT_REGISTER && ss->st == SS_HALF_OPEN && addr_eq(src, &ss->peer)) {
+            if (ss->nak_len && h.seq == ss->nak_seq) {
+                srv_send(s, s->ctl_fd, ss->nak, ss->nak_len, src);
+                return;
+            }
             tlv_set_t t;
             uint64_t nreg = 0;
-            if (tlv_parse(buf + ZTP_HDR_LEN, h.payload_len, &t) == ZTP_OK) tlv_get_u64(&t, TAG_NONCE_REG, &nreg);
-            char a[ADDR_STR];
-            addr_fmt(src, a);
-            log_sess(LOG_INFO, T_AUTH, ss->session_id, ss->serial, "Registration failed: Invalid HMAC");
-            db_register_fail(&s->db, ss->serial, ss->model, "Invalid HMAC", a, wall_ms());
-            db_row_log(s, ss->serial);
-            send_nak(s, ss, RC_BAD_MAC, "Invalid HMAC", nreg);
-            srv_sess_free(s, ss, NULL);
-            return;
+            char serial[17] = "";
+            if (!ss->nak_len && rel_classify(ss->rel, h.seq) == REL_RX_NEW &&
+                tlv_parse(buf + ZTP_HDR_LEN, h.payload_len, &t) == ZTP_OK && tlv_get_u64(&t, TAG_NONCE_REG, &nreg) &&
+                tlv_get_str(&t, TAG_SERIAL, serial, sizeof serial) && !strcmp(serial, ss->serial)) {
+                char a[ADDR_STR];
+                addr_fmt(src, a);
+                log_sess(LOG_INFO, T_AUTH, ss->session_id, ss->serial, "Registration failed: Invalid HMAC");
+                db_register_fail(&s->db, ss->serial, ss->model, "Invalid HMAC", a, wall_ms());
+                db_row_log(s, ss->serial);
+                uint8_t pl[128];
+                tlv_writer_t w;
+                tlv_writer_init(&w, pl, sizeof pl);
+                tlv_put_u16(&w, TAG_REASON, RC_BAD_MAC);
+                tlv_put_str(&w, TAG_DETAIL, "Invalid HMAC");
+                tlv_put_u64(&w, TAG_NONCE_REG, nreg);
+                send_terminal(s, s->ctl_fd, ZT_REGISTER_NAK, ss->session_id, ss->epoch, pl, (uint16_t)w.len, src, ss->nak,
+                              &ss->nak_len);
+                ss->nak_seq = h.seq;
+                return;
+            }
         }
         log_limited(3, LOG_DEBUG, T_UDP, "sid=%u %s: MAC invalid, dropped", (unsigned)h.session_id, ztp_type_name(h.type));
         return;

@@ -84,7 +84,7 @@ static const ent_t SCHEMA[] = {
     I("xfer.tx_queue_max", S_, xfer.tx_queue_max, 1, 4096, 64),
     I("xfer.persist_every_chunks", D_, xfer.persist_every_chunks, 1, 4096, 16),
     I("xfer.hash_attempts", D_, xfer.hash_attempts, 1, 10, 2),
-    I("limits.max_sessions", S_, limits.max_sessions, 1, 1000000, 1024),
+    I("limits.max_sessions", S_, limits.max_sessions, 1, 1536, 1024),   /* <= 3/4 of the server's 2048-slot session table */
     I("limits.max_half_open", S_, limits.max_half_open, 1, 1000000, 256),
     I("limits.max_failed_records", S_, limits.max_failed_records, 1, 10000000, 10000),
     I("limits.hello_rate_per_ip", S_, limits.hello_rate_per_ip, 1, 1000000, 10),
@@ -797,6 +797,19 @@ static const char *need_arg(int argc, char **argv, int *i)
         return NULL;
     }
     return argv[++*i];
+}
+
+void cfg_print_flags(FILE *out, cfg_side_t side)
+{
+    fputs("shorthand flags (each sets a configuration key; --set KEY=VALUE sets any key, README section 15):\n", out);
+    for (size_t k = 0; k < sizeof FLAGS / sizeof FLAGS[0]; k++) {
+        if (!(FLAGS[k].sides & side)) continue;
+        char lhs[48];
+        snprintf(lhs, sizeof lhs, "%s%s", FLAGS[k].flag, FLAGS[k].fixed ? "" : " V");
+        fprintf(out, "  %-26s %s%s%s\n", lhs, FLAGS[k].key, FLAGS[k].fixed ? " = " : "", FLAGS[k].fixed ? FLAGS[k].fixed : "");
+    }
+    fputs("  --sim-mtu N[:emsgsize|:blackhole]  sim.mtu, sim.mtu_mode\n", out);
+    if (side == CFG_DEVICE) fputs("  --nat-sim K=V[,K=V...]     sim.nat.K (idle_timeout_s, reboot_at_s, change_ip_at_s, block_server_port)\n", out);
 }
 
 int cfg_parse_flag(cfg_args_t *a, cfg_side_t side, int argc, char **argv, int *i)

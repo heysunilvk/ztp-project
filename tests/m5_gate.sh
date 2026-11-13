@@ -28,7 +28,11 @@ count() { n=$(grep -F -c -- "$2" "$1" 2>/dev/null); echo "${n:-0}"; }
 expect_line() { if has "$1" "$2"; then ok; else bad "$3: missing \"$2\" in $(basename "$1")"; fi; }
 expect_no_line() { if has "$1" "$2"; then bad "$3: unexpected \"$2\" in $(basename "$1")"; else ok; fi; }
 expect_state() { if grep -q "^$2=$3\$" "$T/$1.state/device.state" 2>/dev/null; then ok; else bad "$4: $2 is not $3"; fi; }
-sha() { shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
+sha() {   # SHA-256 of a file; a missing file or tool gives a unique non-hash, so two of them never compare equal
+    if command -v shasum > /dev/null 2>&1; then h=$(shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1)
+    else h=$(sha256sum "$1" 2>/dev/null | cut -d' ' -f1); fi
+    echo "${h:-no-hash:$1}"
+}
 wait_line() {      # wait_line FILE TEXT SECS: 0 if TEXT appeared in time
     i=0
     while [ $i -lt $(($3 * 20)) ]; do has "$1" "$2" && return 0; sleep 0.05; i=$((i + 1)); done
@@ -144,7 +148,8 @@ start_device f1 --serial ZTP-6A0003 --set run.operational_hold_s=4
 wait_line "$T/f1.log" "[STATE] Device is OPERATIONAL" 40 && n1=$(fd_count "$DPID") || n1=y
 wait_device 20
 expect_line "$T/f1.log" "[BOOT] Device starting (boot #2)" "TC-UPG-02 (fds)"
-[ "$n0" = "$n1" ] && ok || bad "TC-UPG-02: $n1 descriptors after the execv, $n0 without a restart"
+# a count of 0 means the count failed (lsof missing or the process gone), not a match
+[ "$n0" -gt 0 ] 2>/dev/null && [ "$n0" = "$n1" ] && ok || bad "TC-UPG-02: $n1 descriptors after the execv, $n0 without a restart"
 
 # TC-NAT-09 (OPERATIONAL): the NAT reboots under a live session: rebinding, no re-registration
 run_device r1 40 --serial ZTP-6A0004 --fw v1.1 --set run.operational_hold_s=8 --nat-sim reboot_at_s=3

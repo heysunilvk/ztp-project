@@ -1,6 +1,6 @@
 #!/bin/sh
 # The release regression (QA §11.2, M7): every suite, the sanitizer build, the whole impairment matrix, the
-# performance and soak runs, the long NAT runs, and the committed demo and Appendix A logs, all recorded in one
+# performance and soak runs, the long NAT runs, and the committed demo, Appendix A and scenario logs, all recorded in one
 # results folder. `make release`; about 2.5 hours (the soak is 1 h, the long NAT runs 30 min).
 # usage: scripts/run_release.sh   (from the repository root)
 # Env: RESULTS (default results/<date-time>-release), SEEDS (matrix seeds, default 10), SOAK_S (default 3600),
@@ -27,6 +27,7 @@ if [ "${QUICK:-0}" != 1 ]; then
 fi
 step make --no-print-directory demo
 step make --no-print-directory appendix-a
+step make --no-print-directory scenario-logs
 echo
 cat "$RESULTS/summary.txt"
 [ -f "$RESULTS/asan/summary.txt" ] && { echo; echo "ASan build:"; tail -n +7 "$RESULTS/asan/summary.txt"; }

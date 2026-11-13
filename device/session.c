@@ -555,5 +555,15 @@ void dev_session_timer(device_t *d)
         session_lost(d, "session timeout");
         return;
     }
+    /* §8.9: before either sequence space comes near wrapping, re-key with a resume (a new epoch restarts both
+     * at 1). The device decides, with nothing in flight and not mid-upgrade; 2^30 is about 12 days at 1000
+     * frames/s, so in practice only the --rekey-at test hook reaches it */
+    uint32_t lim = d->hook_rekey_at ? d->hook_rekey_at : ZTP_REKEY_SEQ;
+    if (!d->resuming && d->fsm >= DS_REGISTERED && d->fsm <= DS_OPERATIONAL && d->fsm != DS_UPGRADING &&
+        rel_in_flight(d->rel) == 0 && (rel_next_seq(d->rel) > lim || rel_rcv_ack(d->rel) > lim) && dev_can_resume(d)) {
+        LOGI(T_UDP, "Sequence numbers passed %u: re-keying with a resume (new epoch)", (unsigned)lim);
+        dev_resume_start(d);
+        return;
+    }
     if (d->now >= keepalive_due(d)) dev_send_keepalive(d, KA_PERIODIC);   /* E21 */
 }

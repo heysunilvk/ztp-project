@@ -64,7 +64,10 @@ static int write_fw_path(const char *path, const char *model, const char *versio
     return rc;
 }
 
-/* A provisioned config: a strict superset of the PDF's example (DESIGN §11.1), padded to an exact size. */
+/* A provisioned config: a strict superset of the PDF's example (DESIGN §11.1), padded to an exact size. The PDF's
+ * own example (about 100 bytes) would fit in one chunk; Appendix A shows "chunk 1/3 .. 3/3", so cfg v3 carries
+ * realistic extra settings (NTP, syslog, VLANs, 44 ACL entries) and a login banner sized to make it 2310 bytes,
+ * three 1024-byte chunks. README §7 says so. */
 static int write_cfg(const char *dir, int version, size_t target, int acl_entries)
 {
     char path[512], body[8192], acl[6144] = "", banner[1024];
@@ -82,9 +85,22 @@ static int write_cfg(const char *dir, int version, size_t target, int acl_entrie
     if (n < 0 || (size_t)n > target) { fprintf(stderr, "mkartifacts: cfg v%d base is %d B > %zu\n", version, n, target); return -1; }
     static const char words[] = "Authorized access only. This edge gateway is managed by cruise_ops; all sessions are "
                                 "logged and monitored. Disconnect now if you are not an authorized operator. ";
-    size_t need = target - (size_t)n;
-    for (size_t i = 0; i < need && i < sizeof banner - 1; i++) banner[i] = words[i % (sizeof words - 1)];
-    banner[need < sizeof banner ? need : sizeof banner - 1] = '\0';
+    /* the banner fills the gap to the exact size: whole sentences of the text above (cycled), then spaces,
+     * so it never ends in a cut-off word */
+    size_t need = target - (size_t)n, bl = 0, wi = 0;
+    if (need >= sizeof banner) need = sizeof banner - 1;
+    for (;;) {
+        size_t we = wi;
+        while (words[we % (sizeof words - 1)] != ' ') we++;
+        size_t wl = we - wi + 1;   /* the word and its space */
+        if (bl + wl > need) break;
+        for (size_t k = 0; k < wl; k++) banner[bl++] = words[(wi + k) % (sizeof words - 1)];
+        wi = (we + 1) % (sizeof words - 1);
+    }
+    for (size_t k = bl; k > 0; k--)   /* end on a whole sentence */
+        if (banner[k - 1] == '.') { bl = k; break; }
+    while (bl < need) banner[bl++] = ' ';
+    banner[need] = '\0';
     n = snprintf(body, sizeof body, fmt, version, banner, acl);
     int rc = atomic_write_file(path, body, (size_t)n);
     printf("mkartifacts: %s (%d bytes)\n", path, n);
@@ -155,7 +171,7 @@ int main(int argc, char **argv)
     int rc = 0;
     rc |= write_fw(out, "EDGE-GW-100", "v1.1", 65536);
     rc |= write_fw(out, "EDGE-GW-050", "v1.0", 49152);
-    rc |= write_cfg(out, 3, 2310, 45);
+    rc |= write_cfg(out, 3, 2310, 44);
     rc |= write_cfg(out, 2, 1800, 31);
     return rc ? 1 : 0;
 }

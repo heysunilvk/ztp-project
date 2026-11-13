@@ -75,7 +75,7 @@ echo "m2 peer_sim tests (ports $PORT/$DPORT/$DPORT2)"
 
 # --- TC-SESS-04: 1,000 handshakes; session ids unique and random -----------------------------
 start_server sess04 --set limits.hello_rate_per_ip=100000 --set limits.hello_burst=100000 \
-    --set limits.max_sessions=2000 --set limits.max_half_open=2000
+    --set limits.max_sessions=1536 --set limits.max_half_open=1536   # 1,000 live: within the 1536 cap
 sim sess04 handshakes 1000 && ok || bad "TC-SESS-04"
 stop_server
 

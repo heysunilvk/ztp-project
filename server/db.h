@@ -52,12 +52,15 @@ typedef struct {
     FILE      *journal;
     char       path[256];
     bool       replaying;
+    bool       sync_failed;   /* the last synced journal write failed */
     uint64_t   evicted;
 } srv_db_t;
 
 /* Open (and replay) the journal at path; creates its directory. 0, or -1 with err. */
 int  db_open(srv_db_t *db, const char *path, int max_failed, char *err, size_t errsz);
 void db_close(srv_db_t *db, bool compact);
+/* false if the last synced journal write failed: an ACK that depends on it must not be sent */
+bool db_synced(const srv_db_t *db);
 
 db_rec_t *db_get(srv_db_t *db, const char *serial);
 /* Verdicts (§10.3). Returns the record. */

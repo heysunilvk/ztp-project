@@ -137,6 +137,9 @@ static int sess_tx(void *ctx, const uint8_t *frame, size_t len, bool to_source)
 srv_session_t *srv_sess_new(srv_t *s, const char *serial, const char *model)
 {
     if (s->nsessions >= s->cfg.c.limits.max_sessions || s->nhalf_open >= s->cfg.c.limits.max_half_open) return NULL;
+    /* the open-addressing table must keep free slots, or the insert probe below never ends (config caps
+     * limits.max_sessions at 3/4 of the table; this guards the invariant on its own) */
+    if (s->nsessions >= SRV_TABLE_SLOTS * 3 / 4) return NULL;
     if (s->nsessions + s->ndeleted >= SRV_TABLE_SLOTS * 3 / 4) table_rebuild(s);
     srv_session_t *ss = calloc(1, sizeof *ss);
     if (!ss) return NULL;

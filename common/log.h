@@ -25,6 +25,7 @@ enum log_level { LOG_DEBUG = 0, LOG_INFO = 1, LOG_WARN = 2, LOG_OFF = 3 };
 #define T_DB         "DB"
 #define T_CONFIG     "CONFIG"
 #define T_ERROR      "ERROR"
+#define T_TEST       "TEST"       /* a test hook is active or fired: loud, but not an error */
 
 /* Open the log. path may be NULL (stdout only). append=true keeps earlier content (the device
  * appends across restarts, §17.3). echo_stdout=false writes only the file. Returns 0 or -1. */

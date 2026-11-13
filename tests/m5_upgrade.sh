@@ -24,7 +24,11 @@ has() { grep -F -q -- "$2" "$1" 2>/dev/null; }
 expect_line() { if has "$1" "$2"; then ok; else bad "$3: missing \"$2\" in $(basename "$1")"; fi; }
 expect_no_line() { if has "$1" "$2"; then bad "$3: unexpected \"$2\" in $(basename "$1")"; else ok; fi; }
 expect_state() { if grep -q "^$2=$3\$" "$T/$1.state/device.state" 2>/dev/null; then ok; else bad "$4: $2 is not $3"; fi; }
-sha() { shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1 || sha256sum "$1" | cut -d' ' -f1; }
+sha() {   # SHA-256 of a file; a missing file or tool gives a unique non-hash, so two of them never compare equal
+    if command -v shasum > /dev/null 2>&1; then h=$(shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1)
+    else h=$(sha256sum "$1" 2>/dev/null | cut -d' ' -f1); fi
+    echo "${h:-no-hash:$1}"
+}
 
 "$MKA" --out "$T/art" > /dev/null || { echo "mkartifacts failed"; exit 1; }
 A="$T/art"
@@ -85,6 +89,11 @@ done
 [ "$(grep -c '\[AUTH\] REGISTER:' "$T/u1.log")" -eq 1 ] && ok || bad "TC-UPG-03: want exactly one REGISTER"
 [ "$(grep -c 'ZTP-500001\] Registration successful' "$T/s1.log")" -eq 1 ] && ok || bad "TC-UPG-03: server registered more than once"
 expect_line "$T/s1.log" "Resume accepted" "TC-UPG-03 (server)"
+# the resumed session is the same one, and the restarted process's new socket moved the peer (a new NAT mapping)
+sid_reg=$(sed -n 's/.*\[AUTH\] REGISTER: session_id=\([0-9]*\) .*/\1/p' "$T/u1.log" | head -1)
+sid_res=$(sed -n 's/.*\[UDP\] Session resumed (session_id=\([0-9]*\)).*/\1/p' "$T/u1.log" | head -1)
+[ -n "$sid_reg" ] && [ "$sid_reg" = "$sid_res" ] && ok || bad "TC-UPG-03: resumed session $sid_res, registered $sid_reg"
+grep -q "ZTP-500001\] Peer address changed .* -> " "$T/s1.log" && ok || bad "TC-UPG-03 (server): no peer address change"
 expect_line "$T/s1.log" "Device running v1.1 after the upgrade" "TC-UPG-01 (server)"
 grep -q 'ZTP-500001\] OPERATIONAL' "$T/s1.log" && ok || bad "TC-VAL-05: server did not record OPERATIONAL"
 
@@ -208,6 +217,14 @@ if [ "$(uname)" = Linux ] || ifconfig lo0 2>/dev/null | grep -q 'inet 127.0.0.2 
 else
     echo "  TC-NAT-10 (strict): skipped (127.0.0.2 is not local: add an lo0 alias on macOS)"
 fi
+
+# TC-UNIT-06 (re-key, §8.9): past the threshold the device re-keys with a resume (a new epoch restarts both
+# sequence spaces) and carries on; --rekey-at 40 stands in for 2^30. One REGISTER, upgrade and validation as usual
+run_device k1 40 --serial ZTP-500060 --test-hooks --rekey-at 40
+expect_upgraded k1 "TC-UNIT-06 (re-key)"
+expect_line "$T/k1.log" "[UDP] Sequence numbers passed 40: re-keying with a resume (new epoch)" "TC-UNIT-06 (re-key)"
+grep -q '\[UDP\] Session resumed (session_id=[0-9]*) epoch=1$' "$T/k1.log" && ok || bad "TC-UNIT-06: no resume into epoch 1"
+[ "$(grep -c '\[AUTH\] REGISTER:' "$T/k1.log")" -eq 1 ] && ok || bad "TC-UNIT-06: re-key caused a second REGISTER"
 
 # Hooks are refused without --test-hooks
 run_device h1 10 --serial ZTP-500050 --crash-at committed

@@ -1,5 +1,5 @@
 /* Test hooks shared by both binaries (DESIGN §19.2). Every hook is refused unless --test-hooks
- * is also given, and logs "[ERROR] TEST HOOK ACTIVE: <name>" at startup. M2 part:
+ * is also given, and logs "[TEST] TEST HOOK ACTIVE: <name>" at startup. M2 part:
  *   --drop-seq tx:N[,N...]  drop the first transmission of each listed reliable TX seq
  *   --dup-seq tx:N          send one extra copy of the (first) retransmission of seq N */
 #ifndef ZTP_HOOKS_H

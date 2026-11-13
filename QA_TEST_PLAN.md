@@ -7,9 +7,10 @@
 | Date | 2026-11-12 (first draft 2026-11-10) |
 | Owner | Sunil Vallamkonda (QA Lead) |
 | Companion documents | [PRD_ZTP.md](PRD_ZTP.md) (requirement IDs and acceptance criteria) · [DESIGN.md](DESIGN.md) (the behaviour under test; constants in Appendix B) |
-| Test basis | PRD v0.1 (requirement IDs), DESIGN v0.1 (§5 wire spec, §8 reliability, §10 auth, §19 demo) |
+| Test basis | PRD 1.0 (requirement IDs), DESIGN 1.0 (§5 wire spec, §8 reliability, §10 auth, §19 demo); written against the 0.1 drafts, kept aligned since |
+| Results | [TEST_REPORT.md](TEST_REPORT.md): the result of every case in §5, from the release run in `evidence/` |
 
-> **Alignment rules.** Every test case (`TC-*`) traces to at least one PRD requirement ID, and every PRD requirement has at least one test case (§10). Constants such as timers, sizes and ports are **not** restated here: tests refer to them by name from DESIGN Appendix B, so a design change can't silently invalidate a test. The demo fixture is the five devices defined in PRD §5.2 and DESIGN §19.3.
+> **Alignment rules.** Every test case (`TC-*`) traces to at least one PRD requirement ID, and every PRD requirement has at least one test case (§10). Constants such as timers, sizes and ports are **not** restated here: tests refer to them by name from DESIGN Appendix B, so a design change can't silently invalidate a test. The demo fixture is the five devices defined in PRD §5.2 and DESIGN §19.3; as delivered, four of them run (S2, ZTP-84BC19, needs the open `--bad-key` hook, §12.5).
 
 ---
 
@@ -53,7 +54,7 @@ Real NAT hardware, real flash or power-loss rigs, IPv6, Windows, and production 
 |---|---|---|---|---|---|
 | **L1 Unit** | Crypto, codec, TLV, reliability engine, util | C test binaries under `tests/`; the reliability engine runs against a **simulated clock and in-memory link**, with no sockets | `make test` | Dev (QA reviews) | Every build, from M1 |
 | **L2 Component** | One binary against a scripted peer | A test harness that sends crafted datagrams (`tests/peer_sim`) | Yes | QA | M2+ |
-| **L3 Integration** | device ↔ server on loopback | Shell scripts `tests/it_*.sh` with netsim flags; assertions on logs, exit codes and the DB dump | Yes | QA | M2+ per milestone |
+| **L3 Integration** | device ↔ server on loopback | Shell scripts `tests/m2_*.sh` … `tests/m6_*.sh` (one per milestone) and `tests/check_*.sh`, with netsim flags; assertions on logs, exit codes and the DB dump | Yes | QA | M2+ per milestone |
 | **L4 System / E2E** | The full demo, scenarios S1–S5 | `make demo` plus a results checker | Yes | QA | M6, M7 |
 | **Negative / security** | Bad MAC, replay, tampering, floods, fuzzing | §7 | Yes | QA | M3+ |
 | **Resilience / chaos** | Crash points, kill -9, SIGSTOP, rebinding, server restart | Test hooks (DESIGN §19.2) and signals | Yes | QA | M4+ |
@@ -74,8 +75,8 @@ Real NAT hardware, real flash or power-loss rigs, IPv6, Windows, and production 
 | Platforms | **Local:** macOS 14 on the developer's Mac (Apple clang 16, GNU Make 3.81). **CI:** GitHub Actions `ubuntu-latest` (gcc) and `macos-latest` (clang); see DESIGN §19.4. There is **no local Linux host**, so the Ubuntu runner is the Linux platform for the DEL-02 / NFR-01 sign-off |
 | Network | Loopback (`127.0.0.1`). The broadcast test TC-DISC-05 runs locally on the Mac's Wi-Fi/Ethernet interface (its directed broadcast address) and in CI on the Ubuntu runner |
 | Build variants | `make` (release, `-O2 -Wall -Wextra -Werror`); `make asan` (ASan + UBSan); `make debug` (`-O0 -g`) |
-| Impairment | In-code netsim (`--loss/--reorder/--dup/--delay/--seed`), everywhere; macOS dummynet (commands in DESIGN §16.2; not scripted, TC-SIM-04 waived); Linux `tc netem` (`scripts/netem.sh`), CI Ubuntu runner only, TC-SIM-03 |
-| Reduced MTU and real NAT | CI `mtu` job: Linux network namespaces joined by a veth pair at MTU 1280 and 576 (TC-PROV-12/13). Local: `--sim-mtu N:emsgsize` or `N:blackhole` (portable, no sudo). Optional CI `nat-real` job: iptables MASQUERADE with a short conntrack UDP timeout |
+| Impairment | In-code netsim (`--loss/--reorder/--dup/--delay/--seed`), everywhere; macOS dummynet (commands in DESIGN §16.2; not scripted, TC-SIM-04 waived); Linux `tc netem` (inline in the CI `impair-netem` job), CI Ubuntu runner only, TC-SIM-03 |
+| Reduced MTU and real NAT | As built: the CI `platform-linux` job sets the loopback MTU to 1280 for TC-PROV-12; the 576 B path of TC-PROV-13 (a) and the planned `mtu` (veth) and `nat-real` (iptables MASQUERADE) jobs were not built. Local and CI: `--sim-mtu N:emsgsize` or `N:blackhole` (portable, no sudo) for TC-PROV-13 (b, c); the device's NAT emulator for NAT behaviour |
 | Capture | `tcpdump -i lo0 -w run.pcap udp` (macOS) or `-i lo` (Linux); Wireshark; `tests/pcapcheck/pcapcheck` (maximum datagram size, fragment filter) |
 | Memory | Locally: ASan + LeakSanitizer (`make asan`) and `leaks --atExit` (built into macOS). CI: valgrind on the Ubuntu runner |
 | Disk footprint (local) | Build outputs, logs, test artifacts and pcaps: < 100 MB in total. `make clean` and `make clean-logs` reclaim it. Large pcaps are limited with `tcpdump -c`. No VMs or containers locally |
@@ -111,12 +112,12 @@ Real NAT hardware, real flash or power-loss rigs, IPv6, Windows, and production 
 | `fw_1023` / `fw_1024` / `fw_1025` | 1023 / 1024 / 1025 B | Chunk-boundary checks (1 / 1 / 2 chunks) |
 | `fw_64k` | 65,536 B | Standard (64 chunks) |
 | `fw_1m` | 1 MiB | Stress (1024 chunks; many CHUNK_REQ batches) |
-| `fw_corrupt` | 64 KiB with one flipped byte at serve time (`--corrupt-chunk 17` server hook) | Hash mismatch |
+| `fw_corrupt` | 64 KiB with one byte changed on disk after the server hashed it at startup (the planned `--corrupt-chunk` hook was not needed) | Hash mismatch |
 | `cfg_v3.json` / `cfg_v2.json` | ≈ 2.3 KB / ≈ 1.8 KB | Standard configs |
 | `cfg_missing_key.json` / `cfg_malformed.json` | — | Validation failures. Committed under `tests/conf/` in M1 together with a fixture `cfg_v3.json` (exactly 2310 B, the DESIGN §11.2 example), so TC-UNIT-17 runs before `mkartifacts` exists |
 
 ### 4.3 Policy, key and configuration fixtures (all JSON; DESIGN §25)
-- `conf/policy.json` (DESIGN §25.6; assignments only, **no `nat` overrides**). `tests/conf/policy_override.json` adds tenant cruise_ops `nat.grace_s = 180` and `serials.ZTP-55AC90.nat.keepalive_interval_s = 10` (TC-CFG-06, TC-SRV-02). `tests/conf/policy_nopolicy.json` adds a key for EDGE-GW-200 with no policy entry (TC-AUTH-12).
+- `conf/policy.json` (DESIGN §25.6; assignments only, **no `nat` overrides**). `tests/conf/policy_override.json` adds tenant cruise_ops `nat.grace_s = 180` and `serials.ZTP-55AC90.nat.keepalive_interval_s = 10` (TC-CFG-06, TC-SRV-02). `tests/m3_register.sh` writes a key file with a key for EDGE-GW-200 and no policy entry for it (TC-AUTH-12).
 - `conf/keys.json` (mode 0600) with the `fleet` key and models EDGE-GW-100 and EDGE-GW-050. The model `EDGE-GW-999` has no key (TC-AUTH-09).
 - `conf/server.json`, `conf/device.json` (the production defaults) and the per-side profiles `conf/profiles/server/{demo,strict-nat,cgnat,lan,metered}.json` and `conf/profiles/device/{…}.json` (DESIGN §25.7).
 - Negative config fixtures under `tests/conf/`: `bad_range.json` (`nat.keepalive_interval_s: 0`), `bad_type.json` (string where a number is expected), `unknown_key.json` (`nat.keepalive_intervl_s`), `dup_key.json`, `trailing_comma.json`, `too_deep.json` (17 levels), `too_big.json` (> 64 KiB), `dgram_over_cap.json` (`net.max_datagram: 1400`), `chunk_too_big.json` (`xfer.chunk_size: 2048`), `keys_world_readable.json` (mode 0644).
@@ -136,7 +137,7 @@ Each case gives its preconditions and steps in short form, followed by the expec
 | TC-UNIT-03 | Header and TLV encode/decode round trip | FR-05, BON-02 | P1 | Every message type × flag combination with random field values; every TLV tag in DESIGN §5.4.1 (including PATH_PROBE 0x1F, RESUMED 0x20, SRV_STAGE 0x21, DEAD_INTERVALS 0x22, MAX_DGRAM 0x23) and every enumeration in §5.4.3 | Fields identical after the round trip; `seq` present on every type; header length 44; the resume HELLO_ACK (RESUMED + SRV_STAGE) parses without a duplicate-tag error |
 | TC-UNIT-04 | TLV parser bounds | NFR-07 | P1 | Truncated TLV, length beyond the payload, duplicate tag, unknown tag, zero-length string, oversize string | Unknown tag skipped; duplicate or overrun → reject; never reads out of bounds (ASan) |
 | TC-UNIT-05 | Constant-time compare | NFR-06 | P2 | `ct_memeq` on equal and unequal buffers; check there is no early exit | Correct results; no data-dependent branches |
-| TC-UNIT-06 | Serial-number arithmetic and wraparound | FR-05 | P1 | `seq_lt` across 2³² − 1 → 0; the forced re-key threshold | Correct ordering; re-key triggered when `next_seq > 2^30` |
+| TC-UNIT-06 | Serial-number arithmetic and wraparound | FR-05 | P1 | `seq_lt` across 2³² − 1 → 0 (unit); the forced re-key end to end in `tests/m5_upgrade.sh`, with `--rekey-at 40` standing in for 2³⁰ | Correct ordering; re-key triggered when `next_seq > 2^30` |
 | TC-UNIT-07 | RTO estimator, Karn, backoff | FR-06 | P1 | Feed RTT samples; mark one frame retransmitted; trigger repeated timeouts | Matches the RFC 6298 formulas; no sample taken from a retransmitted frame; RTO doubles to the cap; clamped to [min, max] |
 | TC-UNIT-08 | Reorder buffer: in-order delivery | BON-04 | P1 | Simulated link: 10,000 seeded random permutations, losses and duplicates of 1..200 frames | The application receives exactly 1..N in order, once each |
 | TC-UNIT-09 | Duplicate classification | FR-08, BON-05 | P1 | Inject seq ≤ rcv_ack, and a seq that's already buffered | Both dropped, counted as dup, and an immediate ACK is scheduled |
@@ -243,7 +244,7 @@ Each case gives its preconditions and steps in short form, followed by the expec
 | TC-PROV-10 | Artifact changed between attempts | FR-18, FR-19 | P2 | Replace the firmware artifact (new sha) while the device is down | The partial is discarded; full download; verified |
 | TC-PROV-11 | Duplicate chunks are harmless | BON-05 | P1 | `--dup 0.5` on the server's TX during the firmware download | No rewrites (write counter = chunk count); the duplicates are caught by the reliability layer as duplicate seqs (device `dup` counter > 0), so none reaches the application; hash verifies |
 | TC-PROV-12 | 1280-byte MTU path: no fallback needed | FR-20, NFR-02 | P1 | CI `platform-linux`: `lo` MTU set to 1280, one full provisioning (`tests/check_appendix_a.sh` with `APX_SEEDS=0 APX_NO_STEPDOWN=1`), captured and checked by `pcapcheck --max-size 1200` (a veth pair adds nothing here: the limit is the interface MTU either way) | Provisioning completes at 1200 B datagrams; no step-down log; 0 fragments |
-| TC-PROV-13 | Small-MTU path: step-down to 508 B | FR-20, FR-19 | P1 | (a) CI `mtu` job at veth MTU 576 (kernel EMSGSIZE on the server). (b) Locally, **server** `--sim-mtu 1000:emsgsize`. (c) Locally, **server** `--sim-mtu 1000:blackhole` (large server frames silently dropped). Each is applied in the middle of the firmware download | (a, b) Server: `[UDP] [sid=… …] Path MTU too small for 1200 B (EMSGSIZE): datagram limit now 508`; the stuck chunk seqs are resent as 52 B fill frames with `MTU_REDUCED`. (c) Device: `[UDP] Suspected PMTU black hole: datagram limit now 508` after `net.pmtu_blackhole_s`, then MANIFEST_REQ with MAX_DGRAM 508; the server fills its stuck seqs. In every case: CHUNK_SIZE 256 in the new MANIFEST, the chunks already received are **kept** (bitmap converted), no seq gap or stall, the hash verifies, and the max datagram is ≤ 508 from then on, including after a resume |
+| TC-PROV-13 | Small-MTU path: step-down to 508 B | FR-20, FR-19 | P1 | (a) CI `mtu` job at veth MTU 576 (kernel EMSGSIZE on the server; *not built*: (b) produces the same server path with the simulator). (b) Locally, **server** `--sim-mtu 1000:emsgsize`. (c) Locally, **server** `--sim-mtu 1000:blackhole` (large server frames silently dropped). Each is applied in the middle of the firmware download | (a, b) Server: `[UDP] [sid=… …] Path MTU too small for 1200 B (EMSGSIZE): datagram limit now 508`; the stuck chunk seqs are resent as 52 B fill frames with `MTU_REDUCED`. (c) Device: `[UDP] Suspected PMTU black hole: datagram limit now 508` after `net.pmtu_blackhole_s`, then MANIFEST_REQ with MAX_DGRAM 508; the server fills its stuck seqs. In every case: CHUNK_SIZE 256 in the new MANIFEST, the chunks already received are **kept** (bitmap converted), no seq gap or stall, the hash verifies, and the max datagram is ≤ 508 from then on, including after a resume |
 
 ### 5.8 Upgrade and restart (UPG)
 | TC ID | Title | Req | Pri | Steps / setup | Expected result |
@@ -440,35 +441,35 @@ README checklist (TC-DEL-05..07). Each item must be present **and** must agree w
 
 | # | README item | PRD ID | ✓ |
 |---|---|---|---|
-| 1 | Q1 How reliability is implemented over UDP | DEL-06 | ☐ |
-| 2 | Q2 How replay attacks are prevented | DEL-06 | ☐ |
-| 3 | Q3 Why IP fragmentation is avoided | DEL-06 | ☐ |
-| 4 | Q4 How NAT affects the protocol design | DEL-06 | ☐ |
-| 5 | Q5 What happens under packet loss | DEL-06 | ☐ |
-| 6 | Overall architecture and control flow | DEL-07 | ☐ |
-| 7 | UDP session management | DEL-07 | ☐ |
-| 8 | Identity, authentication, registration | DEL-07 | ☐ |
-| 9 | Config and firmware provisioning | DEL-07 | ☐ |
-| 10 | Version upgrades and restarts | DEL-07 | ☐ |
-| 11 | Known limitations and tradeoffs | DEL-07 | ☐ |
-| 12 | Bonus: packet loss and out-of-order handling | DEL-08 | ☐ |
-| 13 | Bonus: duplicate detection | DEL-08 | ☐ |
-| 14 | Bonus: simulation method | DEL-08 | ☐ |
-| 15 | Bonus Q1–Q4 | DEL-08 | ☐ |
-| 16 | Build and run instructions | DEL-05 | ☐ |
-| 17 | Where the server and client logs are | DEL-09/10 | ☐ |
-| 18 | Why "keepalives matter in real deployments" (PDF §4) | DEL-12 | ☐ |
-| 19 | Walkthrough of the Appendix A example with real logs | FR-33 | ☐ |
-| 20 | The DB dump, shown in the PDF example format | FR-31 | ☐ |
-| 21 | Deployment prerequisite (outbound UDP 5555/5556 allowed) and NAT ownership; Q4 answer covers every row of DESIGN §21.1 Q4 | FR-36 | ☐ |
-| 22 | Configuration files and keys (server.json, device.json, policy.json, profiles), with an example | FR-34 | ☐ |
+| 1 | Q1 How reliability is implemented over UDP | DEL-06 | ✅ README §11 Q1 |
+| 2 | Q2 How replay attacks are prevented | DEL-06 | ✅ README §11 Q2 |
+| 3 | Q3 Why IP fragmentation is avoided | DEL-06 | ✅ README §11 Q3 |
+| 4 | Q4 How NAT affects the protocol design | DEL-06 | ✅ README §11 Q4 |
+| 5 | Q5 What happens under packet loss | DEL-06 | ✅ README §11 Q5 |
+| 6 | Overall architecture and control flow | DEL-07 | ✅ README §4 |
+| 7 | UDP session management | DEL-07 | ✅ README §5 |
+| 8 | Identity, authentication, registration | DEL-07 | ✅ README §6 |
+| 9 | Config and firmware provisioning | DEL-07 | ✅ README §7 |
+| 10 | Version upgrades and restarts | DEL-07 | ✅ README §8 |
+| 11 | Known limitations and tradeoffs | DEL-07 | ✅ README §19 |
+| 12 | Bonus: packet loss and out-of-order handling | DEL-08 | ✅ README §13 |
+| 13 | Bonus: duplicate detection | DEL-08 | ✅ README §13, B2 |
+| 14 | Bonus: simulation method | DEL-08 | ✅ README §13 |
+| 15 | Bonus Q1–Q4 | DEL-08 | ✅ README §13, B1–B4 |
+| 16 | Build and run instructions | DEL-05 | ✅ README §1, §16 |
+| 17 | Where the server and client logs are | DEL-09/10 | ✅ README §14.1 |
+| 18 | Why "keepalives matter in real deployments" (PDF §4) | DEL-12 | ✅ README §12 |
+| 19 | Walkthrough of the Appendix A example with real logs | FR-33 | ✅ README §14.2 |
+| 20 | The DB dump, shown in the PDF example format | FR-31 | ⚠ README §10: 4 of the PDF's 5 rows; the ZTP-84BC19 "Invalid HMAC" row needs `--bad-key` (waived, §12.5) |
+| 21 | Deployment prerequisite (outbound UDP 5555/5556 allowed) and NAT ownership; Q4 answer covers every row of DESIGN §21.1 Q4 | FR-36 | ✅ README §11 Q4, §19 |
+| 22 | Configuration files and keys (server.json, device.json, policy.json, profiles), with an example | FR-34 | ✅ README §15 |
 
 Log checks (TC-LOG-01..04, TC-DEL-09) are automated in `tests/check_logs.sh`.
 
 ---
 
 ## 10. Requirements traceability matrix
-Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row was ☐ at v0.1; the statuses below are from the M7 release run (README §17.1). ⚠ marks a requirement whose cases include ones that are open (§12.5) or waived; the other cases of that row pass.
+Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row was ☐ at v0.1; the statuses below are from the M7 release run (TEST_REPORT.md). ⚠ marks a requirement with at least one case that is open (§12.5), partial (one part needs the open tooling, or a part was not run) or waived; the other cases of that row pass, and TEST_REPORT §5 gives each case.
 
 ### 10.1 Functional
 | PRD ID | DESIGN § | Test cases | Status |
@@ -483,37 +484,37 @@ Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row was 
 | ZTP-FR-08 | §8.5 | TC-E2E-01, TC-REL-05, TC-UNIT-09 | ✅ |
 | ZTP-FR-09 | §8, §16 | TC-APX-10, TC-E2E-01, TC-PERF-03, TC-REL-09 | ✅ |
 | ZTP-FR-10 | §9.2, §9.5 | TC-APX-04, TC-E2E-01, TC-NAT-01/02 | ✅ |
-| ZTP-FR-11 | §9.3 | TC-E2E-01, TC-NAT-03/04/05/07/08/12/13, TC-SESS-05 | ⚠ (TC-NAT-12 CHUNK_REQ half open; §12.5) |
-| ZTP-FR-12 | §10.2 | TC-APX-05, TC-AUTH-01, TC-E2E-01 | ✅ |
-| ZTP-FR-13 | §10.1–10.3 | TC-APX-05, TC-AUTH-02/03/09/12, TC-E2E-01, TC-UNIT-02/16 | ⚠ (open: AUTH-03; §12.5) |
-| ZTP-FR-14 | §10.4 | TC-AUTH-04/05/06/07/14/15, TC-E2E-01, TC-NAT-12, TC-SESS-09 | ⚠ (open: AUTH-04, AUTH-05, AUTH-06, AUTH-07, AUTH-14, AUTH-15, SESS-09; TC-NAT-12 CHUNK_REQ half open; §12.5) |
+| ZTP-FR-11 | §9.3 | TC-E2E-01, TC-NAT-03/04/05/07/08/12/13, TC-SESS-05 | ⚠ (partial: NAT-12) |
+| ZTP-FR-12 | §10.2 | TC-APX-05, TC-AUTH-01, TC-E2E-01 | ⚠ (partial: APX-05) |
+| ZTP-FR-13 | §10.1–10.3 | TC-APX-05, TC-AUTH-02/03/09/12, TC-E2E-01, TC-UNIT-02/16 | ⚠ (open: AUTH-03; partial: APX-05) |
+| ZTP-FR-14 | §10.4 | TC-AUTH-04/05/06/07/14/15, TC-E2E-01, TC-NAT-12, TC-SESS-09 | ⚠ (open: AUTH-04, AUTH-05, AUTH-06, AUTH-07, AUTH-14, AUTH-15, SESS-09; partial: NAT-12) |
 | ZTP-FR-15 | §11.1 | TC-APX-06, TC-E2E-01, TC-PDF-03, TC-PROV-01/02 | ✅ |
 | ZTP-FR-16 | §11.1 | TC-APX-07, TC-E2E-01, TC-PROV-03 | ✅ |
 | ZTP-FR-17 | §11.2 | TC-APX-06, TC-E2E-01, TC-PROV-01/03/06 | ✅ |
 | ZTP-FR-18 | §11.3 | TC-APX-06, TC-E2E-01, TC-PROV-01/03/07/10, TC-UNIT-01 | ✅ |
-| ZTP-FR-19 | §11.4 | TC-E2E-01, TC-PROV-08/09/10/13, TC-UNIT-14/19, TC-UPG-10 | ✅ |
-| ZTP-FR-20 | §5.5 | TC-E2E-01, TC-PROV-04/05/12/13, TC-UNIT-19 | ✅ |
+| ZTP-FR-19 | §11.4 | TC-E2E-01, TC-PROV-08/09/10/13, TC-UNIT-14/19, TC-UPG-10 | ⚠ (partial: PROV-13) |
+| ZTP-FR-20 | §5.5 | TC-E2E-01, TC-PROV-04/05/12/13, TC-UNIT-19 | ⚠ (partial: PROV-13) |
 | ZTP-FR-21 | §12.1, §12.6 | TC-APX-07, TC-E2E-01, TC-UNIT-12, TC-UPG-01/05/06 | ✅ |
 | ZTP-FR-22 | §12.2 | TC-APX-07/08, TC-E2E-01, TC-UPG-02 | ✅ |
-| ZTP-FR-23 | §12.3 | TC-APX-08, TC-AUTH-07, TC-E2E-01, TC-NAT-05/09/13, TC-PROV-09, TC-SESS-07, TC-SRV-10, TC-UPG-03/04/08/10/11 | ⚠ (open: AUTH-07, SESS-07; §12.5) |
+| ZTP-FR-23 | §12.3 | TC-APX-08, TC-AUTH-07, TC-E2E-01, TC-NAT-05/09/13, TC-PROV-09, TC-SESS-07, TC-SRV-10, TC-UPG-03/04/08/10/11 | ⚠ (open: AUTH-07, SESS-07) |
 | ZTP-FR-24 | §13 | TC-APX-09, TC-E2E-01, TC-UNIT-17, TC-VAL-01/02 | ✅ |
 | ZTP-FR-25 | §13, §12.5 | TC-APX-09, TC-E2E-01, TC-UPG-09, TC-VAL-01/03 | ✅ |
 | ZTP-FR-26 | §13 | TC-APX-09, TC-E2E-01, TC-VAL-01/04 | ✅ |
 | ZTP-FR-27 | §13, §13.1 | TC-APX-09, TC-E2E-01, TC-VAL-01/05 | ✅ |
-| ZTP-FR-28 | §14.1 | TC-E2E-02, TC-PERF-01, TC-SRV-01/09 | ✅ |
-| ZTP-FR-29 | §14.3 | TC-APX-05, TC-AUTH-09/12, TC-CFG-06, TC-E2E-02, TC-SRV-02, TC-UNIT-11, TC-UPG-06 | ✅ |
-| ZTP-FR-30 | §14.4 | TC-AUTH-03, TC-E2E-02, TC-PDF-02, TC-SRV-03, TC-UPG-04, TC-VAL-05 | ⚠ (open: AUTH-03; §12.5) |
-| ZTP-FR-31 | §14.5 | TC-E2E-02, TC-PDF-02, TC-SRV-04 | ✅ |
-| ZTP-FR-32 | §14.5 | TC-E2E-02, TC-PDF-02, TC-SRV-05 | ✅ |
-| ZTP-FR-33 | §17, §17.4, §4.5 | TC-APX-01/02/03/04/05/06/07/08/09/10, TC-E2E-01, TC-LOG-01, TC-PDF-01 | ✅ |
-| ZTP-FR-34 | §25 | TC-CFG-01/02/03/04/05/07/09/10, TC-UNIT-18/20 | ✅ |
-| ZTP-FR-35 | §9.7, §25.3, §25.6 | TC-CFG-06/08/10, TC-NAT-08, TC-UNIT-20 | ✅ |
-| ZTP-FR-36 | §9.7, §9.8 | TC-AUTH-13, TC-NAT-08/09/10/11 | ⚠ (open: AUTH-13; §12.5) |
+| ZTP-FR-28 | §14.1 | TC-E2E-02, TC-PERF-01, TC-SRV-01/09 | ⚠ (partial: E2E-02, SRV-01) |
+| ZTP-FR-29 | §14.3 | TC-APX-05, TC-AUTH-09/12, TC-CFG-06, TC-E2E-02, TC-SRV-02, TC-UNIT-11, TC-UPG-06 | ⚠ (partial: APX-05, E2E-02) |
+| ZTP-FR-30 | §14.4 | TC-AUTH-03, TC-E2E-02, TC-PDF-02, TC-SRV-03, TC-UPG-04, TC-VAL-05 | ⚠ (open: AUTH-03; partial: E2E-02, PDF-02) |
+| ZTP-FR-31 | §14.5 | TC-E2E-02, TC-PDF-02, TC-SRV-04 | ⚠ (partial: E2E-02, PDF-02) |
+| ZTP-FR-32 | §14.5 | TC-E2E-02, TC-PDF-02, TC-SRV-05 | ⚠ (partial: E2E-02, PDF-02, SRV-05) |
+| ZTP-FR-33 | §17, §17.4, §4.5 | TC-APX-01/02/03/04/05/06/07/08/09/10, TC-E2E-01, TC-LOG-01, TC-PDF-01 | ⚠ (partial: APX-05) |
+| ZTP-FR-34 | §25 | TC-CFG-01/02/03/04/05/07/09/10, TC-UNIT-18/20 | ⚠ (partial: CFG-10) |
+| ZTP-FR-35 | §9.7, §25.3, §25.6 | TC-CFG-06/08/10, TC-NAT-08, TC-UNIT-20 | ⚠ (partial: CFG-10) |
+| ZTP-FR-36 | §9.7, §9.8 | TC-AUTH-13, TC-NAT-08/09/10/11 | ⚠ (open: AUTH-13) |
 
 ### 10.2 Bonus
 | PRD ID | DESIGN § | Test cases | Status |
 |---|---|---|---|
-| ZTP-BON-01 | §6.2 | TC-DISC-04/05/06/07/08 | ✅ |
+| ZTP-BON-01 | §6.2 | TC-DISC-04/05/06/07/08 | ⚠ (partial: DISC-05) |
 | ZTP-BON-02 | §5.2, §8.1 | TC-REL-01, TC-UNIT-03 | ✅ |
 | ZTP-BON-03 | §8.3 | TC-REL-02 | ✅ |
 | ZTP-BON-04 | §8.4 | TC-REL-03/10, TC-UNIT-08 | ✅ |
@@ -527,11 +528,11 @@ Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row was 
 |---|---|---|---|
 | ZTP-NFR-01 | §4.2, §19 | TC-DEL-01, TC-PDF-05, TC-UNIT-01 | ✅ |
 | ZTP-NFR-02 | §5.5 | TC-PROV-04/12 | ✅ |
-| ZTP-NFR-03 | §8 | TC-APX-10, TC-E2E-02, TC-NAT-07, TC-REL-09 | ✅ |
+| ZTP-NFR-03 | §8 | TC-APX-10, TC-E2E-02, TC-NAT-07, TC-REL-09 | ⚠ (partial: E2E-02) |
 | ZTP-NFR-04 | §16.3 | TC-PERF-02 | ✅ |
-| ZTP-NFR-05 | §14 | TC-AUTH-10, TC-PERF-01, TC-SRV-08/11 | ⚠ (open: AUTH-10, SRV-08, SRV-11; §12.5) |
-| ZTP-NFR-06 | §10, §18 | TC-AUTH-08/11/13/14/15, TC-CFG-08/09, TC-DISC-07, TC-NAT-06/12, TC-SESS-06/09, TC-UNIT-05 | ⚠ (open: AUTH-08, AUTH-11, AUTH-13, AUTH-14, AUTH-15, SESS-09; TC-NAT-12 CHUNK_REQ half open; §12.5) |
-| ZTP-NFR-07 | §5.6, §14.6 | TC-CFG-04, TC-PERF-04, TC-REL-08, TC-SRV-07/08/11, TC-UNIT-04/18 | ⚠ (open: SRV-08, SRV-11; §12.5) |
+| ZTP-NFR-05 | §14 | TC-AUTH-10, TC-PERF-01, TC-SRV-08/11 | ⚠ (open: AUTH-10, SRV-08, SRV-11) |
+| ZTP-NFR-06 | §10, §18 | TC-AUTH-08/11/13/14/15, TC-CFG-08/09, TC-DISC-07, TC-NAT-06/12, TC-SESS-06/09, TC-UNIT-05 | ⚠ (open: AUTH-08, AUTH-11, AUTH-13, AUTH-14, AUTH-15, SESS-09; partial: NAT-12) |
+| ZTP-NFR-07 | §5.6, §14.6 | TC-CFG-04, TC-PERF-04, TC-REL-08, TC-SRV-07/08/11, TC-UNIT-04/18 | ⚠ (open: SRV-08, SRV-11) |
 | ZTP-NFR-08 | §17 | TC-LOG-03/04 | ✅ |
 | ZTP-NFR-09 | §16.1 | TC-UNIT-15 | ✅ |
 | ZTP-NFR-10 | §15.3, §14.4 | TC-SRV-06/10, TC-UNIT-13, TC-UPG-07/11 | ✅ |
@@ -540,7 +541,7 @@ Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row was 
 ### 10.4 Deliverables
 | PRD ID | DESIGN § | Test cases | Status |
 |---|---|---|---|
-| ZTP-DEL-01 | §19 | TC-DEL-02 | ✅ |
+| ZTP-DEL-01 | §19 | TC-DEL-02 | ⚠ (partial: DEL-02) |
 | ZTP-DEL-02 | §19.1 | TC-DEL-01 | ✅ |
 | ZTP-DEL-03 | §4.2 | TC-DEL-03 | ✅ |
 | ZTP-DEL-04 | §4.3 | TC-PDF-05, TC-SESS-08 | ✅ |
@@ -548,9 +549,9 @@ Status values: ☐ Not run · ✅ Pass · ❌ Fail · ⚠ Waived. Every row was 
 | ZTP-DEL-06 | §21.1 | TC-DEL-05 | ✅ |
 | ZTP-DEL-07 | §21.3 | TC-DEL-06 | ✅ |
 | ZTP-DEL-08 | §21.2, §21.3 | TC-DEL-07 | ✅ |
-| ZTP-DEL-09 | §17.3 | TC-DEL-02/09 | ✅ |
-| ZTP-DEL-10 | §17.3 | TC-DEL-02/09 | ✅ |
-| ZTP-DEL-11 | §14.5 | TC-DEL-02, TC-PDF-02, TC-SRV-04 | ✅ |
+| ZTP-DEL-09 | §17.3 | TC-DEL-02/09 | ⚠ (partial: DEL-02) |
+| ZTP-DEL-10 | §17.3 | TC-DEL-02/09 | ⚠ (partial: DEL-02) |
+| ZTP-DEL-11 | §14.5 | TC-DEL-02, TC-PDF-02, TC-SRV-04 | ⚠ (partial: DEL-02, PDF-02) |
 | ZTP-DEL-12 | §9.6, §21.3 | TC-DEL-10 | ✅ |
 
 **Coverage:** 67 of 67 PRD requirements have at least one test case. No test case is orphaned: each one in §5 references at least one PRD ID.
@@ -593,6 +594,8 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 *The overall plan is owned by [PRD §11](PRD_ZTP.md#11-release-plan-milestones-and-timeline). This is the QA view of it.*
 
 ### 12.1 QA timeline (in parallel with development; start Mon 2026-11-16, the same calendar as PRD §11)
+> **As delivered.** The schedule below is the original estimate, written before development started (16 Nov – 9 Dec 2026). The work was done earlier: design 10 Nov, M1–M6 10–12 Nov, M7 (release regression, README, test report) 12–13 Nov 2026. The dates of each gate are in QA §11 and the git history. The scope and order of the milestones were followed as planned; the changes are recorded in the gate rows.
+
 | Window | QA activity | Effort |
 |---|---|---|
 | P0 (16–17 Nov) | Review PRD and DESIGN for testability; freeze this plan | 1 d |
@@ -617,7 +620,7 @@ Every defect report includes: TC ID, platform, build variant, **seed and netsim 
 | **M7** | TC-DEL-01..10, TC-SIM-03/04, the full impairment matrix (§6), and a full regression of every gate. **Scope added 2026-11-12 (owner):** (1) README covers PDF "README Requirements" Q1–Q5, Expected Submission §2 topics, the Bonus section (3 topics + B1–B4) and DEL-12; (2) the committed `logs/db_dump.txt` reproduces the PDF §9 dump, except the ZTP-84BC19 "Invalid HMAC" row, which needs `--bad-key` (PRD R-15) and is submitted under a waiver listed in the README; (3) committed logs: `logs/` (5-device demo: `server.log`, `device_<serial>.log`, `db_dump.txt`) and `logs/appendix_a/` (the single-device Appendix A journey, ZTP-93AF21, on 127.0.0.1:5555 on the Mac; CI runs it on 10.10.10.5); (4) a configuration reference for every file in `conf/` (keys, types, defaults, ranges); (5) a folder and file map with a one-line purpose and limitations; (6) every regression suite writes `results/<date-time>/<suite>/` (logs plus `summary.txt`, ignored by git), and one final full release run is copied to `evidence/` and committed; (7) CI evidence: a workflow step writes each job's summary as an uploaded report, and `evidence/ci/` records per-job results, run links and dates; (8) instructions for running the full regression and any single suite or case by hand, on the Mac and on Linux. `tests/run_all.sh` named in §3 is `make test`. **Status (2026-11-12): closed.** Release regression `make release` on b936db3 (README §17.1, `evidence/release-20261112/`): 23/23 steps PASS with no host sleep, the ASan build 16/16, matrix rows M1–M5, M8, M9 × 10 seeds 100% OPERATIONAL, TC-PERF-01..04, TC-NAT-07/13; CI green on 821d134 and a1c5bd3 (b936db3: tests green, one artifact upload failed on a storage error). TC-DEL-01 (clean build, no warnings) and TC-DEL-04 (README quick start on a fresh clone: `make`, `make demo` PASS) on b936db3. The §10 matrix is filled in: every requirement ✅ or ⚠. The release runs found and fixed: two harness bugs, three timing-sensitive demo checks, and a device defect (false PMTU black-hole step-down under loss, DESIGN §5.8). **Exceptions:** the 16 open-tooling cases (§12.5, PRD R-15) and TC-SIM-04 (waived) |
 
 ### 12.2 QA dependencies
-- QA-D1: the test hooks in DESIGN §19.2 (all gated by `--test-hooks`): `--first-session-id`, `--corrupt-chunk`, `--drop-seq`, `--dup-seq`, `--no-discovery`, `--bad-key`, `--replay-test`, `--reuse-nonce`, `--nonce`, `--crash-after-chunks`, `--crash-at`, `--restart-mode`, `--restart-delay`, `--rebind-after`, `--fail-validate`, `--hook-delete-config`, `--no-refetch`, `--hook-bad-fw-version`, plus the simulation flags `--sim-mtu` and `--nat-sim`. These must land with each milestone. **Status (2026-11-11):** `--bad-key`, `--replay-test`, `--reuse-nonce` and `--nonce` are not built yet (§12.5).
+- QA-D1: the test hooks in DESIGN §19.2 (all gated by `--test-hooks`): `--first-session-id`, `--corrupt-chunk`, `--drop-seq`, `--dup-seq`, `--no-discovery`, `--bad-key`, `--replay-test`, `--reuse-nonce`, `--nonce`, `--crash-after-chunks`, `--crash-at`, `--restart-mode`, `--restart-delay`, `--rebind-after`, `--fail-validate`, `--hook-delete-config`, `--no-refetch`, `--hook-bad-fw-version`, plus the simulation flags `--sim-mtu` and `--nat-sim`. These must land with each milestone. **Status (M7, as delivered):** all built except `--bad-key`, `--replay-test`, `--reuse-nonce` and `--nonce` (open tooling, §12.5, PRD R-15) and `--corrupt-chunk` (TC-PROV-07 changes the file on disk instead); `--rekey-at` was added for TC-UNIT-06.
 - QA-D2: **GitHub Actions** on https://github.com/heysunilvk/ztp-project (PRD D-09) as the Linux environment for netem (TC-SIM-03), broadcast (TC-DISC-05 (b)), valgrind and the gcc build. There's no local Linux host or VM, because of limited disk space on the Mac. CI is set up in M1.
 - QA-D3: the Xcode CLT on the macOS host. Satisfied: verified on 2026-11-10 (PRD D-08).
 - QA-D4: `tcpdump` permission on the test host (sudo), for the pcap-based cases.
@@ -663,20 +666,20 @@ The M3 code these tests exercise is built and passes its other tests, and the lo
 | `peer_sim --flood` (HELLO flood from one IP) (M5) | TC-AUTH-10 | Per-IP token bucket (§10.5) and the half-open cap (code review) |
 | `peer_sim` replay of captured terminal ERRORs to another device (M5) | TC-AUTH-15 | The device accepts a terminal ERROR only if it echoes the Nd/Nd′ of its pending HELLO or resume, and RESUME_REQUIRED only for a seq it sent in the current epoch, once per seq (code review) |
 
-**Other QA tooling not yet built under its planned name** (no gate case is blocked by it):
-- The log checkers: `tests/check_appendix_a.sh` (built at M5), `tests/check_logs.sh` and `tests/check_invariants.sh` (built at M6, run by `scripts/run_demo.sh` on every demo and matrix run). The milestone test scripts keep checking their own lines inline.
-- The CI jobs `impair-matrix`, `impair-netem`, `valgrind`, `mtu` and `nat-real` (DESIGN §19.4 status): M6, with the demo.
+**Other planned QA tooling, as delivered:**
+- Built: the log checkers `tests/check_appendix_a.sh` (M5), `tests/check_logs.sh` and `tests/check_invariants.sh` (M6, run by `scripts/run_demo.sh` on every demo and matrix run), and the CI jobs `impair-matrix`, `impair-netem` and `valgrind` (M6).
+- Not built: the CI jobs `mtu` (veth at MTU 576) and `nat-real` (conntrack MASQUERADE), `scripts/netem.sh` (netem runs inline in CI) and a dummynet script (TC-SIM-04 waived).
 
 When a tool lands, its cases move back into the gate and run in CI like the others. Anything still open at M7 is listed in the README's "Test coverage and known gaps" section (DESIGN §21.3).
 
 ## 13. Caveats: what is not or cannot be tested
 | Gap | Why | Mitigation / substitute |
 |---|---|---|
-| Real NAT devices (port-restricted, symmetric, CGNAT) | No NAT hardware in the lab | Rebinding simulation (TC-NAT-05), the NAT emulator (TC-NAT-08..10), idle-timeout logic (TC-NAT-03/04), and the optional CI `nat-real` job (a Linux conntrack MASQUERADE NAT). Optional: a Linux `iptables MASQUERADE` namespace test (§14) |
+| Real NAT devices (port-restricted, symmetric, CGNAT) | No NAT hardware in the lab | Rebinding simulation (TC-NAT-05), the NAT emulator (TC-NAT-08..10), idle-timeout logic (TC-NAT-03/04). A Linux conntrack MASQUERADE job was planned (§14) but not built |
 | Real power loss and flash behaviour | No hardware | Crash injection at every commit point (TC-UPG-07); atomic-write unit tests |
 | Real wireless or satellite loss patterns | No RF test bed | Correlated loss with netem on CI (M7); a range of seeds |
 | Interactive Linux debugging | No local Linux host | Reproduce with the same seed on the Mac (netsim is deterministic); CI uploads logs and pcaps as artifacts; a temporary `tmate` debug step in CI can be enabled if needed |
-| Long-term fleet scale (10k+ devices) | Out of scope | 50-device test plus a 200-device exploratory run; design analysis (DESIGN §14.1) |
+| Long-term fleet scale (10k+ devices) | Out of scope | 50-device test (TC-PERF-01); design analysis (DESIGN §14.1). The 200-device exploratory run was not done |
 | Cryptographic strength | Not a QA activity | Standard primitives with known-answer tests; design review |
 | Confidentiality | Not implemented by design | Documented limitation (DESIGN §18.3) |
 

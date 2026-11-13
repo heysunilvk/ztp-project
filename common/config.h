@@ -117,6 +117,8 @@ typedef struct {
  * --port, --serial, -v). Advances *i past any argument.
  * Returns 1 if consumed, 0 if not a config flag, -1 on a usage error (message on stderr). */
 int cfg_parse_flag(cfg_args_t *a, cfg_side_t side, int argc, char **argv, int *i);
+/* Print every shorthand flag of this side and the key it sets (for --help). */
+void cfg_print_flags(FILE *out, cfg_side_t side);
 
 /* Build the effective configuration. On error prints "config: ..." to stderr and returns
  * EX_CONFIG_CODE; returns 0 on success. Call cfg_free afterwards in either case. */

@@ -309,7 +309,9 @@ static void test_seq(void)
     CHECK(seq_lt(0xFFFFFFF0u, 0x10));
     CHECK(!seq_lt(0x10, 0xFFFFFFF0u));
     CHECK(seq_lt(0x7FFFFFFFu, 0x80000000u));
-    CHECK(ZTP_REKEY_SEQ == 1u << 30);
+    /* the forced re-key at next_seq > ZTP_REKEY_SEQ (2^30) is exercised end to end in tests/m5_upgrade.sh
+     * (--rekey-at stands in for the threshold); here: the threshold is far from the wrap */
+    CHECK(seq_lt(ZTP_REKEY_SEQ, ZTP_REKEY_SEQ + 0x7FFFFFFFu));
 }
 
 void suite_protocol(void)

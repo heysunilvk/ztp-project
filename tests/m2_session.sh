@@ -83,6 +83,8 @@ grep -q "^serial=$serial\$" "$T/d2.state/device.state" && ok || bad "TC-DISC-01:
 cp "$T/d2.state/device.state" "$T/state.before"
 run_device d2 20
 expect_line "$T/d2.log" "[BOOT] Soft serial loaded" "TC-DISC-02 (a)"
+[ "$(grep '^serial=' "$T/state.before")" = "$(grep '^serial=' "$T/d2.state/device.state")" ] && ok \
+    || bad "TC-DISC-02 (a): the persisted serial changed across a restart"
 n_all=$(grep -c "Soft serial: ZTP-" "$T/d2.log"); n_same=$(grep -c "Soft serial: $serial" "$T/d2.log")
 [ "$n_all" -ge 2 ] && [ "$n_all" -eq "$n_same" ] && ok || bad "TC-DISC-02 (a): serial changed ($n_same of $n_all lines)"
 expect_line "$T/d1.log" "[BOOT] Soft serial assigned (configuration)" "TC-DISC-02 (b)"
@@ -93,7 +95,7 @@ run_device d2 20 --serial ZTP-000001
 run_device d3 20 --serial ZTP-71DD08 --discover static --test-hooks --drop-seq tx:1
 [ "$DEV_RC" -eq 0 ] && ok || bad "TC-SESS-02: device exit $DEV_RC"
 expect_line "$T/d3.log" "[UDP] Retransmitting seq=1 (timeout)" TC-SESS-02
-expect_line "$T/d3.log" "[ERROR] TEST HOOK ACTIVE: --drop-seq" TC-SESS-02
+expect_line "$T/d3.log" "[TEST] TEST HOOK ACTIVE: --drop-seq" TC-SESS-02
 n=$(count "$T/s1.log" "HELLO seq=1 received (serial ZTP-71DD08")
 [ "$n" -eq 1 ] && ok || bad "TC-SESS-02: $n sessions for ZTP-71DD08, want 1"
 stop_server

@@ -134,6 +134,10 @@ void dev_upgrade_rollback(device_t *d)
     dev_running_fw(d, bad);
     d->st.active_slot = d->st.active_slot == 'B' ? 'A' : 'B';
     d->st.pending_reboot = 0;
+    /* FAILED is persisted with the slot switch: if the process dies before the report below is ACKed, a
+     * restart must not find stage FW_INSTALLED and report the old image as a completed upgrade */
+    d->st.stage = ST_FAILED;
+    snprintf(d->st.last_fail_reason, sizeof d->st.last_fail_reason, "%s", "VALIDATION_FAILED");
     dev_state_save(d->state_path, &d->st);
     dev_running_fw(d, old);
     LOGI(T_UPGRADE, LM_UPG_ROLLED_BACK, bad, old);
